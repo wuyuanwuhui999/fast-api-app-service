@@ -40,9 +40,17 @@
 3. 准备PostgreSQL数据库
 4. 准备Redis服务
 
+### 创建虚拟环境
+python -m venv env
+
+### 激活虚拟环境
+env\Scripts\activate
+
 ### 安装依赖
+pip install -r requirements.txt
 
 ###运行命令
+uvicorn app.main:app --reload   
 
 ```bash
 poetry install

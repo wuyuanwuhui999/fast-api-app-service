@@ -1,6 +1,6 @@
+from pathlib import Path
 from pydantic_settings import BaseSettings
-from functools import lru_cache
-
+from functools import lru_cache  # 添加这行
 
 class Settings(BaseSettings):
     app_name: str = "User Service"
@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     avatar_path: str = "/static/user/avatar/"
 
     class Config:
-        env_file = "../.env"
+        env_file = Path(__file__).parent.parent / ".env"
 
 
 @lru_cache()
