@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from app.schemas.user import UserCreate, UserInDB, UserUpdate, PasswordChange, ResetPasswordRequest, ResetPasswordConfirm, MailRequest
-from app.services.user import UserService
 from app.services.auth import AuthService
+from app.services.user import UserService
+from app.dependencies.dependencies import get_auth_service  # Add this import
 from app.dependencies.auth import get_current_user
 from typing import List
 
@@ -13,9 +14,8 @@ async def register(user: UserCreate, user_service: UserService = Depends()):
     return await user_service.register_user(user)
 
 @router.post("/login")
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), auth_service: AuthService = Depends()):
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), auth_service: AuthService = Depends(get_auth_service)):  # Modified this line
     return await auth_service.login(form_data.username, form_data.password)
-
 @router.get("/me", response_model=UserInDB)
 async def read_users_me(current_user: UserInDB = Depends(get_current_user)):
     return current_user
