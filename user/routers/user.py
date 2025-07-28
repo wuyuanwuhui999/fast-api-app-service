@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from app.schemas.user import UserCreate, UserInDB, UserUpdate, PasswordChange, ResetPasswordRequest, ResetPasswordConfirm, MailRequest
-from app.services.auth import AuthService
-from app.services.user import UserService
-from app.dependencies.dependencies import get_auth_service  # Add this import
-from app.dependencies.auth import get_current_user
+from user.schemas.user import UserCreate, UserInDB, UserUpdate, PasswordChange, ResetPasswordRequest, ResetPasswordConfirm, MailRequest
+from user.services.auth import AuthService
+from user.services.user import UserService
+from user.dependencies.dependencies import get_auth_service  # Add this import
+from user.dependencies.auth import get_current_user
 from typing import List
 
 router = APIRouter(prefix="/service/user", tags=["user"])

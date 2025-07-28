@@ -2,11 +2,11 @@ from datetime import timedelta
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from app.config import get_settings
-from app.schemas.token import TokenData
-from app.repositories.user import UserRepository
-from app.utils.security import verify_password
-from app.utils.jwt import create_access_token
+from user.config import get_settings
+from user.schemas.token import TokenData
+from user.repositories.user import UserRepository
+from user.utils.security import verify_password
+from user.utils.jwt import create_access_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 

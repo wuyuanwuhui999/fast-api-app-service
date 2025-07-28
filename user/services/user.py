@@ -1,14 +1,14 @@
 from typing import Optional
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from app.repositories.user import UserRepository
-from app.schemas.user import UserCreate, UserInDB, UserUpdate, PasswordChange, ResetPasswordRequest, \
+from user.repositories.user import UserRepository
+from user.schemas.user import UserCreate, UserInDB, UserUpdate, PasswordChange, ResetPasswordRequest, \
     ResetPasswordConfirm, MailRequest
-from app.database import get_db
-from app.utils.security import get_password_hash, verify_password
-from app.utils.jwt import create_access_token
+from user.database import get_db
+from user.utils.security import get_password_hash, verify_password
+from user.utils.jwt import create_access_token
 from datetime import timedelta
-from app.config import get_settings
+from user.config import get_settings
 import random
 import redis
 
