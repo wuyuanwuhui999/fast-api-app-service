@@ -50,7 +50,7 @@ env\Scripts\activate
 pip install -r requirements.txt
 
 ###运行命令
-uvicorn app.main:app --reload   
+uvicorn user.main:app --reload   
 
 ```bash
 poetry install
