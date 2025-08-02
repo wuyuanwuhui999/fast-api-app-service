@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     app_name: str = "User Service"
-    secret_key: str
+    secret_key: str = "WCdTBej2ZRhIBXafQbALbAwpJ5A+v1PR4A4IN6+OhnM="
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 43200  # 30 days
     database_url: str

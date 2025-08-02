@@ -11,8 +11,8 @@ class UserRepository:
     def get_user(self, user_id: str) -> Optional[User]:
         return self.db.query(User).filter(User.id == user_id).first()
 
-    def get_user_by_username(self, username: str) -> Optional[User]:
-        return self.db.query(User).filter(User.user_account == username).first()
+    def get_user_by_username(self, userId: str) -> Optional[User]:
+        return self.db.query(User).filter(User.id == userId).first()
 
     def get_user_by_email(self, email: str) -> Optional[User]:
         return self.db.query(User).filter(User.email == email).first()

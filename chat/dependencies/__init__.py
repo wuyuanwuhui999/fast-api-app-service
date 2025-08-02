@@ -1,7 +1,7 @@
 from fastapi import Depends
 from chat.config import settings
 from chat.services import ChatService
-from langchain4j import (
+from langchain import (
     OllamaEmbeddingModel,
     OllamaStreamingChatModel,
     ElasticsearchEmbeddingStore,

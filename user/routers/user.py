@@ -5,8 +5,10 @@ from user.services.auth import AuthService
 from user.services.user import UserService
 from user.dependencies.dependencies import get_auth_service  # Add this import
 from user.dependencies.auth import get_current_user
-from typing import List
-
+from user.utils.result_util import ResultUtil,ResultEntity
+from datetime import datetime, timedelta
+from user.utils.jwt import create_access_token
+from json import dumps
 router = APIRouter(prefix="/service", tags=["user"])
 
 @router.post("/user/register", response_model=UserInDB)
@@ -17,9 +19,15 @@ async def register(user: UserCreate, user_service: UserService = Depends()):
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), auth_service: AuthService = Depends(get_auth_service)):  # Modified this line
     return await auth_service.login(form_data.username, form_data.password)
 
-@router.get("/user-getway/getUserData", response_model=UserInDB)
+@router.get("/user-getway/getUserData", response_model=ResultEntity)
 async def get_user_data(current_user: UserInDB = Depends(get_current_user)):
-    return current_user
+    user_data = UserInDB.from_orm(current_user).dict()
+    token = create_access_token(data={"sub": user_data})
+    # 返回用户数据和token
+    return ResultUtil.success(
+        data=user_data,
+        token=token
+    )
 
 @router.put("/user-getway/update", response_model=UserInDB)
 async def update_user(user_update: UserUpdate, current_user: UserInDB = Depends(get_current_user), user_service: UserService = Depends()):

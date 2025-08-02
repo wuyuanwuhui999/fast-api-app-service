@@ -1,5 +1,5 @@
 from typing import Optional
-from langchain4j import (
+from langchain import (
     EmbeddingModel,
     ElasticsearchEmbeddingStore,
     TextSegment,

@@ -3,7 +3,7 @@ import uuid
 import logging
 from fastapi import UploadFile, HTTPException
 from typing import Optional, List, Dict, Any
-from langchain4j import (
+from langchain import (
     EmbeddingModel,
     ElasticsearchEmbeddingStore,
     TextSegment,

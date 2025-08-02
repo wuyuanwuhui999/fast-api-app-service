@@ -6,6 +6,17 @@ class Token(BaseModel):
     token_type: str
 
 class TokenData(BaseModel):
+    id: Optional[str] = None
     username: Optional[str] = None
-    user_id: Optional[str] = None
-    scopes: list[str] = []
+    userAccount: Optional[str] = None
+    avater: Optional[str] = None
+    birthday: Optional[str] = None
+    createDate: Optional[str] = None
+    disabled: Optional[int] = None
+    email: Optional[str] = None
+    permission: Optional[int] = None
+    role: Optional[str] = None
+    sex: Optional[int] = None
+    sign: Optional[str] = None
+    telephone: Optional[str] = None
+    updateDate: Optional[str] = None
