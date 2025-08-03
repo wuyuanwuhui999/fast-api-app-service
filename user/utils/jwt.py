@@ -1,3 +1,4 @@
+from base64 import b64decode
 from datetime import datetime, timedelta
 import json
 import jwt
@@ -55,21 +56,17 @@ def create_access_token(
 
 
 def verify_token(token: str) -> Optional[Dict[str, Any]]:
-    """
-    验证并解析 JWT token
-
-    Args:
-        token: JWT token 字符串
-
-    Returns:
-        解析后的 payload 字典，如果验证失败返回 None
-    """
     try:
+        # 统一使用base64解码后的密钥（如果创建时也是这样用的）
+        secret_key = b64decode(settings.secret_key)
+
         payload = jwt.decode(
             token,
             settings.secret_key,
-            algorithms=[settings.algorithm]
+            algorithms=[settings.algorithm],
+            leeway=timedelta(seconds=60)  # Pass the timedelta object directly
         )
         return payload
-    except jwt.PyJWTError:
+    except jwt.PyJWTError as e:
+        print(f"Token验证失败: {str(e)}")
         return None

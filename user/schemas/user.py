@@ -45,8 +45,8 @@ class UserInDB(UserBase):
         from_attributes = True
 
 class PasswordChange(BaseModel):
-    old_password: str
-    new_password: str
+    oldPassword: str
+    newPassword: str
 
 class ResetPasswordRequest(BaseModel):
     email: EmailStr

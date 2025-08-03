@@ -9,14 +9,16 @@ from sqlalchemy.orm import Session
 from user.models.user import User  # 添加这行导入
 from base64 import b64decode
 import json
+
+from user.utils.jwt import verify_token
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 settings = get_settings()
 
 
 async def get_current_user(
-        token: str = Depends(oauth2_scheme),
-        db: Session = Depends(get_db)
+        token: str = Depends(oauth2_scheme)
 ) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -24,8 +26,7 @@ async def get_current_user(
         headers={"Authorization": "Bearer"},
     )
     try:
-        secret_key = b64decode(settings.secret_key)
-        payload = jwt.decode(token, secret_key, algorithms=[settings.algorithm])
+        payload = verify_token(token)
         user_data: str = payload.get("sub")
         if user_data is None:
             raise credentials_exception
@@ -33,13 +34,7 @@ async def get_current_user(
         token_data = TokenData(**json.loads(user_data))
     except (JWTError, json.JSONDecodeError) as e:
         raise credentials_exception
-
-    user_repository = UserRepository(db)
-    # 根据你的数据结构，应该使用user_data.id而不是token_data.id
-    user = user_repository.get_user_by_username(token_data.id)
-    if user is None:
-        raise credentials_exception
-    return user
+    return token_data
 
 
 async def get_current_active_user(
