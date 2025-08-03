@@ -14,7 +14,7 @@ class UserRepository:
     def get_user_by_email(self, email: str) -> Optional[User]:
         return self.db.query(User).filter(User.email == email).first()
 
-    def verify_user(self, user_account: str):
+    def verify_user(self, user_account: str) -> int:
         """
             根据user_account精确查询用户数量
             :param user_account: 用户账号

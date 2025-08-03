@@ -3,7 +3,7 @@ from pydantic import BaseModel,ConfigDict
 from typing import Optional, List
 
 
-class ChatEntity(BaseModel):
+class ChatSchema(BaseModel):
     id: Optional[int] = None
     user_id: str
     files: Optional[str] = None
@@ -27,13 +27,20 @@ class ChatEntity(BaseModel):
         think_start = content.find("<think>")
         think_end = content.find("</think>")
 
-        if think_start >= 0 and think_end > think_start:
+        if 0 <= think_start < think_end:
             self.think_content = content[think_start:think_end + len("</think>")]
             after_think = content[think_end + len("</think>"):]
             self.response_content = after_think.strip()
         else:
             self.think_content = None
             self.response_content = content
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
+            datetime: lambda v: v.strftime("%Y-%m-%d %H:%M:%S")
+        }
+    )
 
 
 class ChatParamsEntity(BaseModel):
@@ -64,7 +71,7 @@ class DirectoryEntity(BaseModel):
         from_attributes = True  # 允许ORM模型转换
 
 
-class ChatSchema(BaseModel):
+class ChatModelSchema(BaseModel):
     id: int
     model_name: Optional[str] = None  # 替代 str | None
     create_time: Optional[datetime] = None

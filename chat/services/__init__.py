@@ -1,7 +1,7 @@
 import os
 import uuid
 import logging
-from fastapi import UploadFile, HTTPException,Depends
+from fastapi import UploadFile, HTTPException, Depends
 from typing import Any
 # from langchain import (
 #     EmbeddingModel,
@@ -22,6 +22,7 @@ import redis
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
 
 class ChatService:
     def __init__(
@@ -116,16 +117,11 @@ class ChatService:
     #
     #     return {"status": "success", "message": "文档删除成功"}
     #
-    # async def get_chat_history(self, user_id: str, page: int = 1, size: int = 10):
-    #     start = (page - 1) * size
-    #     chats = await self._get_chat_history(user_id, start, size)
-    #     total = await self._get_chat_history_total(user_id)
-    #     return {
-    #         "data": chats,
-    #         "total": total,
-    #         "page": page,
-    #         "size": size
-    #     }
+    async def get_chat_history(self, user_id: str, page: int = 1, size: int = 10) -> ResultEntity:
+        start = (page - 1) * size
+        chat_history_list = self.chat_repository.get_chat_history(user_id, start, size)
+        total = self.chat_repository.get_chat_history_total(user_id)
+        return ResultUtil.success(data=chat_history_list, total=total)
     #
     # async def upload_doc(self, file: UploadFile, user_id: str, directory_id: str):
     #     if not file.filename:

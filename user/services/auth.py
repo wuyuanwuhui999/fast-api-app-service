@@ -28,7 +28,6 @@ class AuthService:
 
         access_token_expires = timedelta(minutes=self.settings.access_token_expire_minutes)
         user_data = ResultUtil.convert_snake_to_camel(UserInDB.model_validate(user).dict())
-        print(user_data)
         access_token = create_access_token(
             data={"sub": user_data},
             expires_delta=access_token_expires

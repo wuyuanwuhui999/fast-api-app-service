@@ -26,8 +26,6 @@ class ResultUtil:
         :param token: 可选的token
         :return: ResultEntity
         """
-        print(camel_data)
-        print(ResultUtil.convert_snake_to_camel(data))
         return ResultEntity(
             data=camel_data if camel_data is not None else ResultUtil.convert_snake_to_camel(data),
             status="SUCCESS",

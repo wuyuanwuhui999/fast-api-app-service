@@ -46,11 +46,11 @@ async def get_model_list(chat_service: ChatService = Depends()):
 #     return await chat_service.delete_doc(doc_id, user_id, directory_id)
 #
 #
-# @router.get("/history")
-# async def get_history(
-#         user_id: str,
-#         page: int = 1,
-#         size: int = 10,
-#         chat_service: ChatService = Depends(get_chat_service)
-# ):
-#     return await chat_service.get_chat_history(user_id, page, size)
+@router.get("/getChatHistory")
+async def get_history(
+        user_id: str,
+        pageNum: int = 1,
+        pageSize: int = 10,
+        chat_service: ChatService = Depends()
+):
+    return await chat_service.get_chat_history(user_id, pageNum, pageSize)
