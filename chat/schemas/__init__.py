@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel,ConfigDict
 from typing import Optional, List
 
 
@@ -62,3 +62,17 @@ class DirectoryEntity(BaseModel):
 
     class Config:
         from_attributes = True  # 允许ORM模型转换
+
+
+class ChatSchema(BaseModel):
+    id: int
+    model_name: Optional[str] = None  # 替代 str | None
+    create_time: Optional[datetime] = None
+    update_time: Optional[datetime] = None
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
+            datetime: lambda v: v.strftime("%Y-%m-%d %H:%M:%S")
+        }
+    )
