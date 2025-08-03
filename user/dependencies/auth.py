@@ -1,16 +1,12 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from user.config import get_settings
+from common.config.config import get_settings
 from user.schemas.token import TokenData
-from user.repositories.user import UserRepository
-from user.database import get_db
-from sqlalchemy.orm import Session
 from user.models.user import User  # 添加这行导入
-from base64 import b64decode
 import json
 
-from user.utils.jwt import verify_token
+from common.utils.jwt import verify_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 

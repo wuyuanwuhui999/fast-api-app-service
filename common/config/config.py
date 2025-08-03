@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     PORT: int = 8000  # 确保定义了 PORT 字段
 
     class Config:
-        env_file = Path(__file__).parent.parent / ".env"
+        env_file = Path(__file__).parent.parent.parent / ".env"
 
 
 @lru_cache()

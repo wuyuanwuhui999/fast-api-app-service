@@ -3,7 +3,12 @@ from chat.schemas import ChatParamsEntity
 from chat.services import ChatService
 from chat.dependencies import get_chat_service
 
-router = APIRouter(prefix="/api/chat", tags=["chat"])
+router = APIRouter(prefix="/service/ai", tags=["chat"])
+
+
+@router.get("/getModelList")
+async def get_model_list(chat_service: ChatService = Depends(get_chat_service)):
+    return await chat_service.get_model_list()
 
 
 @router.websocket("/ws/{user_id}")

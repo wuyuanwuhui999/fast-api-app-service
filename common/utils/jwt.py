@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import json
 import jwt
 from typing import Optional, Dict, Any
-from user.config import get_settings
+from common.config.config import get_settings
 
 settings = get_settings()
 
@@ -54,12 +54,8 @@ def create_access_token(
     )
     return encoded_jwt
 
-
 def verify_token(token: str) -> Optional[Dict[str, Any]]:
     try:
-        # 统一使用base64解码后的密钥（如果创建时也是这样用的）
-        secret_key = b64decode(settings.secret_key)
-
         payload = jwt.decode(
             token,
             settings.secret_key,

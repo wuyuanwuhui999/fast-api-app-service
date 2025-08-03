@@ -2,14 +2,14 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from user.repositories.user import UserRepository
 from user.schemas.user import UserCreate, UserInDB, UserUpdate, PasswordChange, ResetPasswordConfirm, MailRequest
-from user.database import get_db
-from user.utils.jwt import create_access_token
+from common.config.database import get_db
+from common.utils.jwt import create_access_token
 from datetime import timedelta
-from user.config import get_settings
+from common.config.config import get_settings
 import random
 import redis
 
-from user.utils.result_util import ResultEntity, ResultUtil
+from common.utils.result_util import ResultEntity, ResultUtil
 
 settings = get_settings()
 

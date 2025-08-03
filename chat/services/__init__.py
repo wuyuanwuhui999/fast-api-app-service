@@ -1,8 +1,9 @@
 import os
 import uuid
 import logging
-from fastapi import UploadFile, HTTPException
-from typing import Optional, List, Dict, Any
+from fastapi import UploadFile, HTTPException,Depends
+from typing import Any
+
 from langchain import (
     EmbeddingModel,
     ElasticsearchEmbeddingStore,
@@ -12,11 +13,16 @@ from langchain import (
     Filter,
     IsEqualTo
 )
-from .config import settings
-from .schemas import *
+from sqlalchemy.orm import Session
+
+from chat.repositories import ChatRepository
+from common.config.config import get_settings
+from chat.schemas import *
+from common.config.database import get_db
+from common.utils.result_util import ResultEntity, ResultUtil
 
 logger = logging.getLogger(__name__)
-
+settings = get_settings()
 
 class ChatService:
     def __init__(
@@ -25,7 +31,8 @@ class ChatService:
             elasticsearch_store: ElasticsearchEmbeddingStore,
             qwen_assistant: Any,
             deepseek_assistant: Any,
-            redis_client: Any
+            redis_client: Any,
+            db: Session = Depends(get_db)
     ):
         self.embedding_model = embedding_model
         self.elasticsearch_store = elasticsearch_store
@@ -33,6 +40,10 @@ class ChatService:
         self.deepseek_assistant = deepseek_assistant
         self.redis = redis_client
         self.upload_dir = settings.UPLOAD_DIR
+        self.chat_repository = ChatRepository(db)
+
+    async def get_model_list(self) -> ResultEntity:
+        return ResultUtil.success(data=self.chat_repository.get_model_list())
 
     async def chat(self, user_id: str, chat_params: ChatParamsEntity):
         chat_entity = ChatEntity(

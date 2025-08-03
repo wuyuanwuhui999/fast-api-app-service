@@ -2,6 +2,7 @@ from datetime import datetime
 from pydantic import BaseModel
 from typing import Optional, List
 
+
 class ChatEntity(BaseModel):
     id: Optional[int] = None
     user_id: str
@@ -34,6 +35,7 @@ class ChatEntity(BaseModel):
             self.think_content = None
             self.response_content = content
 
+
 class ChatParamsEntity(BaseModel):
     prompt: str
     directory_id: str = "public"
@@ -43,11 +45,13 @@ class ChatParamsEntity(BaseModel):
     type: Optional[str] = None  # document/db
     language: Optional[str] = None  # zh/cn
 
+
 class ClientMessage(BaseModel):
     chat_id: str
     prompt: str
     token: str
     files: List[str]
+
 
 class DirectoryEntity(BaseModel):
     id: str

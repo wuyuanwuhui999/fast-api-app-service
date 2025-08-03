@@ -3,6 +3,7 @@ from user.models.user import User
 from user.schemas.user import UserCreate, UserUpdate
 from typing import Optional
 
+
 class UserRepository:
     def __init__(self, db: Session):
         self.db = db
@@ -24,7 +25,8 @@ class UserRepository:
                 .filter(User.user_account == user_account)
                 .count()
         )
-    def get_user_by_user_account(self, user_account: str,password:str) -> Optional[User]:
+
+    def get_user_by_user_account(self, user_account: str, password: str) -> Optional[User]:
         return (
             self.db.query(User)
                 .filter(
@@ -33,7 +35,7 @@ class UserRepository:
                  (User.telephone == user_account)) &
                 (User.password == password)
             )
-            .first()
+                .first()
         )
 
     def get_users(self, skip: int = 0, limit: int = 100) -> list[User]:
@@ -75,4 +77,4 @@ class UserRepository:
         return False
 
     def verify_password(self, user_account: str, password: str) -> bool:
-        return self.get_user_by_user_account(user_account,password)
+        return self.get_user_by_user_account(user_account, password)
