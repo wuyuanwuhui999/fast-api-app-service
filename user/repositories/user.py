@@ -13,6 +13,17 @@ class UserRepository:
     def get_user_by_email(self, email: str) -> Optional[User]:
         return self.db.query(User).filter(User.email == email).first()
 
+    def verify_user(self, user_account: str):
+        """
+            根据user_account精确查询用户数量
+            :param user_account: 用户账号
+            :return: 匹配该账号的用户数量
+            """
+        return (
+            self.db.query(User)
+                .filter(User.user_account == user_account)
+                .count()
+        )
     def get_user_by_user_account(self, user_account: str,password:str) -> Optional[User]:
         return (
             self.db.query(User)
