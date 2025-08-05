@@ -14,9 +14,9 @@ from typing import Any
 # )
 from sqlalchemy.orm import Session
 
-from chat.repositories import ChatRepository
-from common.config.config import get_settings
-from common.config.database import get_db
+from chat.repositories.chat_repository import ChatRepository
+from common.config.common_config import get_settings
+from common.config.common_database import get_db
 from common.utils.result_util import ResultEntity, ResultUtil
 import redis
 

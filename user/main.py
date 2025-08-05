@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from user.routers import user
-from common.config.database import engine, Base
+from user.routers import user_router
+from common.config.common_database import engine, Base
 
 Base.metadata.create_all(bind=engine)
 
@@ -15,7 +15,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(user.router)
+app.include_router(user_router.router)
 
 @app.get("/")
 async def root():

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from chat.routers import router
-from common.config.database import engine, Base
+from chat.routers.chat_router import router
+from common.config.common_database import engine, Base
 
 Base.metadata.create_all(bind=engine)
 

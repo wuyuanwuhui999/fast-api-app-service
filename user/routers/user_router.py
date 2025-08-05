@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends
 
-from user.models.user import LoginForm
-from user.schemas.user import UserCreate, UserInDB, UserUpdate, PasswordChange,ResetPasswordConfirm, MailRequest
-from user.services.auth import AuthService
-from user.services.user import UserService
-from user.dependencies.dependencies import get_auth_service  # Add this import
-from user.dependencies.auth import get_current_user
+from user.models.user_model import LoginForm
+from user.schemas.user_schema import UserCreate, UserInDB, UserUpdate, PasswordChange,ResetPasswordConfirm, MailRequest
+from user.services.auth_service import AuthService
+from user.services.user_service import UserService
+from user.dependencies.user_dependency import get_auth_service  # Add this import
+from user.dependencies.auth_dependency import get_current_user
 from common.utils.result_util import ResultEntity
 
 router = APIRouter(prefix="/service", tags=["user"])

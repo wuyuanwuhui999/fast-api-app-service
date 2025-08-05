@@ -79,7 +79,7 @@ def generate_directory_tree(root_dir, exclude_dirs=None, exclude_files=None, max
 if __name__ == "__main__":
     tree = generate_directory_tree(
         "F:/python/fast-api-app-service",
-        exclude_dirs=["env","__pycache__",".idea",".git","chat"],
+        exclude_dirs=["env","__pycache__",".idea",".git"],
         exclude_files=["read_file.py","read_tree.py",".gitignore","README.md","一键启动项目.bat","一键提交到gitee.bat","一键提交到github.bat"]
     )
 

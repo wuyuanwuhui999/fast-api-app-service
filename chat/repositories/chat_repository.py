@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session
 from typing import List
 
-from chat.models import ChatModel, ChatHistory
-from chat.schemas import ChatModelSchema, ChatSchema
+from chat.models.chat_model import ChatModel, ChatHistory
+from chat.schemas.chat_schema import ChatModelSchema, ChatSchema
 
 
 class ChatRepository:

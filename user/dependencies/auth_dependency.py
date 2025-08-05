@@ -1,12 +1,12 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from common.config.config import get_settings
-from user.schemas.token import TokenData
-from user.models.user import User  # 添加这行导入
+from common.config.common_config import get_settings
+from user.schemas.token_schema import TokenData
+from user.models.user_model import User  # 添加这行导入
 import json
 
-from common.utils.jwt import verify_token
+from common.utils.jwt_util import verify_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import json
 import jwt
 from typing import Optional, Dict, Any
-from common.config.config import get_settings
+from common.config.common_config import get_settings
 
 settings = get_settings()
 

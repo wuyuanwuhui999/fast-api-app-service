@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, UploadFile, WebSocket
-from chat.schemas import ChatParamsEntity
-from chat.services import ChatService
+from chat.schemas.chat_schema import ChatParamsEntity
+from chat.services.chat_service import ChatService
 # from chat.dependencies import get_chat_service
 
 router = APIRouter(prefix="/service/ai", tags=["chat"])
