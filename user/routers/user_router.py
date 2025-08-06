@@ -5,7 +5,7 @@ from user.schemas.user_schema import UserCreate, UserInDB, UserUpdate, PasswordC
 from user.services.auth_service import AuthService
 from user.services.user_service import UserService
 from user.dependencies.user_dependency import get_auth_service  # Add this import
-from user.dependencies.auth_dependency import get_current_user
+from common.dependencies.auth_dependency import get_current_user
 from common.utils.result_util import ResultEntity
 
 router = APIRouter(prefix="/service", tags=["user"])

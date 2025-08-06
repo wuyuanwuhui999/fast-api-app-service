@@ -26,26 +26,26 @@ async def get_model_list(chat_service: ChatService = Depends()):
 #             await websocket.send_text(response)
 #
 #
-# @router.post("/documents")
-# async def upload_document(
-#         file: UploadFile,
-#         user_id: str,
-#         directory_id: str = "public",
-#         chat_service: ChatService = Depends(get_chat_service)
-# ):
-#     return await chat_service.upload_doc(file, user_id, directory_id)
+@router.post("/uploadDoc")
+async def upload_document(
+        file: UploadFile,
+        user_id: str,
+        directory_id: str = "public",
+        chat_service: ChatService = Depends(get_chat_service)
+):
+    return await chat_service.upload_doc(file, user_id, directory_id)
 #
 #
-# @router.delete("/documents/{doc_id}")
-# async def delete_document(
-#         doc_id: str,
-#         user_id: str,
-#         directory_id: str,
-#         chat_service: ChatService = Depends(get_chat_service)
-# ):
-#     return await chat_service.delete_doc(doc_id, user_id, directory_id)
-#
-#
+@router.delete("/deleteDoc/{doc_id}")
+async def delete_document(
+        doc_id: str,
+        user_id: str,
+        directory_id: str,
+        chat_service: ChatService = Depends(get_chat_service)
+):
+    return await chat_service.delete_document(doc_id, user_id, directory_id)
+
+
 @router.get("/getChatHistory")
 async def get_history(
         user_id: str,

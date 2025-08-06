@@ -93,29 +93,29 @@ class ChatService:
     #         logger.error(f"Chat streaming error: {str(e)}")
     #         raise HTTPException(status_code=500, detail="Chat streaming failed")
     #
-    # async def delete_doc(self, doc_id: str, user_id: str, directory_id: str):
-    #     doc = await self._get_doc_by_id(doc_id, user_id, directory_id)
-    #     if not doc:
-    #         raise HTTPException(status_code=404, detail="文档不存在或无权删除")
-    #
-    #     # Delete from filesystem
-    #     file_path = os.path.join(
-    #         self.upload_dir,
-    #         f"{doc.id}{'.' + doc.ext if doc.ext else ''}"
-    #     )
-    #     if os.path.exists(file_path):
-    #         os.remove(file_path)
-    #
-    #     # Delete from Elasticsearch
-    #     directory_filter = IsEqualTo("metadata.directory_id", directory_id)
-    #     user_filter = IsEqualTo("metadata.user_id", user_id)
-    #     combined_filter = Filter.and_(directory_filter, user_filter)
-    #     await self.elasticsearch_store.remove_all(combined_filter)
-    #
-    #     # Delete from DB
-    #     await self._delete_doc(doc_id, user_id, directory_id)
-    #
-    #     return {"status": "success", "message": "文档删除成功"}
+    async def delete_document(self, doc_id: str, user_id: str, directory_id: str):
+        doc = await self._get_doc_by_id(doc_id, user_id, directory_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="文档不存在或无权删除")
+
+        # Delete from filesystem
+        file_path = os.path.join(
+            self.upload_dir,
+            f"{doc.id}{'.' + doc.ext if doc.ext else ''}"
+        )
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+        # Delete from Elasticsearch
+        directory_filter = IsEqualTo("metadata.directory_id", directory_id)
+        user_filter = IsEqualTo("metadata.user_id", user_id)
+        combined_filter = Filter.and_(directory_filter, user_filter)
+        await self.elasticsearch_store.remove_all(combined_filter)
+
+        # Delete from DB
+        await self._delete_doc(doc_id, user_id, directory_id)
+
+        return {"status": "success", "message": "文档删除成功"}
     #
     async def get_chat_history(self, user_id: str, page: int = 1, size: int = 10) -> ResultEntity:
         start = (page - 1) * size

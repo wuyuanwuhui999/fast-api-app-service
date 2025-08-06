@@ -3,7 +3,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from common.config.common_config import get_settings
-from user.schemas.token_schema import TokenData
+from common.schemas.token_schema import TokenData
 from user.repositories.user_repository import UserRepository
 from user.schemas.user_schema import UserInDB
 from common.utils.result_util import ResultUtil

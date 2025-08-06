@@ -1,9 +1,9 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+from jose import JWTError
 from common.config.common_config import get_settings
-from user.schemas.token_schema import TokenData
-from user.models.user_model import User  # 添加这行导入
+from common.schemas.token_schema import TokenData
+from common.models.common_model import User
 import json
 
 from common.utils.jwt_util import verify_token

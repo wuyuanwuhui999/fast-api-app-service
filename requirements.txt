@@ -19,4 +19,5 @@ langchain-core=0.3.72
 ollama=0.5.1
 httpx=0.28.1
 sse-starlette=3.0.2
+langchain_ollama=0.3.6
 
