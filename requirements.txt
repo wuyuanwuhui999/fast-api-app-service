@@ -20,4 +20,6 @@ ollama=0.5.1
 httpx=0.28.1
 sse-starlette=3.0.2
 langchain_ollama=0.3.6
+langchain_elasticsearch=0.3.2
+PyPDF2=3.0.1
 

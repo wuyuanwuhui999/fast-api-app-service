@@ -60,7 +60,7 @@ class ClientMessage(BaseModel):
     files: List[str]
 
 
-class DirectoryEntity(BaseModel):
+class DirectorySchema(BaseModel):
     id: str
     user_id: str
     directory: str
@@ -83,3 +83,12 @@ class ChatModelSchema(BaseModel):
             datetime: lambda v: v.strftime("%Y-%m-%d %H:%M:%S")
         }
     )
+
+class ChatDocSchema(BaseModel):
+    id: str
+    directory_id: Optional[str] = None
+    name: Optional[str] = None
+    ext: Optional[str] = None
+    user_id: Optional[str] = None
+    create_time: Optional[datetime] = None
+    update_time: Optional[datetime] = None
