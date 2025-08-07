@@ -122,45 +122,46 @@ class ChatService:
         chat_history_list = self.chat_repository.get_chat_history(user_id, start, size)
         total = self.chat_repository.get_chat_history_total(user_id)
         return ResultUtil.success(data=chat_history_list, total=total)
-    #
-    # async def upload_doc(self, file: UploadFile, user_id: str, directory_id: str):
-    #     if not file.filename:
-    #         raise HTTPException(status_code=400, detail="文件名不能为空")
-    #
-    #     ext = self._get_file_extension(file.filename)
-    #     if ext.lower() not in ["pdf", "txt"]:
-    #         raise HTTPException(status_code=400, detail="只能上传pdf和txt的文档")
-    #
-    #     doc_id = str(uuid.uuid4()).replace("-", "")
-    #
-    #     try:
-    #         content = await file.read()
-    #
-    #         if ext.lower() == "pdf":
-    #             await self._process_pdf(content, file.filename, user_id, doc_id, directory_id)
-    #         else:
-    #             await self._process_txt(content, file.filename, user_id, doc_id, directory_id)
-    #
-    #         # Save file
-    #         file_path = os.path.join(self.upload_dir, file.filename)
-    #         os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    #         with open(file_path, "wb") as f:
-    #             f.write(content)
-    #
-    #         # Save doc metadata
-    #         doc = ChatDocEntity(
-    #             id=doc_id,
-    #             user_id=user_id,
-    #             name=file.filename,
-    #             ext=ext,
-    #             directory_id=directory_id
-    #         )
-    #         await self._save_doc(doc)
-    #
-    #         return {"status": "success", "message": "文件上传成功"}
-    #
-    #     except Exception as e:
-    #         logger.error(f"Document processing failed: {str(e)}")
-    #         raise HTTPException(status_code=500, detail=f"文件处理失败: {str(e)}")
+
+
+    async def upload_doc(self, file: UploadFile, user_id: str, directory_id: str):
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="文件名不能为空")
+
+        ext = self._get_file_extension(file.filename)
+        if ext.lower() not in ["pdf", "txt"]:
+            raise HTTPException(status_code=400, detail="只能上传pdf和txt的文档")
+
+        doc_id = str(uuid.uuid4()).replace("-", "")
+
+        try:
+            content = await file.read()
+
+            if ext.lower() == "pdf":
+                await self._process_pdf(content, file.filename, user_id, doc_id, directory_id)
+            else:
+                await self._process_txt(content, file.filename, user_id, doc_id, directory_id)
+
+            # Save file
+            file_path = os.path.join(self.upload_dir, file.filename)
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, "wb") as f:
+                f.write(content)
+
+            # Save doc metadata
+            doc = ChatDocEntity(
+                id=doc_id,
+                user_id=user_id,
+                name=file.filename,
+                ext=ext,
+                directory_id=directory_id
+            )
+            await self._save_doc(doc)
+
+            return {"status": "success", "message": "文件上传成功"}
+
+        except Exception as e:
+            logger.error(f"Document processing failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"文件处理失败: {str(e)}")
 
     # Helper methods would be implemented here...

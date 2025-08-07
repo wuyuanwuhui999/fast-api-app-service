@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, UploadFile, WebSocket
 from chat.schemas.chat_schema import ChatParamsEntity
 from chat.services.chat_service import ChatService
 # from chat.dependencies import get_chat_service
+from common.dependencies.auth_dependency import get_current_user
+from common.schemas.user_schema import UserInDB
 
 router = APIRouter(prefix="/service/ai", tags=["chat"])
 
@@ -29,28 +31,28 @@ async def get_model_list(chat_service: ChatService = Depends()):
 @router.post("/uploadDoc")
 async def upload_document(
         file: UploadFile,
-        user_id: str,
         directory_id: str = "public",
-        chat_service: ChatService = Depends(get_chat_service)
+        current_user: UserInDB = Depends(get_current_user),
+        chat_service: ChatService = Depends(get_current_user)
 ):
-    return await chat_service.upload_doc(file, user_id, directory_id)
+    return await chat_service.upload_doc(file, current_user.id, directory_id)
 #
 #
 @router.delete("/deleteDoc/{doc_id}")
 async def delete_document(
         doc_id: str,
-        user_id: str,
         directory_id: str,
-        chat_service: ChatService = Depends(get_chat_service)
+        current_user: UserInDB = Depends(get_current_user),
+        chat_service: ChatService = Depends()
 ):
-    return await chat_service.delete_document(doc_id, user_id, directory_id)
+    return await chat_service.delete_document(doc_id, current_user.id, directory_id)
 
 
 @router.get("/getChatHistory")
 async def get_history(
-        user_id: str,
         pageNum: int = 1,
         pageSize: int = 10,
-        chat_service: ChatService = Depends()
+        current_user: UserInDB = Depends(get_current_user),
+        chat_service: ChatService = Depends(get_current_user)
 ):
-    return await chat_service.get_chat_history(user_id, pageNum, pageSize)
+    return await chat_service.get_chat_history(current_user.id, pageNum, pageSize)
