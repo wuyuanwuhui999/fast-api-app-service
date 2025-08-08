@@ -5,7 +5,7 @@ from jose import JWTError, jwt
 from common.config.common_config import get_settings
 from common.schemas.token_schema import TokenData
 from user.repositories.user_repository import UserRepository
-from user.schemas.user_schema import UserInDB
+from common.schemas.user_schema import UserInDB
 from common.utils.result_util import ResultUtil
 from common.utils.jwt_util import create_access_token
 

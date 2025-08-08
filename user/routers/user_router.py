@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends
 
 from user.models.user_model import LoginForm
-from user.schemas.user_schema import UserCreate, UserInDB, UserUpdate, PasswordChange,ResetPasswordConfirm, MailRequest
+from common.schemas.user_schema import UserInDB
+from user.schemas.user_schema import UserCreate, UserUpdate, PasswordChange,ResetPasswordConfirm, MailRequest
 from user.services.auth_service import AuthService
 from user.services.user_service import UserService
 from user.dependencies.user_dependency import get_auth_service  # Add this import

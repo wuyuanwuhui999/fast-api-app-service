@@ -2,6 +2,7 @@ from sqlalchemy import Column, String, Integer, DateTime, Boolean
 from common.config.common_database import Base
 from pydantic import BaseModel
 
+
 class User(Base):
     __tablename__ = "user"  # 注意表名改为单数形式，与你数据库一致
     __table_args__ = {
@@ -27,6 +28,7 @@ class User(Base):
     region = Column(String(255), comment='地区')
     disabled = Column(Integer, default=0, comment='是否禁用，0表示不不禁用，1表示禁用')
     permission = Column(Integer, default=0, comment='权限大小')
+
 
 class LoginForm(BaseModel):
     userAccount: str

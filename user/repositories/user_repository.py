@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from user.models.user_model import User
+from common.models.common_model import User
 from user.schemas.user_schema import UserCreate, UserUpdate
 from typing import Optional
 

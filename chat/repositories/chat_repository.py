@@ -3,7 +3,7 @@ from fastapi.logger import logger
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from chat.models.chat_model import ChatModel, ChatHistory, ChatDoc
+from chat.models.chat_model import ChatModel, ChatHistory, ChatDocModel
 from chat.schemas.chat_schema import ChatModelSchema, ChatSchema, ChatDocSchema
 
 
@@ -24,7 +24,7 @@ class ChatRepository:
 
     def save_doc(self, doc: ChatDocSchema) -> bool:
         try:
-            db_doc = ChatDoc(
+            db_doc = ChatDocModel(
                 id=doc.id,
                 directory_id=doc.directory_id,
                 name=doc.name,
@@ -46,10 +46,10 @@ class ChatRepository:
     ) -> Optional[ChatDocSchema]:
         """Get document by ID with user and directory validation"""
         try:
-            doc = self.db.query(ChatDoc).filter(
-                ChatDoc.id == doc_id,
-                ChatDoc.user_id == user_id,
-                ChatDoc.directory_id == directory_id
+            doc = self.db.query(ChatDocModel).filter(
+                ChatDocModel.id == doc_id,
+                ChatDocModel.user_id == user_id,
+                ChatDocModel.directory_id == directory_id
             ).first()
 
             if doc:
@@ -74,11 +74,11 @@ class ChatRepository:
             directory_id: str
     ) -> bool:
         try:
-            deleted_count = self.db.query(ChatDoc).filter(
+            deleted_count = self.db.query(ChatDocModel).filter(
                 and_(
-                    ChatDoc.id == doc_id,
-                    ChatDoc.user_id == user_id,
-                    ChatDoc.directory_id == directory_id
+                    ChatDocModel.id == doc_id,
+                    ChatDocModel.user_id == user_id,
+                    ChatDocModel.directory_id == directory_id
                 )
             ).delete()
 
@@ -90,3 +90,14 @@ class ChatRepository:
             logger.error(f"Failed to delete document {doc_id}: {str(e)}")
             raise
 
+    def get_doc_List(self, user_id: str) -> List[ChatDocSchema]:
+        doc_list = self.db.query(ChatDocModel).filter(
+            ChatDocModel.user_id == user_id,
+        ).all()
+
+        # model_list = self.db.query(ChatModel).all()
+        # return [ChatModelSchema.model_validate(model).dict() for model in model_list]
+
+        for doc in doc_list:
+            print(ChatDocSchema.model_validate(doc).dict())
+        return [ChatDocSchema.model_validate(doc).dict() for doc in doc_list]

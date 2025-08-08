@@ -21,6 +21,7 @@ from langchain_elasticsearch import ElasticsearchStore
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.prompts.chat import ChatPromptTemplate
 from langchain_core.documents import Document
+from langchain_community.embeddings import OllamaEmbeddings  # 导入 OllamaEmbeddings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -35,7 +36,7 @@ class ChatService:
         self.elasticsearch_store = ElasticsearchStore(
             es_url="http://localhost:9200",  # 使用API代理服务提高访问稳定性
             index_name="chat_vector_index",
-            embedding=OpenAIEmbeddings(model="mxbai-embed-large:latest"),
+            embedding=OllamaEmbeddings(model="mxbai-embed-large:latest")
         )
 
         self.redis = redis.Redis.from_url(settings.redis_url)
@@ -245,3 +246,6 @@ class ChatService:
         except Exception as e:
             logger.error(f"Document processing failed: {str(e)}")
             raise HTTPException(status_code=500, detail=f"文件处理失败: {str(e)}")
+
+    async def get_doc_List(self,user_id:str) -> ResultEntity:
+        return ResultUtil.success(data=self.chat_repository.get_doc_List(user_id))

@@ -53,6 +53,14 @@ async def get_history(
         pageNum: int = 1,
         pageSize: int = 10,
         current_user: UserInDB = Depends(get_current_user),
-        chat_service: ChatService = Depends(get_current_user)
+        chat_service: ChatService = Depends()
 ):
     return await chat_service.get_chat_history(current_user.id, pageNum, pageSize)
+
+
+@router.get("/getDocList")
+async def get_doc_List(
+        current_user: UserInDB = Depends(get_current_user),
+        chat_service: ChatService = Depends()
+):
+    return await chat_service.get_doc_List(current_user.id)

@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel,ConfigDict
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 
 
@@ -83,6 +83,7 @@ class ChatModelSchema(BaseModel):
             datetime: lambda v: v.strftime("%Y-%m-%d %H:%M:%S")
         }
     )
+
 
 class ChatDocSchema(BaseModel):
     id: str
