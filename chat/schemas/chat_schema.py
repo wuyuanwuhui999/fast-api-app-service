@@ -13,7 +13,7 @@ class ChatSchema(BaseModel):
     content: Optional[str] = None
     think_content: Optional[str] = None
     response_content: Optional[str] = None
-    create_time: Optional[str] = None
+    create_time: Optional[datetime] = None  # 改为 datetime 类型
 
     # 自定义内容处理方法
     def set_content(self, content: str):
@@ -38,17 +38,17 @@ class ChatSchema(BaseModel):
     model_config = ConfigDict(
         from_attributes=True,
         json_encoders={
-            datetime: lambda v: v.strftime("%Y-%m-%d %H:%M:%S")
+            datetime: lambda v: v.strftime("%Y-%m-%d %H:%M:%S") if v else None
         }
     )
 
-
 class ChatParamsEntity(BaseModel):
     prompt: str
-    directory_id: str = "public"
-    chat_id: str
-    model_name: str
-    show_think: bool = False
+    directoryId: str = "default"
+    chatId: str
+    token: str
+    modelName: str
+    showThink: bool = False
     type: Optional[str] = None  # document/db
     language: Optional[str] = None  # zh/cn
 

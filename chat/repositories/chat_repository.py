@@ -16,8 +16,15 @@ class ChatRepository:
         return [ChatModelSchema.model_validate(model).dict() for model in model_list]
 
     def get_chat_history(self,user_id:str, start:int, size:int)-> List[ChatSchema]:
-        chat_history_list = self.db.query(ChatHistory).filter(ChatHistory.user_id == user_id).limit(start,size)
-        return [ChatSchema.model_validate(model).dict() for model in chat_history_list]
+        chat_history_list = self.db.query(ChatHistory)\
+            .filter(ChatHistory.user_id == user_id) \
+            .offset(start) \
+            .limit(size)
+        return [
+            ChatSchema.model_validate(
+                {k: v for k, v in chat_item.__dict__.items() if not k.startswith('_')}
+            ).dict() for chat_item in chat_history_list
+        ]
 
     def get_chat_history_total(self,user_id)->int:
          return self.db.query(ChatHistory).filter(ChatHistory.user_id == user_id).count()
@@ -92,12 +99,11 @@ class ChatRepository:
 
     def get_doc_List(self, user_id: str) -> List[ChatDocSchema]:
         doc_list = self.db.query(ChatDocModel).filter(
-            ChatDocModel.user_id == user_id,
+            ChatDocModel.user_id == user_id
         ).all()
 
-        # model_list = self.db.query(ChatModel).all()
-        # return [ChatModelSchema.model_validate(model).dict() for model in model_list]
-
-        for doc in doc_list:
-            print(ChatDocSchema.model_validate(doc).dict())
-        return [ChatDocSchema.model_validate(doc).dict() for doc in doc_list]
+        return [
+            ChatDocSchema.model_validate(
+                {k: v for k, v in doc.__dict__.items() if not k.startswith('_')}
+            ).dict() for doc in doc_list
+        ]
