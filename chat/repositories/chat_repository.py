@@ -18,8 +18,13 @@ class ChatRepository:
         return [ChatModelSchema.model_validate(model).dict() for model in model_list]
 
     async def save_chat_history(self, chat_data: ChatSchema) -> bool:
-        """异步保存聊天记录到数据库"""
+        """保存聊天记录到数据库"""
         try:
+            if not self.db:
+                logger.error("数据库会话不可用")
+                return False
+
+            # 创建数据库对象（修正缩进位置）
             db_chat = ChatHistory(
                 user_id=chat_data.user_id,
                 model_name=chat_data.model_name,
@@ -30,12 +35,20 @@ class ChatRepository:
                 content=chat_data.content,
                 create_time=datetime.now()
             )
+
             self.db.add(db_chat)
-            await self.db.commit()  # 需要异步SQLAlchemy
+            await self.db.commit()
             return True
+
         except Exception as e:
+            logger.error(f"保存失败: {str(e)}", exc_info=True)
+            if self.db:  # 确保db存在才执行rollback
+                await self.db.rollback()
+            return False
+
+        except Exception as e:
+            logger.error(f"保存失败: {str(e)}")
             await self.db.rollback()
-            logger.error(f"保存聊天记录失败: {str(e)}")
             return False
 
     def get_chat_history(self,user_id:str, start:int, size:int)-> List[ChatSchema]:

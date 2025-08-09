@@ -6,7 +6,6 @@ import pdfplumber
 from sqlalchemy.orm import Session
 import os
 
-from chat.models.chat_model import ChatHistory
 from chat.repositories.chat_repository import ChatRepository
 from chat.schemas.chat_schema import ChatDocSchema, ChatParamsEntity, ChatSchema
 from chat.utils.chat_util import PromptUtil
@@ -14,11 +13,7 @@ from common.config.common_config import get_settings
 from common.config.common_database import get_db
 from common.utils.result_util import ResultEntity, ResultUtil
 import redis
-from langchain.chat_models import init_chat_model
 from PyPDF2 import PdfReader
-from langchain_community import vectorstores
-from langchain import embeddings, text_splitter
-from elasticsearch import Elasticsearch
 from langchain_elasticsearch import ElasticsearchStore
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.prompts.chat import ChatPromptTemplate
@@ -28,7 +23,6 @@ from langchain_ollama import OllamaLLM
 from langchain.schema import Document  # Import Document class
 from langchain.text_splitter import CharacterTextSplitter
 from io import BytesIO
-import elasticsearch_dsl
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -131,11 +125,20 @@ class ChatService:
     async def save_chat_history_async(self, chat_entity: ChatSchema, content: str):
         """异步保存聊天记录的辅助方法"""
         try:
+            if not self.chat_repository:
+                logger.error("chat_repository 未初始化")
+                return
+
             chat_entity.content = content
             chat_entity.set_content(content)
-            await self.chat_repository.save_chat_history(chat_entity)
+
+            # 确保返回的是协程对象
+            result = await self.chat_repository.save_chat_history(chat_entity)
+            if not result:
+                logger.error("保存聊天记录返回False")
+
         except Exception as e:
-            logger.error(f"后台保存聊天记录失败: {str(e)}")
+            logger.error(f"后台保存聊天记录失败: {str(e)}", exc_info=True)
 
     async def build_context(self, query: str, user_id: str, directory_id: str) -> str:
         try:
@@ -219,7 +222,6 @@ class ChatService:
             doc_id: str,
             directory_id: str
     ):
-        """Process PDF file and store embeddings"""
         try:
             pdf_reader = PdfReader(BytesIO(content))
             full_text = ""
@@ -280,61 +282,11 @@ class ChatService:
     async def get_model_list(self) -> ResultEntity:
         return ResultUtil.success(data=self.chat_repository.get_model_list())
 
-    # async def chat(self, user_id: str, chat_params: ChatParamsEntity):
-    #     chat_entity = ChatEntity(
-    #         user_id=user_id,
-    #         chat_id=chat_params.chat_id,
-    #         prompt=chat_params.prompt,
-    #         model_name=chat_params.model_name,
-    #         content=""
-    #     )
-    #
-    #     response_collector = []
-    #
-    #     async for response_part in self.chat_with_websocket(user_id, chat_params):
-    #         response_collector.append(response_part)
-    #         chat_entity.content = "".join(response_collector)
-    #
-    #     # Save final chat
-    #     chat_entity.content = "".join(response_collector)
-    #     await self._save_chat(chat_entity)
-    #
-    #     return response_collector
-    #
-    # async def chat_with_websocket(self, user_id: str, chat_params: ChatParamsEntity):
-    #     chat_entity = ChatEntity(
-    #         user_id=user_id,
-    #         chat_id=chat_params.chat_id,
-    #         prompt=chat_params.prompt,
-    #         model_name=chat_params.model_name
-    #     )
-    #
-    #     if chat_params.type == "document":
-    #         context = await self._build_context(
-    #             chat_params.prompt,
-    #             user_id,
-    #             chat_params.directory_id
-    #         )
-    #         if not context:
-    #             yield "对不起，没有查询到相关文档"
-    #             return
-    #         chat_params.prompt = context
-    #
-    #     assistant = self._select_assistant(chat_params.model_name)
-    #
-    #     try:
-    #         async for response in assistant.stream_chat(chat_params):
-    #             yield response
-    #     except Exception as e:
-    #         logger.error(f"Chat streaming error: {str(e)}")
-    #         raise HTTPException(status_code=500, detail="Chat streaming failed")
-    #
     async def delete_document(self, doc_id: str, user_id: str, directory_id: str):
         doc = await self.chat_repository.get_doc_by_id(doc_id, user_id, directory_id)
         if not doc:
             raise HTTPException(status_code=404, detail="文档不存在或无权删除")
 
-        # Delete from filesystem
         file_path = os.path.join(
             self.upload_dir,
             f"{doc.id}{'.' + doc.ext if doc.ext else ''}"
@@ -342,12 +294,6 @@ class ChatService:
         if os.path.exists(file_path):
             os.remove(file_path)
 
-        # directory_filter = IsEqualTo("metadata.directory_id", directory_id)
-        # user_filter = IsEqualTo("metadata.user_id", user_id)
-        # combined_filter = Filter.and_(directory_filter, user_filter)
-        # await self.elasticsearch_store.remove_all(combined_filter)
-
-        # Delete from DB
         await self.chat_repository.delete_doc(doc_id, user_id, directory_id)
 
         return ResultUtil.success(msg="文档删除成功")
