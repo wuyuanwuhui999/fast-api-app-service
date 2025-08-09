@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from elasticsearch.esql import and_
 from fastapi.logger import logger
 from sqlalchemy.orm import Session
@@ -14,6 +16,27 @@ class ChatRepository:
     def get_model_list(self) -> List[ChatModelSchema]:
         model_list = self.db.query(ChatModel).all()
         return [ChatModelSchema.model_validate(model).dict() for model in model_list]
+
+    async def save_chat_history(self, chat_data: ChatSchema) -> bool:
+        """异步保存聊天记录到数据库"""
+        try:
+            db_chat = ChatHistory(
+                user_id=chat_data.user_id,
+                model_name=chat_data.model_name,
+                chat_id=chat_data.chat_id,
+                prompt=chat_data.prompt,
+                think_content=chat_data.think_content,
+                response_content=chat_data.response_content,
+                content=chat_data.content,
+                create_time=datetime.now()
+            )
+            self.db.add(db_chat)
+            await self.db.commit()  # 需要异步SQLAlchemy
+            return True
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"保存聊天记录失败: {str(e)}")
+            return False
 
     def get_chat_history(self,user_id:str, start:int, size:int)-> List[ChatSchema]:
         chat_history_list = self.db.query(ChatHistory)\

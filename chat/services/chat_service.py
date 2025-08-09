@@ -5,8 +5,10 @@ from fastapi import UploadFile, HTTPException, Depends
 import pdfplumber
 from sqlalchemy.orm import Session
 import os
+
+from chat.models.chat_model import ChatHistory
 from chat.repositories.chat_repository import ChatRepository
-from chat.schemas.chat_schema import ChatDocSchema, ChatParamsEntity
+from chat.schemas.chat_schema import ChatDocSchema, ChatParamsEntity, ChatSchema
 from chat.utils.chat_util import PromptUtil
 from common.config.common_config import get_settings
 from common.config.common_database import get_db
@@ -37,16 +39,23 @@ class ChatService:
             self,
             db: Session = Depends(get_db)
     ):
-
         self.elasticsearch_store = ElasticsearchStore(
-            es_url="http://localhost:9200",  # 使用API代理服务提高访问稳定性
+            es_url="http://localhost:9200",
             index_name="chat_vector_index",
-            embedding=OllamaEmbeddings(model="mxbai-embed-large:latest")
+            embedding=OllamaEmbeddings(model="nomic-embed-text:latest")
         )
 
-        self.chat_model = OllamaLLM(
-            model="deepseek-r1:8b"
-        )
+        # 初始化模型映射字典
+        self.model_mapping = {
+            "deepseek-r1:8b": lambda show_think: OllamaLLM(
+                model="deepseek-r1:8b",
+                model_kwargs={"options": {"think": show_think}}
+            ),
+            "qwen3:8b": lambda show_think: OllamaLLM(
+                model="qwen3:8b",
+                model_kwargs={"options": {"think": show_think}}
+            )
+        }
 
         self.redis = redis.Redis.from_url(settings.redis_url)
         self.upload_dir = settings.UPLOAD_DIR
@@ -57,7 +66,29 @@ class ChatService:
             user_id: str,
             chat_params: ChatParamsEntity
     ):
+        chat_entity = ChatSchema(
+            user_id=user_id,
+            chat_id=chat_params.chatId,
+            prompt=chat_params.prompt,
+            model_name=chat_params.modelName,
+            content="",
+            think_content=None,
+            response_content=None
+        )
+
+        response_collector = []
+
         try:
+            # 根据 modelName 和 showThink 获取对应的模型实例
+            model_factory = self.model_mapping.get(chat_params.modelName)
+            if not model_factory:
+                yield f"Error: 不支持的大模型 {chat_params.modelName}"
+                yield "[completed]"
+                return
+
+            # 根据 showThink 参数创建模型实例
+            chat_model = model_factory(chat_params.showThink)
+
             prompt = chat_params.prompt
 
             if chat_params.type == "document":
@@ -67,28 +98,44 @@ class ChatService:
                     chat_params.directoryId
                 )
                 if context:
-                    prompt = f"Context: {context}\n\nQuestion: {chat_params.prompt}"
+                    prompt = f"请参考内容: {context}\n\n回答问题: {chat_params.prompt}"
                 else:
-                    yield "No relevant documents found for your query."
+                    yield "对不起，没有查询到相关文档！"
+                    yield "[completed]"
                     return
 
-            # Create the chat prompt template
             chat_template = ChatPromptTemplate.from_messages([
-                ("system", "You are a helpful AI assistant."),
+                ("system", "你叫小吴同学，是一个无所不能的AI助手，上知天文下知地理，请用小吴同学的身份回答问题。"),
                 ("human", "{prompt}")
             ])
 
-            # Format the prompt
             formatted_prompt = chat_template.format_messages(prompt=prompt)
 
-            # Stream the response from the model
-            async for chunk in self.chat_model.astream(formatted_prompt):
-                if chunk:
-                    yield chunk.content
+            # 流式返回模型响应
+            async for chunk in chat_model.astream(formatted_prompt):
+                response_collector.append(str(chunk))
+                yield str(chunk)
 
+            # 保存对话记录
+            chat_entity.content = "".join(response_collector)
+            chat_entity.set_content(chat_entity.content)  # 处理思考内容和响应内容
+
+            yield "[completed]"
+            # 再异步保存记录（不等待）
+            asyncio.create_task(self.save_chat_history_async(chat_entity, "".join(response_collector)))
         except Exception as e:
             logger.error(f"WebSocket chat error: {str(e)}", exc_info=True)
             yield f"Error occurred: {str(e)}"
+            yield "[completed]"
+
+    async def save_chat_history_async(self, chat_entity: ChatSchema, content: str):
+        """异步保存聊天记录的辅助方法"""
+        try:
+            chat_entity.content = content
+            chat_entity.set_content(content)
+            await self.chat_repository.save_chat_history(chat_entity)
+        except Exception as e:
+            logger.error(f"后台保存聊天记录失败: {str(e)}")
 
     async def build_context(self, query: str, user_id: str, directory_id: str) -> str:
         try:

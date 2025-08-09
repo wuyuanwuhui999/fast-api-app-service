@@ -24,8 +24,8 @@ async def websocket_chat(
         user_data = await get_current_user(chat_params.token)
         async for response in chat_service.chat_with_websocket(user_data.id, chat_params):
             await websocket.send_text(response)
-#
-#
+
+
 @router.post("/uploadDoc")
 async def upload_doc(
         file: UploadFile,
