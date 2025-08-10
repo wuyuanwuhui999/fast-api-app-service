@@ -59,7 +59,8 @@ async def get_history(
 
 @router.get("/getDocList")
 async def get_doc_List(
+        tenant_id: str = None,
         current_user: UserInDB = Depends(get_current_user),
         chat_service: ChatService = Depends()
 ):
-    return await chat_service.get_doc_List(current_user.id)
+    return await chat_service.get_doc_List(current_user.id,tenant_id)

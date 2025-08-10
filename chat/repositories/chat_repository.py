@@ -85,15 +85,21 @@ class ChatRepository:
             self,
             doc_id: str,
             user_id: str,
-            directory_id: str
+            directory_id: str,
+            tenant_id: Optional[str] = None
     ) -> Optional[ChatDocSchema]:
         """Get document by ID with user and directory validation"""
         try:
-            doc = self.db.query(ChatDocModel).filter(
+            query = self.db.query(ChatDocModel).filter(
                 ChatDocModel.id == doc_id,
                 ChatDocModel.user_id == user_id,
                 ChatDocModel.directory_id == directory_id
-            ).first()
+            )
+
+            if tenant_id:
+                query = query.filter(ChatDocModel.tenant_id == tenant_id)
+
+            doc = query.first()
 
             if doc:
                 return ChatDocSchema(
@@ -102,6 +108,7 @@ class ChatRepository:
                     name=doc.name,
                     ext=doc.ext,
                     user_id=doc.user_id,
+                    tenant_id=doc.tenant_id,  # 新增
                     create_time=doc.create_time,
                     update_time=doc.update_time
                 )
@@ -114,32 +121,42 @@ class ChatRepository:
             self,
             doc_id: str,
             user_id: str,
-            directory_id: str
+            directory_id: str,
+            tenant_id: Optional[str] = None
     ) -> bool:
         try:
-            deleted_count = self.db.query(ChatDocModel).filter(
+            query = self.db.query(ChatDocModel).filter(
                 and_(
                     ChatDocModel.id == doc_id,
                     ChatDocModel.user_id == user_id,
                     ChatDocModel.directory_id == directory_id
                 )
-            ).delete()
+            )
 
+            if tenant_id:
+                query = query.filter(ChatDocModel.tenant_id == tenant_id)
+
+            deleted_count = query.delete()
             self.db.commit()
             return deleted_count > 0
-
         except Exception as e:
             self.db.rollback()
             logger.error(f"Failed to delete document {doc_id}: {str(e)}")
             raise
 
-    def get_doc_List(self, user_id: str) -> List[ChatDocSchema]:
-        doc_list = self.db.query(ChatDocModel).filter(
+    def get_doc_List(self, user_id: str, tenant_id: Optional[str] = None) -> List[ChatDocSchema]:
+        query = self.db.query(ChatDocModel).filter(
             ChatDocModel.user_id == user_id
-        ).all()
+        )
+
+        if tenant_id:
+            query = query.filter(ChatDocModel.tenant_id == tenant_id)
+
+        doc_list = query.all()
 
         return [
             ChatDocSchema.model_validate(
                 {k: v for k, v in doc.__dict__.items() if not k.startswith('_')}
             ).dict() for doc in doc_list
         ]
+

@@ -92,5 +92,6 @@ class ChatDocSchema(BaseModel):
     name: Optional[str] = None
     ext: Optional[str] = None
     user_id: Optional[str] = None
+    tenant_id: Optional[str] = None  # 新增tenant_id字段
     create_time: Optional[datetime] = None
     update_time: Optional[datetime] = None

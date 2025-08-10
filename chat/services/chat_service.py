@@ -399,5 +399,5 @@ class ChatService:
             logger.error(f"Document processing failed: {str(e)}")
             raise HTTPException(status_code=500, detail=f"文件处理失败: {str(e)}")
 
-    async def get_doc_List(self,user_id:str) -> ResultEntity:
-        return ResultUtil.success(data=self.chat_repository.get_doc_List(user_id))
+    async def get_doc_List(self,user_id:str,tenant_id:str = None) -> ResultEntity:
+        return ResultUtil.success(data=self.chat_repository.get_doc_List(user_id,tenant_id))

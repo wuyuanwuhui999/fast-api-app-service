@@ -13,10 +13,11 @@ class ChatDocModel(Base):
     }
 
     id = Column(String(32), primary_key=True, comment='文档id')
-    directory_id = Column(String(255), comment='租户id')
+    directory_id = Column(String(255), comment='目录id')  # 修改注释
     name = Column(String(255), comment='文档原标题')
     ext = Column(String(255), comment='文档格式')
     user_id = Column(String(32), comment='用户id')
+    tenant_id = Column(String(32), comment='租户id')  # 新增tenant_id字段
     create_time = Column(DateTime, server_default=func.now(), comment='创建时间')
     update_time = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment='修改时间')
 
