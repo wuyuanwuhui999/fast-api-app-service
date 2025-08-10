@@ -2,7 +2,6 @@ import asyncio
 import uuid
 import logging
 from fastapi import UploadFile, HTTPException, Depends
-import pdfplumber
 from sqlalchemy.orm import Session
 import os
 
@@ -13,14 +12,12 @@ from common.config.common_config import get_settings
 from common.config.common_database import get_db
 from common.utils.result_util import ResultEntity, ResultUtil
 import redis
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
 from langchain_elasticsearch import ElasticsearchStore
-from langchain.text_splitter import CharacterTextSplitter
 from langchain.prompts.chat import ChatPromptTemplate
-from langchain_core.documents import Document
 from langchain_ollama import OllamaEmbeddings
 from langchain_ollama import OllamaLLM
-from langchain.schema import Document  # Import Document class
+from langchain_core.documents import Document
 from langchain.text_splitter import CharacterTextSplitter
 from io import BytesIO
 
@@ -170,7 +167,7 @@ class ChatService:
             logger.error(f"Error building context from documents: {str(e)}", exc_info=True)
             return ""
 
-    async def process_text_content(
+    def process_text_content(
             self,
             content: str,
             filename: str,
@@ -214,7 +211,7 @@ class ChatService:
             logger.error(f"处理文本内容失败: {str(e)}", exc_info=True)
             raise
 
-    async def process_pdf(
+    def process_pdf(
             self,
             content: bytes,
             filename: str,
@@ -243,7 +240,7 @@ class ChatService:
                 raise HTTPException(status_code=400, detail="无法从PDF提取文本内容")
 
             # 处理文本内容
-            await self.process_text_content(
+            self.process_text_content(
                 full_text,
                 filename,
                 user_id,
@@ -257,7 +254,7 @@ class ChatService:
             logger.error(f"PDF processing failed: {str(e)}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"PDF处理失败: {str(e)}")
 
-    async def process_txt(
+    def process_txt(
             self,
             content: bytes,
             filename: str,
@@ -268,7 +265,7 @@ class ChatService:
         """Process TXT file and store embeddings"""
         try:
             text_content = content.decode('utf-8')
-            await self.process_text_content(
+            self.process_text_content(
                 text_content,
                 filename,
                 user_id,
@@ -319,9 +316,9 @@ class ChatService:
             content = await file.read()
 
             if ext.lower() == "pdf":
-                await self.process_pdf(content, file.filename, user_id, doc_id, directory_id)
+                self.process_pdf(content, file.filename, user_id, doc_id, directory_id)
             else:
-                await self.process_txt(content, file.filename, user_id, doc_id, directory_id)
+                self.process_txt(content, file.filename, user_id, doc_id, directory_id)
 
             file_path = os.path.join(self.upload_dir, file.filename)
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
