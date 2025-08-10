@@ -51,6 +51,7 @@ class ChatParamsEntity(BaseModel):
     showThink: bool = False
     type: Optional[str] = None  # document/db
     language: Optional[str] = None  # zh/cn
+    tenant_id: Optional[str] = None
 
 
 class ClientMessage(BaseModel):

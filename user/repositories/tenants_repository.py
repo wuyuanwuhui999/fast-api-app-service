@@ -13,31 +13,21 @@ class TenantsRepository:
         self.db = db
 
     async def get_user_tenants(self, user_id: str) -> List[TenantSchema]:
-        """获取用户所属的所有租户"""
+        """获取用户所属的所有租户（优化版，单次查询）"""
         try:
-            # 查询租户用户关联表获取用户所属租户ID列表
-            tenant_users = self.db.query(TenantUserModel).filter(
-                TenantUserModel.user_id == user_id
-            ).all()
-
-            if not tenant_users:
-                return []
-
-            # 获取租户详细信息
-            tenant_ids = [tu.tenant_id for tu in tenant_users]
-            tenants = self.db.query(TenantModel).filter(
-                TenantModel.id.in_(tenant_ids)
-            ).all()
-
-            # 构建结果，包含用户在每个租户中的角色
-            result = []
-            for tenant in tenants:
-                # 查找用户在该租户的角色
-                role_type = next(
-                    (tu.role_type for tu in tenant_users if tu.tenant_id == tenant.id),
-                    0
+            stmt = (
+                select(TenantModel, TenantUserModel.role_type)
+                    .join(
+                    TenantUserModel,
+                    TenantModel.id == TenantUserModel.tenant_id
                 )
+                    .where(TenantUserModel.user_id == user_id)
+            )
 
+            results = self.db.execute(stmt)
+
+            result = []
+            for tenant, role_type in results:
                 tenant_schema = TenantSchema.model_validate(tenant)
                 tenant_schema.role_type = role_type
                 result.append(tenant_schema)

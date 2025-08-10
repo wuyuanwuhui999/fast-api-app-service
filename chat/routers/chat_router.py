@@ -30,10 +30,11 @@ async def websocket_chat(
 async def upload_doc(
         file: UploadFile,
         directory_id: str = "public",
+        tenant_id: str = "None",
         current_user: UserInDB = Depends(get_current_user),
         chat_service: ChatService = Depends()
 ):
-    return await chat_service.upload_doc(file, current_user.id, directory_id)
+    return await chat_service.upload_doc(file, current_user.id, directory_id,tenant_id)
 #
 #
 @router.delete("/deleteDoc/{doc_id}")

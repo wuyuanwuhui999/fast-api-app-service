@@ -1,10 +1,12 @@
 import asyncio
 import uuid
 import logging
+from datetime import timedelta
+
 from fastapi import UploadFile, HTTPException, Depends
 from sqlalchemy.orm import Session
 import os
-
+from langchain.memory import BaseMemory
 from chat.repositories.chat_repository import ChatRepository
 from chat.schemas.chat_schema import ChatDocSchema, ChatParamsEntity, ChatSchema
 from chat.utils.chat_util import PromptUtil
@@ -70,6 +72,25 @@ class ChatService:
         response_collector = []
 
         try:
+            # 从Redis获取或初始化会话记忆
+            chat_history_key = f"chat_history:{user_id}:{chat_params.chatId}"
+            chat_history = self.redis.get(chat_history_key)
+
+            # 初始化聊天模板
+            messages = [
+                ("system", "你叫小吴同学，是一个无所不能的AI助手，上知天文下知地理，请用小吴同学的身份回答问题。")
+            ]
+
+            # 如果有历史会话，添加到消息中
+            if chat_history:
+                try:
+                    messages.extend(eval(chat_history.decode('utf-8')))
+                except Exception as e:
+                    logger.warning(f"Failed to parse chat history from Redis: {str(e)}")
+
+            # 添加当前用户消息
+            messages.append(("human", chat_params.prompt))
+
             # 根据 modelName 和 showThink 获取对应的模型实例
             model_factory = self.model_mapping.get(chat_params.modelName)
             if not model_factory:
@@ -80,13 +101,16 @@ class ChatService:
             # 根据 showThink 参数创建模型实例
             chat_model = model_factory(chat_params.showThink)
 
-            prompt = chat_params.prompt
+            chat_template = ChatPromptTemplate.from_messages(messages)
 
+            # 构建上下文（如果是文档类型）
+            prompt = chat_params.prompt
             if chat_params.type == "document":
                 context = await self.build_context(
                     chat_params.prompt,
                     user_id,
-                    chat_params.directoryId
+                    chat_params.directoryId,
+                    tenant_id=chat_params.tenant_id
                 )
                 if context:
                     prompt = f"请参考内容: {context}\n\n回答问题: {chat_params.prompt}"
@@ -95,25 +119,43 @@ class ChatService:
                     yield "[completed]"
                     return
 
-            chat_template = ChatPromptTemplate.from_messages([
-                ("system", "你叫小吴同学，是一个无所不能的AI助手，上知天文下知地理，请用小吴同学的身份回答问题。"),
-                ("human", "{prompt}")
-            ])
-
             formatted_prompt = chat_template.format_messages(prompt=prompt)
 
             # 流式返回模型响应
-            async for chunk in chat_model.astream(formatted_prompt):
-                response_collector.append(str(chunk))
-                yield str(chunk)
+            full_response = ""
+            async for chunk in chat_model.astream(
+                    formatted_prompt,
+                    config={"configurable": {"session_id": chat_params.chatId}},
+            ):
+                chunk_str = str(chunk)
+                response_collector.append(chunk_str)
+                full_response += chunk_str
+                yield chunk_str
+
+            # 保存当前会话到Redis
+            try:
+                # 只保留最近的10轮对话避免内存过大
+                updated_messages = messages.copy()
+                updated_messages.append(("ai", full_response))
+                if len(updated_messages) > 20:  # 10轮对话(每轮user+AI)
+                    updated_messages = updated_messages[-20:]
+
+                # 设置过期时间为180天
+                await self.redis.setex(
+                    chat_history_key,
+                    timedelta(days=180),
+                    str(updated_messages)
+                )
+            except Exception as e:
+                logger.error(f"Failed to save chat history to Redis: {str(e)}")
 
             # 保存对话记录
-            chat_entity.content = "".join(response_collector)
-            chat_entity.set_content(chat_entity.content)  # 处理思考内容和响应内容
+            chat_entity.content = full_response
+            chat_entity.set_content(chat_entity.content)
 
             yield "[completed]"
-            # 再异步保存记录（不等待）
-            asyncio.create_task(self.save_chat_history_async(chat_entity, "".join(response_collector)))
+            # 异步保存记录
+            asyncio.create_task(self.save_chat_history_async(chat_entity, full_response))
         except Exception as e:
             logger.error(f"WebSocket chat error: {str(e)}", exc_info=True)
             yield f"Error occurred: {str(e)}"
@@ -137,13 +179,24 @@ class ChatService:
         except Exception as e:
             logger.error(f"后台保存聊天记录失败: {str(e)}", exc_info=True)
 
-    async def build_context(self, query: str, user_id: str, directory_id: str) -> str:
+    async def build_context(self, query: str, user_id: str, directory_id: str, tenant_id: str = None) -> str:
         try:
             filters = {
                 "user_id": user_id,
-                "directory_id": directory_id
+                "directory_id": directory_id,
+                "tenant_id": tenant_id
             }
-            results = self.elasticsearch_store.similarity_search(query,filters=[{"term":{f"metadata.{key}":value for key,value in filters.items()}}])
+
+            valid_filters = {k: v for k, v in filters.items() if v is not None and v != ""}
+
+            filter_query = [{"term": {f"metadata.{key}": value}} for key, value in
+                            valid_filters.items()] if valid_filters else []
+
+            results = self.elasticsearch_store.similarity_search(
+                query,
+                filters=filter_query if filter_query else None
+            )
+
             if not results:
                 return ""
 
@@ -173,7 +226,8 @@ class ChatService:
             filename: str,
             user_id: str,
             doc_id: str,
-            directory_id: str
+            directory_id: str,
+            tenant_id: str = None
     ):
         try:
             if not content.strip():
@@ -194,6 +248,7 @@ class ChatService:
                     page_content=text,
                     metadata={
                         "filename": filename,
+                        "tenant_id": tenant_id,
                         "page": i + 1,
                         "user_id": user_id,
                         "doc_id": doc_id,
@@ -217,7 +272,8 @@ class ChatService:
             filename: str,
             user_id: str,
             doc_id: str,
-            directory_id: str
+            directory_id: str,
+            tenant_id: str = None
     ):
         try:
             pdf_reader = PdfReader(BytesIO(content))
@@ -245,7 +301,8 @@ class ChatService:
                 filename,
                 user_id,
                 doc_id,
-                directory_id
+                directory_id,
+                tenant_id
             )
 
         except HTTPException:
@@ -260,7 +317,8 @@ class ChatService:
             filename: str,
             user_id: str,
             doc_id: str,
-            directory_id: str
+            directory_id: str,
+            tenant_id: str = None
     ):
         """Process TXT file and store embeddings"""
         try:
@@ -270,7 +328,8 @@ class ChatService:
                 filename,
                 user_id,
                 doc_id,
-                directory_id
+                directory_id,
+                tenant_id
             )
         except Exception as e:
             logger.error(f"TXT processing failed: {str(e)}")
@@ -302,7 +361,7 @@ class ChatService:
         total = self.chat_repository.get_chat_history_total(user_id)
         return ResultUtil.success(data=chat_history_list, total=total)
 
-    async def upload_doc(self, file: UploadFile, user_id: str, directory_id: str) -> ResultEntity:
+    async def upload_doc(self, file: UploadFile, user_id: str, directory_id: str,tenant_id: str = None) -> ResultEntity:
         if not file.filename:
             raise HTTPException(status_code=400, detail="文件名不能为空")
 
@@ -316,9 +375,9 @@ class ChatService:
             content = await file.read()
 
             if ext.lower() == "pdf":
-                self.process_pdf(content, file.filename, user_id, doc_id, directory_id)
+                self.process_pdf(content, file.filename, user_id, doc_id, directory_id,tenant_id=tenant_id)
             else:
-                self.process_txt(content, file.filename, user_id, doc_id, directory_id)
+                self.process_txt(content, file.filename, user_id, doc_id, directory_id,tenant_id=tenant_id)
 
             file_path = os.path.join(self.upload_dir, file.filename)
             os.makedirs(os.path.dirname(file_path), exist_ok=True)

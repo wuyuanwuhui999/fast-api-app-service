@@ -25,7 +25,7 @@ class TenantsService:
             return ResultUtil.success(data=tenants, total=len(tenants))
         except Exception as e:
             logger.error(f"获取用户租户列表失败: {str(e)}", exc_info=True)
-            return ResultUtil.fail(msg="获取租户列表失败")
+            return ResultUtil.fail(msg="获取租户列表失败",data=None)
 
     async def create_tenant(self, tenant_data: TenantCreateSchema, current_user: UserInDB) -> ResultEntity:
         if not await self._check_admin_permission(current_user.id):
