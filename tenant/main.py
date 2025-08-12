@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from user.routers import user_router
+from tenant.routers import tenants_router
 from common.config.common_database import engine, Base
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="User Service", version="1.0.0")
+app = FastAPI(title="tenant Service", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -15,12 +15,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(user_router.router)
+app.include_router(tenants_router.router)
 
 @app.get("/")
 async def root():
-    return {"message": "User Service is running"}
+    return {"message": "Tenant Service is running"}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8002)

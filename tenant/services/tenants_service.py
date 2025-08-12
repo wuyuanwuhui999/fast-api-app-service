@@ -2,8 +2,8 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from common.schemas.user_schema import UserInDB
-from user.repositories.tenants_repository import TenantsRepository
-from user.schemas.tenants_schema import  TenantUserRoleSchema, TenantUserRoleUpdateSchema, TenantUpdateSchema, TenantCreateSchema
+from tenant.repositories.tenants_repository import TenantsRepository
+from tenant.schemas.tenants_schema import  TenantUserRoleSchema, TenantUserRoleUpdateSchema, TenantUpdateSchema, TenantCreateSchema
 from common.config.common_database import get_db
 from common.config.common_config import get_settings
 import redis

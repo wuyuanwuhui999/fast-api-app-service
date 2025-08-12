@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 
 from common.schemas.user_schema import UserInDB
-from user.schemas.tenants_schema import TenantUserRoleUpdateSchema, TenantUpdateSchema, TenantCreateSchema
-from user.services.tenants_service import TenantsService
+from tenant.schemas.tenants_schema import TenantUserRoleUpdateSchema, TenantUpdateSchema, TenantCreateSchema
+from tenant.services.tenants_service import TenantsService
 from common.dependencies.auth_dependency import get_current_user
 
 router = APIRouter(prefix="/service/user", tags=["tenant"])

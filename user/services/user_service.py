@@ -10,7 +10,6 @@ from datetime import timedelta
 from common.config.common_config import get_settings
 import random
 import redis
-from fastapi.logger import logger
 from common.utils.result_util import ResultEntity, ResultUtil
 
 settings = get_settings()

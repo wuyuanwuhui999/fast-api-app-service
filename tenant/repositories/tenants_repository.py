@@ -3,8 +3,8 @@ from datetime import datetime
 
 from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
-from user.models.tenants_model import TenantUserModel, TenantModel, TenantUserRoleModel
-from user.schemas.tenants_schema import TenantSchema, TenantCreateSchema, TenantUpdateSchema, TenantUserRoleSchema
+from tenant.models.tenants_model import TenantUserModel, TenantModel, TenantUserRoleModel
+from tenant.schemas.tenants_schema import TenantSchema, TenantCreateSchema, TenantUpdateSchema, TenantUserRoleSchema
 from typing import List
 from fastapi.logger import logger
 

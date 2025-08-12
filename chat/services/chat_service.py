@@ -20,7 +20,7 @@ from langchain.prompts.chat import ChatPromptTemplate
 from langchain_ollama import OllamaEmbeddings
 from langchain_ollama import OllamaLLM
 from langchain_core.documents import Document
-from langchain.text_splitter import CharacterTextSplitter
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from io import BytesIO
 
 logger = logging.getLogger(__name__)
@@ -233,7 +233,7 @@ class ChatService:
             if not content.strip():
                 raise ValueError("内容不能为空")
 
-            text_splitter = CharacterTextSplitter(
+            text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=1000,
                 chunk_overlap=200
             )
@@ -257,7 +257,8 @@ class ChatService:
                 ))
 
             try:
-                self.elasticsearch_store.add_documents(documents)
+                ElasticsearchStore.from_documents(documents,OllamaEmbeddings(model="nomic-embed-text:latest"))
+                # self.elasticsearch_store.add_documents(documents)
             except Exception as e:
                 logger.warning(f"索引文档失败， {str(e)}")
 
