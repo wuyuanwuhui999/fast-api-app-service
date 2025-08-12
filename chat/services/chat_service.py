@@ -257,8 +257,7 @@ class ChatService:
                 ))
 
             try:
-                ElasticsearchStore.from_documents(documents,OllamaEmbeddings(model="nomic-embed-text:latest"))
-                # self.elasticsearch_store.add_documents(documents)
+                self.elasticsearch_store.add_documents(documents)
             except Exception as e:
                 logger.warning(f"索引文档失败， {str(e)}")
 
@@ -274,7 +273,7 @@ class ChatService:
             user_id: str,
             doc_id: str,
             directory_id: str,
-            tenant_id: str = None
+            tenant_id: str
     ):
         try:
             pdf_reader = PdfReader(BytesIO(content))
@@ -362,7 +361,7 @@ class ChatService:
         total = self.chat_repository.get_chat_history_total(user_id)
         return ResultUtil.success(data=chat_history_list, total=total)
 
-    async def upload_doc(self, file: UploadFile, user_id: str, directory_id: str,tenant_id: str = None) -> ResultEntity:
+    async def upload_doc(self, file: UploadFile, user_id: str, directory_id: str,tenant_id:str) -> ResultEntity:
         if not file.filename:
             raise HTTPException(status_code=400, detail="文件名不能为空")
 
@@ -376,9 +375,9 @@ class ChatService:
             content = await file.read()
 
             if ext.lower() == "pdf":
-                self.process_pdf(content, file.filename, user_id, doc_id, directory_id,tenant_id=tenant_id)
+                self.process_pdf(content, file.filename, user_id, doc_id, directory_id,tenant_id)
             else:
-                self.process_txt(content, file.filename, user_id, doc_id, directory_id,tenant_id=tenant_id)
+                self.process_txt(content, file.filename, user_id, doc_id, directory_id,tenant_id)
 
             file_path = os.path.join(self.upload_dir, file.filename)
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -390,7 +389,8 @@ class ChatService:
                 user_id=user_id,
                 name=file.filename,
                 ext=ext,
-                directory_id=directory_id
+                directory_id=directory_id,
+                tenant_id=tenant_id
             )
             await self.chat_repository.save_doc(doc)
 

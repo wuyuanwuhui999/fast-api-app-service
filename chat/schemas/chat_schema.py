@@ -65,6 +65,7 @@ class DirectorySchema(BaseModel):
     id: str
     user_id: str
     directory: str
+    tenant_id: str
     update_time: Optional[str] = None
     create_time: Optional[str] = None
 

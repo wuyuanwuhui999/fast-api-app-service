@@ -5,7 +5,7 @@ from tenant.schemas.tenants_schema import TenantUserRoleUpdateSchema, TenantUpda
 from tenant.services.tenants_service import TenantsService
 from common.dependencies.auth_dependency import get_current_user
 
-router = APIRouter(prefix="/service/user", tags=["tenant"])
+router = APIRouter(prefix="/service/tenant", tags=["tenant"])
 
 @router.get("/getUserTenants")
 async def get_user_tenants(
