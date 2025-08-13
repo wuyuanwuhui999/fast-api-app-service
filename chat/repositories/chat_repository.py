@@ -65,7 +65,7 @@ class ChatRepository:
     def get_chat_history_total(self,user_id)->int:
          return self.db.query(ChatHistory).filter(ChatHistory.user_id == user_id).count()
 
-    def save_doc(self, doc: ChatDocSchema) -> bool:
+    def save_doc(self, doc: ChatDocSchema) -> int:
         try:
             db_doc = ChatDocModel(
                 id=doc.id,
@@ -77,7 +77,7 @@ class ChatRepository:
             )
             self.db.add(db_doc)
             self.db.commit()
-            return True
+            return 1
         except Exception as e:
             self.db.rollback()
             raise e

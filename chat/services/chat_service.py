@@ -391,8 +391,7 @@ class ChatService:
                 directory_id=directory_id,
                 tenant_id=tenant_id
             )
-            await self.chat_repository.save_doc(doc)
-
+            self.chat_repository.save_doc(doc)
             return ResultUtil.success(msg="文件上传成功")
 
         except Exception as e:
