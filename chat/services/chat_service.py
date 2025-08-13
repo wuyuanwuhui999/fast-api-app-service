@@ -6,7 +6,6 @@ from datetime import timedelta
 from fastapi import UploadFile, HTTPException, Depends
 from sqlalchemy.orm import Session
 import os
-from langchain.memory import BaseMemory
 from chat.repositories.chat_repository import ChatRepository
 from chat.schemas.chat_schema import ChatDocSchema, ChatParamsEntity, ChatSchema
 from chat.utils.chat_util import PromptUtil

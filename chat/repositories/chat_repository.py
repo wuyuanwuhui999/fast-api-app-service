@@ -72,6 +72,7 @@ class ChatRepository:
                 directory_id=doc.directory_id,
                 name=doc.name,
                 ext=doc.ext,
+                tenant_id=doc.tenant_id,
                 user_id=doc.user_id
             )
             self.db.add(db_doc)
