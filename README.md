@@ -1,192 +1,232 @@
-__FastAPI 应用服务__
+**FastAPI 智能聊天应用服务**
 
-基于 FastAPI 构建的多功能应用服务，集成了用户管理和 AI 聊天功能，提供完整的用户认证、账户管理以及智能对话交互能力。
+基于 FastAPI 构建的模块化智能聊天应用服务，集成用户管理、AI 对话与文档交互功能，支持多模型调用与 RAG（检索增强生成）文档查询。
 
-__项目概述__
+**项目概述**
 
-本项目是一个模块化的 FastAPI 应用服务，包含两个核心模块：
-
-  
+本项目采用模块化设计，包含两大核心服务：
 
 
-- 用户服务（User Service）：提供用户认证、账户管理等基础功能
-- 聊天服务（Chat Service）：提供 AI 对话、文档查询（RAG）等智能交互功能
 
-__功能特性__
 
-__用户服务（User Service）__
+- **用户服务**：提供完整的用户认证与账户管理功能
+- **聊天服务**：支持多模型 AI 对话、文档上传与检索增强生成 (RAG) 功能
 
-- __用户认证__
-	- JWT 令牌认证
-	- 用户名 / 密码登录
-	- 邮箱验证码登录
-- __账户安全__
-	- 密码加密存储
-	- 密码修改与重置
-	- 邮箱验证流程
-- __用户管理__
-	- 用户注册
-	- 个人信息更新
-	- 头像上传
-- __安全防护__
-	- 请求认证中间件
-	- 敏感操作验证
-	- 账户禁用机制
+通过 WebSocket 实现实时聊天交互，结合 Elasticsearch 实现高效文档检索，利用 Ollama 部署本地大模型，确保数据隐私与响应速度。
 
-__聊天服务（Chat Service）__
+**功能特性**
 
-- __AI 对话__
-	- 多模型支持（deepseek\-r1:8b、qwen3:8b 等）
-	- WebSocket 实时通信
-	- 思考过程展示（可切换）
-- __文档管理__
-	- 文档上传（PDF、TXT 等格式）
-	- 文档删除
-	- 文档列表查询
-- __RAG 功能__
-	- 基于文档的智能问答
-	- 相关内容精准定位
-	- 多文档联合查询
-- __会话管理__
-	- 聊天记录保存
-	- 历史会话查询
-	- 分页获取记录
+**用户服务**
 
-__技术栈__
+- **认证机制**：支持用户名密码登录、邮箱验证码登录、JWT 令牌认证
+- **账户管理**：用户注册、信息修改、密码重置、邮箱验证
+- **安全保障**：密码加密存储、敏感操作验证、请求权限控制
 
-- 🐍 Python 3\.10\+
-- ⚡ FastAPI 高性能框架
-- 🛢️ SQLAlchemy 2\.0 ORM
-- 🗃️ MySQL 数据库
-- 🔑 JWT 认证
-- 📧 SMTP 邮件服务
-- 🧩 Redis 缓存服务
-- 🔍 Elasticsearch 搜索引擎
-- 🦜️🔗 LangChain 大模型应用框架
-- 🦙 Ollama 本地大模型部署工具
+**聊天服务**
 
-__快速开始__
+- **AI 对话**：
+  - 多模型支持（deepseek-r1:8b、qwen3:8b 等）
+  - WebSocket 实时通信
+  - 思考过程展示（可切换）
+- **文档管理**：
+  - 多格式文档上传（PDF、TXT 等）
+  - 文档删除与列表查询
+  - 基于 Elasticsearch 的向量检索
+- **RAG 功能**：
+  - 文档内容精准定位
+  - 基于文档的智能问答
+  - 多文档联合查询
+- **会话管理**：
+  - 聊天记录持久化存储
+  - 分页获取历史会话
+  - Redis 缓存近期对话
 
-__环境准备__
+**技术栈**
 
-1. 安装 Python 3\.10\+
-2. 安装 Poetry 包管理工具
-3. 准备 PostgreSQL 数据库
-4. 准备 Redis 服务
-5. 准备 Elasticsearch 服务
-6. 部署 Ollama 及所需模型
+- **核心框架**：Python 3.10+、FastAPI
+- **数据存储**：
+  - PostgreSQL 数据库（用户数据、聊天记录）
+  - Redis（会话缓存、临时数据）
+  - Elasticsearch（文档向量存储与检索）
+- **认证授权**：JWT、密码加密（passlib）
+- **AI 集成**：
+  - LangChain（大模型应用框架）
+  - Ollama（本地大模型部署）
+  - 向量嵌入（nomic-embed-text）
+- **其他工具**：
+  - SQLAlchemy 2.0（ORM）
+  - WebSocket（实时通信）
+  - python-multipart（文件上传）
 
-__安装步骤__
+**快速开始**
+
+**环境准备**
+
+1. 安装 Python 3.10+
+1. 安装 Poetry 包管理工具
+1. 部署必要服务：
+   1. PostgreSQL 数据库
+   1. Redis 服务
+   1. Elasticsearch 服务
+   1. Ollama 及所需模型（deepseek-r1:8b、qwen3:8b、nomic-embed-text）
+
+**安装步骤**
 
 1. 克隆仓库
 
 bash
 
-git clone https://github\.com/wuyuanwuhui999/fast\-api\-app\-service\.git
+git clone https://github.com/wuyuanwuhui999/fast-api-app-service.git
 
-cd fast\-api\-app\-service
-
-  
+cd fast-api-app-service
 
 
-1. 创建虚拟环境
-
-bash
-
-python \-m venv env
-
-  
 
 
-1. 激活虚拟环境
+2. 创建并激活虚拟环境
 
 bash
+
+\# 创建虚拟环境
+
+python -m venv env
+
+\# 激活虚拟环境
 
 \# Windows
 
-env\\Scripts\\activate
+env\Scripts\activate
 
 \# Linux/MacOS
 
 source env/bin/activate
 
-  
 
 
-1. 安装依赖
 
-bash
-
-pip install \-r requirements\.txt
-
-__运行服务__
-
-1. 启动用户服务
+3. 安装依赖
 
 bash
 
-uvicorn user\.main:app \-\-reload \-\-port 8000
+pip install -r requirements.txt
 
-  
+**运行服务**
 
-
-1. 启动聊天服务
+1. 启动用户服务（端口 8000）
 
 bash
 
-uvicorn chat\.main:app \-\-reload \-\-port 8001
-
-__API 接口__
-
-__用户服务接口__
-
-- POST /service/user/register \- 用户注册
-- POST /service/user/login \- 用户登录
-- GET /service/user\-getway/getUserData \- 获取用户信息
-- PUT /service/user\-getway/updateUser \- 更新用户信息
-- PUT /service/user\-getway/updatePassword \- 修改密码
-- POST /service/user/sendEmailVertifyCode \- 发送邮箱验证码
-- POST /service/user\-getway/resetPassword \- 重置密码
-- POST /service/user/loginByEmail \- 邮箱登录
-
-__聊天服务接口__
-
-- GET /service/ai/getModelList \- 获取模型列表
-- WebSocket /service/ai/ws/chat \- 实时聊天接口
-- POST /service/ai/uploadDoc \- 上传文档
-- DELETE /service/ai/deleteDoc/\{doc\_id\} \- 删除文档
-- GET /service/ai/getChatHistory \- 获取聊天历史
-- GET /service/ai/getDocList \- 获取文档列表
-
-__界面预览__
-
-__项目结构__
-
-项目采用模块化设计，主要目录结构如下：
-
-  
+uvicorn user.main:app --reload --port 8000
 
 
-- user/ \- 用户服务模块
-	- routers/ \- 路由定义
-	- services/ \- 业务逻辑
-	- repositories/ \- 数据访问
-	- models/ \- 数据模型
-	- schemas/ \- 数据验证
-- chat/ \- 聊天服务模块
-	- routers/ \- 路由定义
-	- services/ \- 业务逻辑
-	- repositories/ \- 数据访问
-	- models/ \- 数据模型
-	- schemas/ \- 数据验证
-	- utils/ \- 工具函数
-- common/ \- 公共模块
-	- config/ \- 配置文件
-	- dependencies/ \- 依赖注入
-	- models/ \- 公共模型
-	- utils/ \- 公共工具
 
- 
+
+2. 启动聊天服务（端口 8001）
+
+bash
+
+uvicorn chat.main:app --reload --port 8001
+
+**API 接口文档**
+
+**用户服务接口**
+
+|**方法**|**路径**|**描述**|
+| - | - | - |
+|POST|/service/user/register|用户注册|
+|POST|/service/user/login|用户名密码登录|
+|POST|/service/user/loginByEmail|邮箱验证码登录|
+|GET|/service/user-getway/getUserData|获取用户信息|
+|PUT|/service/user-getway/updateUser|更新用户信息|
+|PUT|/service/user-getway/updatePassword|修改密码|
+|POST|/service/user/sendEmailVertifyCode|发送邮箱验证码|
+|POST|/service/user-getway/resetPassword|重置密码|
+
+**聊天服务接口**
+
+|**方法**|**路径**|**描述**|
+| - | - | - |
+|GET|/service/ai/getModelList|获取可用模型列表|
+|WebSocket|/service/ai/ws/chat|实时聊天接口|
+|POST|/service/ai/uploadDoc|上传文档（支持 RAG）|
+|DELETE|/service/ai/deleteDoc/{doc\_id}|删除文档|
+|GET|/service/ai/getChatHistory|获取聊天历史记录|
+|GET|/service/ai/getDocList|获取用户文档列表|
+
+**项目结构**
+
+plaintext
+
+fast-api-app-service/
+
+├── user/                 # 用户服务模块
+
+│   ├── routers/          # 路由定义
+
+│   ├── services/         # 业务逻辑
+
+│   ├── repositories/     # 数据访问
+
+│   ├── models/           # 数据模型
+
+│   └── schemas/          # 数据验证
+
+├── chat/                 # 聊天服务模块
+
+│   ├── routers/          # 路由定义
+
+│   ├── services/         # 业务逻辑
+
+│   ├── repositories/     # 数据访问
+
+│   ├── models/           # 数据模型
+
+│   ├── schemas/          # 数据验证
+
+│   └── utils/            # 工具函数
+
+├── common/               # 公共模块
+
+│   ├── config/           # 配置文件
+
+│   ├── dependencies/     # 依赖注入
+
+│   ├── models/           # 公共模型
+
+│   └── utils/            # 公共工具
+
+├── tenant/               # 租户管理模块
+
+│   ├── models/           # 租户数据模型
+
+│   ├── repositories/     # 租户数据访问
+
+│   └── schemas/          # 租户数据验证
+
+├── prompt/               # 提示词管理模块
+
+│   ├── models/           # 提示词模型
+
+│   ├── repositories/     # 提示词数据访问
+
+│   └── services/         # 提示词业务逻辑
+
+├── test/                 # 测试模块
+
+│   └── elasticsearch\_test.py # Elasticsearch测试
+
+├── requirements.txt      # 项目依赖
+
+└── README.md             # 项目文档
+
+**部署说明**
+
+1. 确保所有依赖服务（PostgreSQL、Redis、Elasticsearch、Ollama）已正确配置并启动
+1. 根据实际环境修改配置文件中的连接参数
+1. 生产环境建议使用 Gunicorn 作为 WSGI 服务器，配合 Nginx 作为反向代理
+1. 大模型选择需根据硬件配置调整，推荐至少 16GB 内存运行 8B 参数模型
+
+
 
 ================================APP界面预览================================   
 ![ai智能聊天助手](ai智能聊天助手.png)
