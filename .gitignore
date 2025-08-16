@@ -1,6 +1,7 @@
 # JetBrains IDE 相关文件
 .idea/
 *.iml
+.git/
 *.ipr
 *.iws
 env/

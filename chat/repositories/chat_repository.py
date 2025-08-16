@@ -73,7 +73,9 @@ class ChatRepository:
                 name=doc.name,
                 ext=doc.ext,
                 tenant_id=doc.tenant_id,
-                user_id=doc.user_id
+                user_id=doc.user_id,
+                create_time=datetime.now(),
+                update_time=datetime.now()
             )
             self.db.add(db_doc)
             self.db.commit()
@@ -147,7 +149,8 @@ class ChatRepository:
 
     def get_doc_List(self, user_id: str, tenant_id: Optional[str] = None) -> List[ChatDocSchema]:
         query = self.db.query(ChatDocModel).filter(
-            ChatDocModel.user_id == user_id
+            ChatDocModel.user_id == user_id,
+            ChatDocModel.tenant_id == tenant_id
         )
 
         if tenant_id:
