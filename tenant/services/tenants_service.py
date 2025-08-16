@@ -18,14 +18,24 @@ class TenantsService:
         self.tenants_repository = TenantsRepository(db)
         self.redis = redis.Redis.from_url(settings.redis_url)
 
-    async def get_user_tenants(self, user_id: str) -> ResultEntity:
+    async def get_user_tenant_list(self, user_id: str) -> ResultEntity:
         """获取用户所属的所有租户"""
         try:
-            tenants = await self.tenants_repository.get_user_tenants(user_id)
+            tenants = await self.tenants_repository.get_user_tenant_list(user_id)
             return ResultUtil.success(data=tenants, total=len(tenants))
         except Exception as e:
             logger.error(f"获取用户租户列表失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg="获取租户列表失败",data=None)
+
+
+    async def get_tenant_user(self, user_id: str,tenant_id:str) -> ResultEntity:
+        """获取用户所属的所有租户"""
+        try:
+            tenants = await self.tenants_repository.get_tenant_user(user_id,tenant_id)
+            return ResultUtil.success(data=tenants, total=len(tenants))
+        except Exception as e:
+            logger.error(f"获取当前租户的用户失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg="获取当前租户的用户失败",data=None)
 
     async def create_tenant(self, tenant_data: TenantCreateSchema, current_user: UserInDB) -> ResultEntity:
         if not await self._check_admin_permission(current_user.id):

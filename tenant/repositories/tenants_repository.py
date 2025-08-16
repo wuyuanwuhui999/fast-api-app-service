@@ -8,11 +8,12 @@ from tenant.schemas.tenants_schema import TenantSchema, TenantCreateSchema, Tena
 from typing import List
 from fastapi.logger import logger
 
+
 class TenantsRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    async def get_user_tenants(self, user_id: str) -> List[TenantSchema]:
+    async def get_user_tenant_list(self, user_id: str) -> List[TenantSchema]:
         """获取用户所属的所有租户（优化版，单次查询）"""
         try:
             stmt = (
@@ -37,6 +38,11 @@ class TenantsRepository:
         except Exception as e:
             logger.error(f"获取用户租户列表失败: {str(e)}", exc_info=True)
             raise
+
+    async def get_tenant_user(self, user_id: str, tenant_id: str):
+        return self.db.query(TenantUserModel).filter(
+            (TenantUserModel.tenant_id == tenant_id) & (TenantUserModel.user_id == user_id)
+        ).first()
 
     async def create_tenant(self, tenant_data: TenantCreateSchema, creator_id: str) -> TenantSchema:
         db_tenant = TenantModel(
