@@ -60,9 +60,12 @@ class ResultUtil:
             return None
         if isinstance(data, dict):
             return {ResultUtil.snake_to_camel(k): ResultUtil.convert_snake_to_camel(v)
-                   for k, v in data.items()}
+                    for k, v in data.items()}
         elif isinstance(data, (list, tuple)):
             return [ResultUtil.convert_snake_to_camel(item) for item in data]
+        elif hasattr(data, 'dict'):  # 处理Pydantic模型
+            return {ResultUtil.snake_to_camel(k): ResultUtil.convert_snake_to_camel(v)
+                    for k, v in data.model_dump().items()}
         return data
 
     @staticmethod

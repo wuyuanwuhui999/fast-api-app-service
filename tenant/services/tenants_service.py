@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 
 from common.schemas.user_schema import UserInDB
 from tenant.repositories.tenants_repository import TenantsRepository
-from tenant.schemas.tenants_schema import  TenantUserRoleSchema, TenantUserRoleUpdateSchema, TenantUpdateSchema, TenantCreateSchema
+from tenant.schemas.tenants_schema import TenantUserRoleSchema, TenantUserRoleUpdateSchema, TenantUpdateSchema, \
+    TenantCreateSchema
 from common.config.common_database import get_db
 from common.config.common_config import get_settings
 import redis
@@ -22,20 +23,24 @@ class TenantsService:
         """获取用户所属的所有租户"""
         try:
             tenants = await self.tenants_repository.get_user_tenant_list(user_id)
-            return ResultUtil.success(data=tenants, total=len(tenants))
+            if tenants:
+                # 直接返回租户列表，不需要转换为 TenantUserSchema
+                return ResultUtil.success(data=tenants, total=len(tenants))
+            return ResultUtil.fail(msg="用户不属于任何租户")
         except Exception as e:
             logger.error(f"获取用户租户列表失败: {str(e)}", exc_info=True)
-            return ResultUtil.fail(msg="获取租户列表失败",data=None)
+            return ResultUtil.fail(msg="获取租户列表失败", data=None)
 
-
-    async def get_tenant_user(self, user_id: str,tenant_id:str) -> ResultEntity:
-        """获取用户所属的所有租户"""
+    async def get_tenant_user(self, user_id: str, tenant_id: str) -> ResultEntity:
+        """获取用户在指定租户的信息"""
         try:
-            tenants = await self.tenants_repository.get_tenant_user(user_id,tenant_id)
-            return ResultUtil.success(data=tenants, total=len(tenants))
+            tenant_user = await self.tenants_repository.get_tenant_user(user_id, tenant_id)
+            if tenant_user:
+                return ResultUtil.success(data=tenant_user)
+            return ResultUtil.fail(msg="用户不在该租户中")
         except Exception as e:
             logger.error(f"获取当前租户的用户失败: {str(e)}", exc_info=True)
-            return ResultUtil.fail(msg="获取当前租户的用户失败",data=None)
+            return ResultUtil.fail(msg="获取当前租户的用户失败", data=None)
 
     async def create_tenant(self, tenant_data: TenantCreateSchema, current_user: UserInDB) -> ResultEntity:
         if not await self._check_admin_permission(current_user.id):

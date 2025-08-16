@@ -4,8 +4,9 @@ from datetime import datetime
 from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 from tenant.models.tenants_model import TenantUserModel, TenantModel, TenantUserRoleModel
-from tenant.schemas.tenants_schema import TenantSchema, TenantCreateSchema, TenantUpdateSchema, TenantUserRoleSchema
-from typing import List
+from tenant.schemas.tenants_schema import TenantSchema, TenantCreateSchema, TenantUpdateSchema, TenantUserRoleSchema, \
+    TenantUserSchema
+from typing import List, Optional
 from fastapi.logger import logger
 
 
@@ -39,10 +40,16 @@ class TenantsRepository:
             logger.error(f"获取用户租户列表失败: {str(e)}", exc_info=True)
             raise
 
-    async def get_tenant_user(self, user_id: str, tenant_id: str):
-        return self.db.query(TenantUserModel).filter(
-            (TenantUserModel.tenant_id == tenant_id) & (TenantUserModel.user_id == user_id)
+    async def get_tenant_user(self, user_id: str, tenant_id: str) -> Optional[TenantUserSchema]:
+        """获取用户在指定租户的信息"""
+        tenant_user = self.db.query(TenantUserModel).filter(
+            (TenantUserModel.tenant_id == tenant_id) &
+            (TenantUserModel.user_id == user_id)
         ).first()
+
+        if tenant_user:
+            return TenantUserSchema.model_validate(tenant_user)
+        return None
 
     async def create_tenant(self, tenant_data: TenantCreateSchema, creator_id: str) -> TenantSchema:
         db_tenant = TenantModel(
