@@ -42,6 +42,49 @@ class TenantsService:
             logger.error(f"获取当前租户的用户失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg="获取当前租户的用户失败", data=None)
 
+    # 在 TenantsService 类中添加以下方法
+    async def get_tenant_users_with_pagination(
+            self,
+            tenant_id: str,
+            page: int,
+            page_size: int,
+            current_user: UserInDB
+    ) -> ResultEntity:
+        """获取租户用户列表（分页）"""
+        try:
+            # 权限检查 - 只有租户管理员或超级管理员可以查看
+            if not await self._check_tenant_admin(tenant_id, current_user.id):
+                return ResultUtil.error("无权查看此租户用户列表")
+
+            # 获取租户用户分页列表
+            users, total = await self.tenants_repository.get_tenant_users_with_pagination(
+                tenant_id, page, page_size
+            )
+
+            # 获取用户详细信息（从用户表）
+            user_details = []
+            for user_role in users:
+                user = await self.tenants_repository.get_user(user_role.user_id)
+                if user:
+                    user_details.append({
+                        "id": user_role.id,
+                        "tenant_id": user_role.tenant_id,
+                        "user_id": user_role.user_id,
+                        "role_type": user_role.role_type,
+                        "is_disabled": user_role.is_disabled,
+                        "create_time": user_role.create_time,
+                        "update_time": user_role.update_time,
+                        "username": user.username,
+                        "email": user.email,
+                        "avatar": user.avatar
+                    })
+
+            return ResultUtil.success(data=user_details, total=total)
+
+        except Exception as e:
+            logger.error(f"获取租户用户分页列表失败: {str(e)}", exc_info=True)
+            return ResultUtil.error("获取用户列表失败")
+
     async def create_tenant(self, tenant_data: TenantCreateSchema, current_user: UserInDB) -> ResultEntity:
         if not await self._check_admin_permission(current_user.id):
             return ResultUtil.fail(msg="无权创建租户")

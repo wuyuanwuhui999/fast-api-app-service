@@ -26,6 +26,20 @@ async def get_user_tenant(
     """获取当前用户所属的所有租户"""
     return await tenants_service.get_tenant_user(current_user.id,tenantId)
 
+# 在 router 中添加以下路由
+@router.get("/getTenantUserList", response_model=ResultEntity)
+async def get_tenant_users_with_pagination(
+    tenantId: str,
+    pageNum: int = 1,
+    pageSize: int = 10,
+    current_user: UserInDB = Depends(get_current_user),
+    tenants_service: TenantsService = Depends()
+):
+    """获取租户用户列表（分页）"""
+    return await tenants_service.get_tenant_users_with_pagination(
+        tenantId, pageNum, pageSize, current_user
+    )
+
 @router.post("/tenants",response_model=ResultEntity)
 async def create_tenant(
     tenant_data: TenantCreateSchema,

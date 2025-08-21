@@ -39,6 +39,11 @@ class TenantUserSchema(BaseModel):
         }
     )
 
+# 在 tenants_schema.py 末尾添加
+class TenantUsersQuerySchema(BaseModel):
+    tenant_id: str
+    page: int = Field(1, ge=1, description="页码")
+    page_size: int = Field(10, ge=1, le=20, description="每页数量")
 
 class TenantListResponse(BaseModel):
     data: List[TenantSchema]

@@ -51,6 +51,42 @@ class TenantsRepository:
             return TenantUserSchema.model_validate(tenant_user)
         return None
 
+    # 在 TenantsRepository 类中添加以下方法
+    async def get_tenant_users_with_pagination(
+            self,
+            tenant_id: str,
+            page: int = 1,
+            page_size: int = 10
+    ) -> tuple[List[TenantUserRoleSchema], int]:
+        """获取租户用户列表（分页）"""
+        try:
+            # 计算偏移量
+            offset = (page - 1) * page_size
+
+            # 查询总数
+            total_stmt = select(func.count()).select_from(TenantUserRoleModel).where(
+                TenantUserRoleModel.tenant_id == tenant_id
+            )
+            total = self.db.scalar(total_stmt)
+
+            # 查询分页数据
+            stmt = (
+                select(TenantUserRoleModel)
+                    .where(TenantUserRoleModel.tenant_id == tenant_id)
+                    .order_by(TenantUserRoleModel.create_time.desc())
+                    .offset(offset)
+                    .limit(page_size)
+            )
+
+            results = self.db.execute(stmt)
+            users = [TenantUserRoleSchema.model_validate(u) for u in results.scalars()]
+
+            return users, total
+
+        except Exception as e:
+            logger.error(f"获取租户用户分页列表失败: {str(e)}", exc_info=True)
+            raise
+
     async def create_tenant(self, tenant_data: TenantCreateSchema, creator_id: str) -> TenantSchema:
         db_tenant = TenantModel(
             id=str(uuid.uuid4()),
