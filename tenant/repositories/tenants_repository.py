@@ -137,3 +137,12 @@ class TenantsRepository:
             select(TenantUserRoleModel).where(TenantUserRoleModel.tenant_id == tenant_id)
         )
         return [TenantUserRoleSchema.model_validate(u) for u in users.scalars()]
+
+    async def get_user_tenants(self, user_id: str) -> List[TenantUserModel]:
+        users = await self.db.execute(
+            select(TenantUserModel).where(
+                (TenantUserModel.user_id == user_id) &
+                (TenantUserModel.role_type > 2)
+            )
+        )
+        return [TenantUserSchema.model_validate(u) for u in users.scalars()]

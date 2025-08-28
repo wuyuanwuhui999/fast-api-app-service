@@ -54,7 +54,7 @@ class TenantsService:
         try:
             # 权限检查 - 只有租户管理员或超级管理员可以查看
             if not await self._check_tenant_admin(tenant_id, current_user.id):
-                return ResultUtil.error("无权查看此租户用户列表")
+                return ResultUtil.fail("无权查看此租户用户列表")
 
             # 获取租户用户分页列表
             users, total = await self.tenants_repository.get_tenant_users_with_pagination(
@@ -83,7 +83,7 @@ class TenantsService:
 
         except Exception as e:
             logger.error(f"获取租户用户分页列表失败: {str(e)}", exc_info=True)
-            return ResultUtil.error("获取用户列表失败")
+            return ResultUtil.fail("获取用户列表失败")
 
     async def create_tenant(self, tenant_data: TenantCreateSchema, current_user: UserInDB) -> ResultEntity:
         if not await self._check_admin_permission(current_user.id):
