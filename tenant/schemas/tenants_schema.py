@@ -31,6 +31,7 @@ class TenantUserSchema(BaseModel):
     role_type: int = Field(..., description="角色类型：0-普通用户，1-租户管理员，2-超级管理员")
     join_date: datetime = Field(..., description="加入时间")
     create_by: str = Field(..., description="创建人ID")
+    disabled: Optional[int] = None
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -67,9 +68,9 @@ class TenantUserRoleSchema(BaseModel):
     tenant_id: str
     user_id: str
     role_type: int = Field(..., ge=0, le=2)
-    is_disabled: bool = False
+    disabled: bool = False
 
 
 class TenantUserRoleUpdateSchema(BaseModel):
     role_type: Optional[int] = Field(None, ge=0, le=2)
-    is_disabled: Optional[bool] = None
+    disabled: Optional[bool] = None

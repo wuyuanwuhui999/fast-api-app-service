@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     mail_server: str = "smtp.qq.com"
     mail_starttls: bool = False
     mail_ssl_tls: bool = True
-    avatar_path: str = "/static/user/avatar/"
+    avater_path: str = "/static/user/avater/"
     UPLOAD_DIR: str = "G:/static/ai/"
     class Config:
         env_file = Path(__file__).parent.parent.parent / ".env"

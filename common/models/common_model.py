@@ -20,7 +20,7 @@ class User(Base):
     username = Column(String(255), nullable=False, comment='昵称')
     telephone = Column(String(20), comment='电话')
     email = Column(String(255), comment='邮箱')
-    avater = Column(String(255), comment='头像地址')  # 注意字段名是avater不是avatar
+    avater = Column(String(255), comment='头像地址')  # 注意字段名是avater不是avater
     birthday = Column(String(16), comment='出生年月日')
     sex = Column(String(1), comment='性别，0:男，1:女')  # 原表是varchar(1)
     role = Column(String(255), comment='角色')

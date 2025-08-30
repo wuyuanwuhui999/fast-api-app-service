@@ -34,6 +34,7 @@ class TenantUserModel(Base):
     role_type = Column(SmallInteger, nullable=False, comment='角色类型：0-普通用户，1-租户管理员，2-超级管理员')
     join_date = Column(DateTime, nullable=False, comment='加入时间')
     create_by = Column(String(32), nullable=False, comment='创建人ID')
+    disabled = Column(SmallInteger, nullable=False, comment='是否禁用')
 
 
 # 在chat_model.py中添加以下模型（如果尚未存在）
@@ -48,6 +49,6 @@ class TenantUserRoleModel(Base):
     tenant_id = Column(String(32), nullable=False)
     user_id = Column(String(32), nullable=False)
     role_type = Column(Integer, nullable=False, comment='0-普通用户 1-管理员 2-超级管理员')
-    is_disabled = Column(Boolean, default=False, comment='是否禁用')
+    disabled = Column(Boolean, default=False, comment='是否禁用')
     create_time = Column(DateTime, server_default=func.now())
     update_time = Column(DateTime, server_default=func.now(), onupdate=func.now())

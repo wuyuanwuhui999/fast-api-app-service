@@ -63,20 +63,19 @@ class TenantsService:
 
             # 获取用户详细信息（从用户表）
             user_details = []
-            for user_role in users:
-                user = await self.tenants_repository.get_user(user_role.user_id)
+            for tenant_user in users:
+                user = await self.tenants_repository.get_user(tenant_user.user_id)
                 if user:
                     user_details.append({
-                        "id": user_role.id,
-                        "tenant_id": user_role.tenant_id,
-                        "user_id": user_role.user_id,
-                        "role_type": user_role.role_type,
-                        "is_disabled": user_role.is_disabled,
-                        "create_time": user_role.create_time,
-                        "update_time": user_role.update_time,
+                        "id": tenant_user.id,
+                        "tenant_id": tenant_user.tenant_id,
+                        "user_id": tenant_user.user_id,
+                        "role_type": tenant_user.role_type,
+                        "disabled": tenant_user.disabled,
+                        "join_date": tenant_user.join_date,
                         "username": user.username,
                         "email": user.email,
-                        "avatar": user.avatar
+                        "avater": user.avater
                     })
 
             return ResultUtil.success(data=user_details, total=total)
@@ -165,7 +164,7 @@ class TenantsService:
             # 获取用户在该租户的角色
             tenant_roles = await self.tenants_repository.get_user_tenants(user_id)
             for tenant in tenant_roles:
-                if tenant.id == tenant_id:
+                if tenant.tenant_id == tenant_id:  # 注意：这里应该是 tenant.tenant_id 而不是 tenant.id
                     # 角色类型1(管理员)或2(超级管理员)都有权限
                     return tenant.role_type >= 1
             return False
@@ -196,7 +195,7 @@ class TenantsService:
                         **user_role.dict(),
                         "username": user.username,
                         "email": user.email,
-                        "avatar": user.avatar
+                        "avater": user.avater
                     })
 
             return ResultUtil.success(data=user_details)

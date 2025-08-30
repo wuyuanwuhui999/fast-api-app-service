@@ -1,8 +1,10 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.orm import Session
+
+from common.models.common_model import User
 from tenant.models.tenants_model import TenantUserModel, TenantModel, TenantUserRoleModel
 from tenant.schemas.tenants_schema import TenantSchema, TenantCreateSchema, TenantUpdateSchema, TenantUserRoleSchema, \
     TenantUserSchema
@@ -57,29 +59,29 @@ class TenantsRepository:
             tenant_id: str,
             page: int = 1,
             page_size: int = 10
-    ) -> tuple[List[TenantUserRoleSchema], int]:
+    ) -> tuple[List[TenantUserSchema], int]:
         """获取租户用户列表（分页）"""
         try:
             # 计算偏移量
             offset = (page - 1) * page_size
 
             # 查询总数
-            total_stmt = select(func.count()).select_from(TenantUserRoleModel).where(
-                TenantUserRoleModel.tenant_id == tenant_id
+            total_stmt = select(func.count()).select_from(TenantUserModel).where(
+                TenantUserModel.tenant_id == tenant_id
             )
             total = self.db.scalar(total_stmt)
 
             # 查询分页数据
             stmt = (
-                select(TenantUserRoleModel)
-                    .where(TenantUserRoleModel.tenant_id == tenant_id)
-                    .order_by(TenantUserRoleModel.create_time.desc())
+                select(TenantUserModel)
+                    .where(TenantUserModel.tenant_id == tenant_id)
+                    .order_by(TenantUserModel.join_date.desc())
                     .offset(offset)
                     .limit(page_size)
             )
 
             results = self.db.execute(stmt)
-            users = [TenantUserRoleSchema.model_validate(u) for u in results.scalars()]
+            users = [TenantUserSchema.model_validate(u) for u in results.scalars()]
 
             return users, total
 
@@ -138,11 +140,23 @@ class TenantsRepository:
         )
         return [TenantUserRoleSchema.model_validate(u) for u in users.scalars()]
 
-    async def get_user_tenants(self, user_id: str) -> List[TenantUserModel]:
-        users = await self.db.execute(
+    async def get_user_tenants(self, user_id: str) -> List[TenantUserSchema]:
+        """获取用户的所有租户角色信息"""
+        users = self.db.execute(
             select(TenantUserModel).where(
                 (TenantUserModel.user_id == user_id) &
-                (TenantUserModel.role_type > 2)
+                (TenantUserModel.role_type > 0)  # 获取所有有管理权限的角色
             )
         )
         return [TenantUserSchema.model_validate(u) for u in users.scalars()]
+
+        # 添加 get_user 方法
+
+    async def get_user(self, user_id: str) -> Optional[User]:
+        """根据用户ID获取用户信息"""
+        try:
+            user = self.db.query(User).filter(User.id == user_id).first()
+            return user
+        except Exception as e:
+            logger.error(f"获取用户信息失败: {str(e)}", exc_info=True)
+            return None
