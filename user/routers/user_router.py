@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from user.models.user_model import LoginForm
 from common.schemas.user_schema import UserInDB
@@ -57,3 +57,18 @@ async def login_by_email(mail_request: MailRequest, user_service: UserService = 
 @router.post("/user/vertifyUser", response_model=ResultEntity)
 async def verify_user(user: UserCreate, user_service: UserService = Depends()):
     return await user_service.verify_user(user)
+
+@router.get("/user-getway/searchUsers", response_model=ResultEntity)
+async def search_users(
+    keyword: str = Query(..., description="搜索关键词"),
+    tenantId:str = Query(0, description="租户id"),
+    pageNum: int = Query(0, description="跳过记录数"),
+    pageSize: int = Query(100, description="返回记录数"),
+    current_user: UserInDB = Depends(get_current_user),
+    user_service: UserService = Depends()
+):
+    """
+    模糊查询用户列表
+    根据用户名、账号、邮箱、电话进行模糊搜索
+    """
+    return await user_service.search_users(keyword,tenantId, (pageNum - 1) * pageSize, pageSize)

@@ -139,3 +139,26 @@ class UserService:
     async def verify_user(self, user: UserCreate) -> ResultEntity:
         user_account_count = self.user_repository.verify_user(user.user_account)
         return ResultUtil.success(data=user_account_count)
+
+    async def search_users(self, keyword: str, tenant_id: str, skip: int = 0,
+                                            limit: int = 100) -> ResultEntity:
+        """
+        模糊查询用户列表，并标记用户是否在指定租户中
+        :param keyword: 搜索关键词
+        :param tenant_id: 租户ID
+        :param skip: 跳过记录数
+        :param limit: 返回记录数
+        :return: 用户列表和总数（包含租户关联标识）
+        """
+        # 查询用户列表（包含租户标识）
+        users_with_flag = self.user_repository.search_users(keyword, tenant_id, skip, limit)
+        total = self.user_repository.count_search_users(keyword)
+
+        # 构建返回数据
+        user_list = []
+        for user, in_tenant_flag in users_with_flag:
+            user_data = UserInDB.model_validate(user).dict()
+            user_data['in_tenant'] = in_tenant_flag  # 添加租户标识字段
+            user_list.append(user_data)
+
+        return ResultUtil.success(data=user_list,total = total)

@@ -1,7 +1,10 @@
+from sqlalchemy import or_, case
 from sqlalchemy.orm import Session
 from common.models.common_model import User
+from tenant.models.tenants_model import TenantUserModel
 from user.schemas.user_schema import UserCreate, UserUpdate
-from typing import Optional
+from typing import Optional, Any
+
 
 class UserRepository:
     def __init__(self, db: Session):
@@ -39,6 +42,66 @@ class UserRepository:
 
     def get_users(self, skip: int = 0, limit: int = 100) -> list[User]:
         return self.db.query(User).offset(skip).limit(limit).all()
+
+    def search_users(self, keyword: str, tenant_id: str, skip: int = 0, limit: int = 100) -> list:
+        """
+        模糊查询用户列表，并标记用户是否在指定租户中
+        :param keyword: 搜索关键词
+        :param tenant_id: 租户ID
+        :param skip: 跳过记录数
+        :param limit: 返回记录数
+        :return: 用户列表（包含租户关联标识）
+        """
+        # 构建子查询：检查用户是否在租户中
+        tenant_user_subquery = (
+            self.db.query(TenantUserModel.user_id)
+            .filter(
+                TenantUserModel.tenant_id == tenant_id,
+                TenantUserModel.disabled == 0  # 只查询未禁用的关联
+            )
+            .subquery()
+        )
+
+        # 主查询：模糊搜索用户并添加租户标识
+        return (
+            self.db.query(
+                User,
+                case(
+                    (User.id.in_(self.db.query(tenant_user_subquery)), 1),
+                    else_=0
+                ).label('in_tenant')
+            )
+            .filter(
+                or_(
+                    User.username.ilike(f"%{keyword}%"),
+                    User.user_account.ilike(f"%{keyword}%"),
+                    User.email.ilike(f"%{keyword}%"),
+                    User.telephone.ilike(f"%{keyword}%")
+                )
+            )
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+
+    def count_search_users(self, keyword: str) -> int:
+        """
+        统计模糊查询的用户数量
+        :param keyword: 搜索关键词
+        :return: 用户数量
+        """
+        return (
+            self.db.query(User)
+            .filter(
+                or_(
+                    User.username.ilike(f"%{keyword}%"),
+                    User.user_account.ilike(f"%{keyword}%"),
+                    User.email.ilike(f"%{keyword}%"),
+                    User.telephone.ilike(f"%{keyword}%")
+                )
+            )
+            .count()
+        )
 
     def create_user(self, user: UserCreate) -> User:
         db_user = User(
