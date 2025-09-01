@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, UploadFile, WebSocket
 from chat.schemas.chat_schema import ChatParamsEntity
 from chat.services.chat_service import ChatService
 from common.dependencies.auth_dependency import get_current_user
-from common.schemas.user_schema import UserInDB
+from common.schemas.user_schema import UserSchema
 
 router = APIRouter(prefix="/service/ai", tags=["chat"])
 
@@ -31,7 +31,7 @@ async def upload_doc(
         file: UploadFile,
         directoryId: str = "public",
         tenantId: str = "personal",
-        current_user: UserInDB = Depends(get_current_user),
+        current_user: UserSchema = Depends(get_current_user),
         chat_service: ChatService = Depends()
 ):
     return await chat_service.upload_doc(file, current_user.id, directoryId,tenantId)
@@ -41,7 +41,7 @@ async def upload_doc(
 async def delete_document(
         doc_id: str,
         directory_id: str,
-        current_user: UserInDB = Depends(get_current_user),
+        current_user: UserSchema = Depends(get_current_user),
         chat_service: ChatService = Depends()
 ):
     return await chat_service.delete_document(doc_id, current_user.id, directory_id)
@@ -51,7 +51,7 @@ async def delete_document(
 async def get_history(
         pageNum: int = 1,
         pageSize: int = 10,
-        current_user: UserInDB = Depends(get_current_user),
+        current_user: UserSchema = Depends(get_current_user),
         chat_service: ChatService = Depends()
 ):
     return await chat_service.get_chat_history(current_user.id, pageNum, pageSize)
@@ -60,7 +60,7 @@ async def get_history(
 @router.get("/getDocList")
 async def get_doc_List(
         tenant_id: str = None,
-        current_user: UserInDB = Depends(get_current_user),
+        current_user: UserSchema = Depends(get_current_user),
         chat_service: ChatService = Depends()
 ):
     return await chat_service.get_doc_List(current_user.id,tenant_id)

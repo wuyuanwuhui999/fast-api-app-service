@@ -5,7 +5,7 @@ from jose import JWTError, jwt
 from common.config.common_config import get_settings
 from common.schemas.token_schema import TokenData
 from user.repositories.user_repository import UserRepository
-from common.schemas.user_schema import UserInDB
+from common.schemas.user_schema import UserSchema
 from common.utils.result_util import ResultUtil
 from common.utils.jwt_util import create_access_token
 
@@ -27,7 +27,7 @@ class AuthService:
             )
 
         access_token_expires = timedelta(minutes=self.settings.access_token_expire_minutes)
-        user_data = ResultUtil.convert_snake_to_camel(UserInDB.model_validate(user).dict())
+        user_data = ResultUtil.convert_snake_to_camel(UserSchema.model_validate(user).dict())
         access_token = create_access_token(
             data={"sub": user_data},
             expires_delta=access_token_expires

@@ -1,6 +1,6 @@
 from sqlalchemy import or_, case
 from sqlalchemy.orm import Session
-from common.models.common_model import User
+from common.models.common_model import UserMode
 from tenant.models.tenants_model import TenantUserModel
 from user.schemas.user_schema import UserCreate, UserUpdate
 from typing import Optional, Any
@@ -10,11 +10,11 @@ class UserRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_user_by_id(self, userId: str) -> Optional[User]:
-        return self.db.query(User).filter(User.id == userId).first()
+    def get_user_by_id(self, userId: str) -> Optional[UserMode]:
+        return self.db.query(UserMode).filter(UserMode.id == userId).first()
 
-    def get_user_by_email(self, email: str) -> Optional[User]:
-        return self.db.query(User).filter(User.email == email).first()
+    def get_user_by_email(self, email: str) -> Optional[UserMode]:
+        return self.db.query(UserMode).filter(UserMode.email == email).first()
 
     def verify_user(self, user_account: str) -> int:
         """
@@ -23,25 +23,25 @@ class UserRepository:
             :return: 匹配该账号的用户数量
             """
         return (
-            self.db.query(User)
-                .filter(User.user_account == user_account)
+            self.db.query(UserMode)
+                .filter(UserMode.user_account == user_account)
                 .count()
         )
 
-    def get_user_by_user_account(self, user_account: str, password: str) -> Optional[User]:
+    def get_user_by_user_account(self, user_account: str, password: str) -> Optional[UserMode]:
         return (
-            self.db.query(User)
+            self.db.query(UserMode)
                 .filter(
-                ((User.user_account == user_account) |
-                 (User.email == user_account) |
-                 (User.telephone == user_account)) &
-                (User.password == password)
+                ((UserMode.user_account == user_account) |
+                 (UserMode.email == user_account) |
+                 (UserMode.telephone == user_account)) &
+                (UserMode.password == password)
             )
                 .first()
         )
 
-    def get_users(self, skip: int = 0, limit: int = 100) -> list[User]:
-        return self.db.query(User).offset(skip).limit(limit).all()
+    def get_users(self, skip: int = 0, limit: int = 100) -> list[UserMode]:
+        return self.db.query(UserMode).offset(skip).limit(limit).all()
 
     def search_users(self, keyword: str, tenant_id: str, skip: int = 0, limit: int = 100) -> list:
         """
@@ -65,18 +65,18 @@ class UserRepository:
         # 主查询：模糊搜索用户并添加租户标识
         return (
             self.db.query(
-                User,
+                UserMode,
                 case(
-                    (User.id.in_(self.db.query(tenant_user_subquery)), 1),
+                    (UserMode.id.in_(self.db.query(tenant_user_subquery)), 1),
                     else_=0
-                ).label('in_tenant')
+                ).label('checked')
             )
             .filter(
                 or_(
-                    User.username.ilike(f"%{keyword}%"),
-                    User.user_account.ilike(f"%{keyword}%"),
-                    User.email.ilike(f"%{keyword}%"),
-                    User.telephone.ilike(f"%{keyword}%")
+                    UserMode.username.ilike(f"%{keyword}%"),
+                    UserMode.user_account.ilike(f"%{keyword}%"),
+                    UserMode.email.ilike(f"%{keyword}%"),
+                    UserMode.telephone.ilike(f"%{keyword}%")
                 )
             )
             .offset(skip)
@@ -91,20 +91,20 @@ class UserRepository:
         :return: 用户数量
         """
         return (
-            self.db.query(User)
+            self.db.query(UserMode)
             .filter(
                 or_(
-                    User.username.ilike(f"%{keyword}%"),
-                    User.user_account.ilike(f"%{keyword}%"),
-                    User.email.ilike(f"%{keyword}%"),
-                    User.telephone.ilike(f"%{keyword}%")
+                    UserMode.username.ilike(f"%{keyword}%"),
+                    UserMode.user_account.ilike(f"%{keyword}%"),
+                    UserMode.email.ilike(f"%{keyword}%"),
+                    UserMode.telephone.ilike(f"%{keyword}%")
                 )
             )
             .count()
         )
 
-    def create_user(self, user: UserCreate) -> User:
-        db_user = User(
+    def create_user(self, user: UserCreate) -> UserMode:
+        db_user = UserMode(
             user_account=user.user_account,
             email=user.email,
             username=user.username,
@@ -120,7 +120,7 @@ class UserRepository:
         self.db.refresh(db_user)
         return db_user
 
-    def update_user(self, user_id: str, user: UserUpdate) -> Optional[User]:
+    def update_user(self, user_id: str, user: UserUpdate) -> Optional[UserMode]:
         db_user = self.get_user_by_id(user_id)
         if db_user:
             update_data = user.model_dump(exclude_unset=True)

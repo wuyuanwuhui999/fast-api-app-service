@@ -9,7 +9,7 @@ class UserBase(BaseModel):
     username: str
 
 
-class UserInDB(UserBase):
+class UserSchema(UserBase):
     id: str
     user_account: str
     create_date: datetime

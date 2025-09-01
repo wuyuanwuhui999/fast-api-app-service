@@ -23,7 +23,7 @@ class PromptModel(Base):
 
     # 定义关系（可选）
     tenant = relationship("Tenant", back_populates="prompts")
-    user = relationship("User", back_populates="prompts")
+    user = relationship("UserMode", back_populates="prompts")
 
     def __repr__(self):
         return f"<Prompt(id={self.id}, title={self.title})>"

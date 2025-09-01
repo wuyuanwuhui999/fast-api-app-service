@@ -40,6 +40,7 @@ class TenantUserSchema(BaseModel):
         }
     )
 
+
 # 在 tenants_schema.py 末尾添加
 class TenantUsersQuerySchema(BaseModel):
     tenant_id: str

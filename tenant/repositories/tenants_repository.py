@@ -4,11 +4,11 @@ from datetime import datetime
 from sqlalchemy import select, delete, func
 from sqlalchemy.orm import Session
 
-from common.models.common_model import User
+from common.models.common_model import UserMode
+from common.schemas.user_schema import UserSchema
 from tenant.models.tenants_model import TenantUserModel, TenantModel, TenantUserRoleModel
-from tenant.schemas.tenants_schema import TenantSchema, TenantCreateSchema, TenantUpdateSchema, TenantUserRoleSchema, \
-    TenantUserSchema
-from typing import List, Optional
+from tenant.schemas.tenants_schema import TenantSchema, TenantCreateSchema, TenantUpdateSchema, TenantUserRoleSchema, TenantUserSchema
+from typing import List, Optional, Any, Coroutine
 from fastapi.logger import logger
 
 
@@ -91,7 +91,7 @@ class TenantsRepository:
 
     async def create_tenant(self, tenant_data: TenantCreateSchema, creator_id: str) -> TenantSchema:
         db_tenant = TenantModel(
-            id=str(uuid.uuid4()),
+            id=str(uuid.uuid4()).replace("-", ""),
             name=tenant_data.name,
             code=tenant_data.code,
             description=tenant_data.description,
@@ -121,18 +121,26 @@ class TenantsRepository:
         await self.db.commit()
         return result.rowcount > 0
 
-    async def set_tenant_user_role(self, role_data: TenantUserRoleSchema) -> bool:
-        # 添加或更新用户角色
-        existing = await self.db.get(TenantUserRoleModel, (role_data.tenant_id, role_data.user_id))
-        if existing:
-            for field, value in role_data.dict(exclude_unset=True).items():
-                setattr(existing, field, value)
-        else:
-            db_role = TenantUserRoleModel(**role_data.dict())
-            self.db.add(db_role)
+    async def add_tenant_user(self, tenant_user: TenantUserSchema) -> TenantUserSchema:
+        # 检查是否已存在相同的租户-用户关联
+        existing = self.db.query(TenantUserModel).filter(
+            TenantUserModel.tenant_id == tenant_user.tenant_id,
+            TenantUserModel.user_id == tenant_user.user_id
+        ).first()
 
-        await self.db.commit()
-        return True
+        if existing:
+            return None  # 已存在，不需要重复添加
+        else:
+            db_tenant_user = TenantUserModel(**tenant_user.model_dump())
+            self.db.add(db_tenant_user)
+            self.db.commit()
+            # 刷新对象以获取数据库生成的字段（如果有的话）
+            self.db.refresh(db_tenant_user)
+            # 将数据库模型转换为 Schema 对象
+            return TenantUserSchema.model_validate(db_tenant_user)
+    
+    async def get_user_by_id(self, user_id: str) -> Optional[type[UserSchema]]:
+        return  self.db.query(UserMode).filter((UserMode.id == user_id) & (UserMode.disabled == 0)).first()
 
     async def get_tenant_users(self, tenant_id: str) -> List[TenantUserRoleSchema]:
         users = await self.db.execute(
@@ -152,10 +160,10 @@ class TenantsRepository:
 
         # 添加 get_user 方法
 
-    async def get_user(self, user_id: str) -> Optional[User]:
+    async def get_user(self, user_id: str) -> Optional[UserMode]:
         """根据用户ID获取用户信息"""
         try:
-            user = self.db.query(User).filter(User.id == user_id).first()
+            user = self.db.query(UserMode).filter(UserMode.id == user_id).first()
             return user
         except Exception as e:
             logger.error(f"获取用户信息失败: {str(e)}", exc_info=True)

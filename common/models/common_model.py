@@ -3,7 +3,7 @@ from common.config.common_database import Base
 from pydantic import BaseModel
 
 
-class User(Base):
+class UserMode(Base):
     __tablename__ = "user"  # 注意表名改为单数形式，与你数据库一致
     __table_args__ = {
         'comment': '用户表',

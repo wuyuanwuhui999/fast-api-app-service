@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 
 from user.models.user_model import LoginForm
-from common.schemas.user_schema import UserInDB
+from common.schemas.user_schema import UserSchema
 from user.schemas.user_schema import UserCreate, UserUpdate, PasswordChange, ResetPasswordConfirm, MailRequest
 from user.services.auth_service import AuthService
 from user.services.user_service import UserService
@@ -12,7 +12,7 @@ from common.utils.result_util import ResultEntity
 router = APIRouter(prefix="/service", tags=["user"])
 
 
-@router.post("/user/register", response_model=UserInDB)
+@router.post("/user/register", response_model=UserSchema)
 async def register(user: UserCreate, user_service: UserService = Depends()):
     return await user_service.register_user(user)
 
@@ -23,18 +23,18 @@ async def login(form_data: LoginForm, auth_service: AuthService = Depends(get_au
 
 
 @router.get("/user-getway/getUserData", response_model=ResultEntity)
-async def get_user_data(current_user: UserInDB = Depends(get_current_user), user_service: UserService = Depends()):
+async def get_user_data(current_user: UserSchema = Depends(get_current_user), user_service: UserService = Depends()):
     return await user_service.get_user_data(current_user)
 
 
 @router.put("/user-getway/updateUser", response_model=ResultEntity)
-async def update_user(user_update: UserUpdate, current_user: UserInDB = Depends(get_current_user),
+async def update_user(user_update: UserUpdate, current_user: UserSchema = Depends(get_current_user),
                       user_service: UserService = Depends()):
     return await user_service.update_user(current_user.id, user_update)
 
 
 @router.put("/user-getway/updatePassword", response_model=ResultEntity)
-async def update_password(password_change: PasswordChange, current_user: UserInDB = Depends(get_current_user),
+async def update_password(password_change: PasswordChange, current_user: UserSchema = Depends(get_current_user),
                           user_service: UserService = Depends()):
     return await user_service.update_password(current_user.userAccount, password_change)
 
@@ -64,7 +64,7 @@ async def search_users(
     tenantId:str = Query(0, description="租户id"),
     pageNum: int = Query(0, description="跳过记录数"),
     pageSize: int = Query(100, description="返回记录数"),
-    current_user: UserInDB = Depends(get_current_user),
+    current_user: UserSchema = Depends(get_current_user),
     user_service: UserService = Depends()
 ):
     """

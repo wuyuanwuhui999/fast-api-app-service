@@ -1,7 +1,7 @@
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from common.schemas.user_schema import UserInDB
+from common.schemas.user_schema import UserSchema
 from user.repositories.user_repository import UserRepository
 from user.schemas.user_schema import UserCreate, UserUpdate, PasswordChange, ResetPasswordConfirm, MailRequest
 from common.config.common_database import get_db
@@ -35,7 +35,7 @@ class UserService:
 
         user_data = self.user_repository.create_user(user)
         access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
-        user_data = UserInDB.model_validate(user_data).dict()
+        user_data = UserSchema.model_validate(user_data).dict()
         access_token = create_access_token(
             data={"sub": user_data},
             expires_delta=access_token_expires
@@ -45,9 +45,9 @@ class UserService:
             token=access_token
         )
 
-    async def get_user_data(self, current_user: UserInDB) -> ResultEntity:
+    async def get_user_data(self, current_user: UserSchema) -> ResultEntity:
         user = self.user_repository.get_user_by_id(current_user.id)
-        user_data = UserInDB.model_validate(user).dict()
+        user_data = UserSchema.model_validate(user).dict()
         # 生成新的访问令牌，默认30天有效期
         token = create_access_token(data={"sub": user_data})
 
@@ -103,7 +103,7 @@ class UserService:
         self.user_repository.update_password(user.id, reset_request.new_password)
 
         access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
-        user_data = UserInDB.model_validate(user).dict()
+        user_data = UserSchema.model_validate(user).dict()
         access_token = create_access_token(
             data={"sub": user_data},
             expires_delta=access_token_expires
@@ -126,7 +126,7 @@ class UserService:
             raise HTTPException(status_code=404, detail="User not found")
 
         access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
-        user_data = UserInDB.model_validate(user).dict()
+        user_data = UserSchema.model_validate(user).dict()
         access_token = create_access_token(
             data={"sub": user_data},
             expires_delta=access_token_expires
@@ -157,8 +157,8 @@ class UserService:
         # 构建返回数据
         user_list = []
         for user, in_tenant_flag in users_with_flag:
-            user_data = UserInDB.model_validate(user).dict()
-            user_data['in_tenant'] = in_tenant_flag  # 添加租户标识字段
+            user_data = UserSchema.model_validate(user).dict()
+            user_data['checked'] = in_tenant_flag  # 添加租户标识字段
             user_list.append(user_data)
 
         return ResultUtil.success(data=user_list,total = total)
