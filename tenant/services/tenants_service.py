@@ -69,12 +69,7 @@ class TenantsService:
                 user = await self.tenants_repository.get_user(tenant_user.user_id)
                 if user:
                     user_details.append({
-                        "id": tenant_user.id,
-                        "tenant_id": tenant_user.tenant_id,
-                        "user_id": tenant_user.user_id,
-                        "role_type": tenant_user.role_type,
-                        "disabled": tenant_user.disabled,
-                        "join_date": tenant_user.join_date,
+                        **tenant_user.model_dump(),
                         "username": user.username,
                         "email": user.email,
                         "avater": user.avater
@@ -216,3 +211,87 @@ class TenantsService:
         except Exception as e:
             logger.error(f"获取租户用户列表失败: {str(e)}", exc_info=True)
             return ResultUtil.error("获取用户列表失败")
+
+    # 在 TenantsService 类中添加以下方法
+
+    async def add_admin(self, tenant_id: str, current_user_id: str, user_id: str) -> ResultEntity:
+        """设置用户为管理员（需要超级管理员权限）"""
+        try:
+            # 权限检查 - 只有超级管理员可以设置管理员
+            if not await self._check_super_admin(current_user_id):
+                return ResultUtil.fail(msg="需要超级管理员权限")
+
+            # 检查目标用户是否存在
+            target_user = await self.tenants_repository.get_user_by_id(user_id)
+            if not target_user:
+                return ResultUtil.fail(msg="目标用户不存在")
+
+            # 检查目标用户是否在租户中
+            tenant_user = await self.tenants_repository.get_tenant_user_role(tenant_id, user_id)
+            if not tenant_user:
+                return ResultUtil.fail(msg="用户不在该租户中")
+
+            # 设置管理员权限
+            success = await self.tenants_repository.add_admin(tenant_id, user_id)
+
+            if success:
+                # 获取更新后的用户信息
+                updated_user = await self.tenants_repository.get_tenant_user_role(tenant_id, user_id)
+                user_info = await self.tenants_repository.get_user_by_id(user_id)
+
+                return ResultUtil.success(data={
+                    **updated_user.model_dump(),
+                    "username": user_info.username,
+                    "email": user_info.email,
+                    "avater": user_info.avater
+                }, msg="设置管理员成功")
+            else:
+                return ResultUtil.fail(msg="设置管理员失败")
+
+        except Exception as e:
+            logger.error(f"设置管理员失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg="设置管理员失败")
+
+    async def delete_admin(self, tenant_id: str, current_user_id: str, user_id: str) -> ResultEntity:
+        """取消用户的管理员权限（需要超级管理员权限）"""
+        try:
+            # 权限检查 - 只有超级管理员可以取消管理员权限
+            if not await self._check_super_admin(current_user_id):
+                return ResultUtil.fail(msg="需要超级管理员权限")
+
+            # 检查目标用户是否存在
+            target_user = await self.tenants_repository.get_user_by_id(user_id)
+            if not target_user:
+                return ResultUtil.fail(msg="目标用户不存在")
+
+            # 检查目标用户是否在租户中且有管理员权限
+            tenant_user = await self.tenants_repository.get_tenant_user_role(tenant_id, user_id)
+            if not tenant_user:
+                return ResultUtil.fail(msg="用户不在该租户中")
+
+            if tenant_user.role_type == 0:
+                return ResultUtil.fail(msg="用户不是管理员")
+
+            # 取消管理员权限（设置为普通用户）
+            success = await self.tenants_repository.delete_admin(tenant_id, user_id)
+
+            if success:
+                # 获取更新后的用户信息
+                updated_user = await self.tenants_repository.get_tenant_user_role(tenant_id, user_id)
+                user_info = await self.tenants_repository.get_user_by_id(user_id)
+
+                return ResultUtil.success(data={
+                    **updated_user.model_dump(),
+                    "username": user_info.username,
+                    "email": user_info.email,
+                    "avater": user_info.avater
+                }, msg="取消管理员权限成功")
+            else:
+                return ResultUtil.fail(msg="取消管理员权限失败")
+
+        except Exception as e:
+            logger.error(f"取消管理员权限失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg="取消管理员权限失败")
+
+
+

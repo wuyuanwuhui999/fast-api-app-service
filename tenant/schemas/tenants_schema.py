@@ -75,3 +75,8 @@ class TenantUserRoleSchema(BaseModel):
 class TenantUserRoleUpdateSchema(BaseModel):
     role_type: Optional[int] = Field(None, ge=0, le=2)
     disabled: Optional[bool] = None
+
+# 在 tenants_schema.py 末尾添加
+class TenantAdminUpdateSchema(BaseModel):
+    userId: str
+    tenantId: str

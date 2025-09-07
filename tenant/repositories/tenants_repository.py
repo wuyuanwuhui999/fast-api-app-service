@@ -168,3 +168,60 @@ class TenantsRepository:
         except Exception as e:
             logger.error(f"获取用户信息失败: {str(e)}", exc_info=True)
             return None
+
+    # 在 TenantsRepository 类中添加以下方法
+
+    async def add_admin(self, tenant_id: str, user_id: str) -> bool:
+        """设置用户为管理员"""
+        try:
+            # 查找用户的租户角色记录
+            tenant_user = self.db.query(TenantUserModel).filter(
+                TenantUserModel.tenant_id == tenant_id,
+                TenantUserModel.user_id == user_id
+            ).first()
+
+            if tenant_user:
+                # 更新角色类型
+                tenant_user.role_type = 1
+                self.db.commit()
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"设置管理员失败: {str(e)}", exc_info=True)
+            self.db.rollback()
+            return False
+
+    async def delete_admin(self, tenant_id: str, user_id: str) -> bool:
+        """取消用户的管理员权限（设置为普通用户）"""
+        try:
+            # 查找用户的租户角色记录
+            tenant_user = self.db.query(TenantUserModel).filter(
+                TenantUserModel.tenant_id == tenant_id,
+                TenantUserModel.user_id == user_id
+            ).first()
+
+            if tenant_user and tenant_user.role_type >= 1:  # 只有管理员或超级管理员才能被取消
+                # 设置为普通用户
+                tenant_user.role_type = 0
+                self.db.commit()
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"取消管理员权限失败: {str(e)}", exc_info=True)
+            self.db.rollback()
+            return False
+
+    async def get_tenant_user_role(self, tenant_id: str, user_id: str) -> Optional[TenantUserSchema]:
+        """获取用户在租户中的角色信息"""
+        try:
+            tenant_user = self.db.query(TenantUserModel).filter(
+                TenantUserModel.tenant_id == tenant_id,
+                TenantUserModel.user_id == user_id
+            ).first()
+
+            if tenant_user:
+                return TenantUserSchema.model_validate(tenant_user)
+            return None
+        except Exception as e:
+            logger.error(f"获取租户用户角色失败: {str(e)}", exc_info=True)
+            return None
