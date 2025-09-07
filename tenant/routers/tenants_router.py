@@ -9,7 +9,7 @@ from common.dependencies.auth_dependency import get_current_user
 
 router = APIRouter(prefix="/service/tenant", tags=["tenant"])
 
-@router.get("/getTenantsList",response_model=ResultEntity)
+@router.get("/getUserTenantList",response_model=ResultEntity)
 async def get_user_tenants(
     current_user: UserSchema = Depends(get_current_user),
     tenants_service: TenantsService = Depends()
