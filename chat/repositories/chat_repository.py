@@ -7,6 +7,7 @@ from typing import List, Optional
 
 from chat.models.chat_model import ChatModel, ChatHistory, ChatDocModel
 from chat.schemas.chat_schema import ChatModelSchema, ChatSchema, ChatDocSchema
+from chat.schemas.chat_schema import DirectorySchema
 
 
 class ChatRepository:
@@ -164,3 +165,47 @@ class ChatRepository:
             ).dict() for doc in doc_list
         ]
 
+    # 在ChatRepository类中修改create_directory方法
+    async def create_directory(
+            self,
+            tenant_id: str,
+            user_id: str,
+            directory_name: str
+    ) -> DirectorySchema:
+        """在数据库中创建文件夹并返回完整的文件夹对象"""
+        try:
+            from chat.models.chat_model import ChatDocDirectory
+            import uuid
+            from datetime import datetime
+
+            # 生成唯一的目录ID
+            directory_id = str(uuid.uuid4()).replace("-", "")
+
+            db_directory = ChatDocDirectory(
+                id=directory_id,
+                user_id=user_id,
+                directory=directory_name,
+                tenant_id=tenant_id,
+                create_time=datetime.now(),
+                update_time=datetime.now()
+            )
+
+            self.db.add(db_directory)
+            self.db.commit()
+            self.db.refresh(db_directory)  # 刷新以获取完整的对象数据
+
+            # 返回完整的文件夹对象
+            return DirectorySchema(
+                id=db_directory.id,
+                user_id=db_directory.user_id,
+                directory=db_directory.directory,
+                tenant_id=db_directory.tenant_id,
+                create_time=db_directory.create_time.strftime(
+                    "%Y-%m-%d %H:%M:%S") if db_directory.create_time else None,
+                update_time=db_directory.update_time.strftime("%Y-%m-%d %H:%M:%S") if db_directory.update_time else None
+            )
+
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"数据库创建文件夹失败: {str(e)}")
+            raise

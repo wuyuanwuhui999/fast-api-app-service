@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, UploadFile, WebSocket
-from chat.schemas.chat_schema import ChatParamsEntity
+from chat.schemas.chat_schema import ChatParamsEntity, CreateDirectoryShema
 from chat.services.chat_service import ChatService
 from common.dependencies.auth_dependency import get_current_user
 from common.schemas.user_schema import UserSchema
@@ -64,3 +64,25 @@ async def get_doc_List(
         chat_service: ChatService = Depends()
 ):
     return await chat_service.get_doc_List(current_user.id,tenant_id)
+
+# 在chat_router.py中添加以下路由
+@router.get("/getDirectoryList")
+async def get_directory_list(
+    tenantId: str,
+    current_user: UserSchema = Depends(get_current_user),
+    chat_service: ChatService = Depends()
+):
+    return await chat_service.get_directory_list(current_user.id, tenantId)
+
+# 在chat_router.py中添加另一种路由方式
+@router.post("/createDir")
+async def create_directory(
+    request: CreateDirectoryShema,
+    current_user: UserSchema = Depends(get_current_user),
+    chat_service: ChatService = Depends()
+):
+    return await chat_service.create_directory(
+        current_user.id,
+        request.tenantId,
+        request.directory
+    )

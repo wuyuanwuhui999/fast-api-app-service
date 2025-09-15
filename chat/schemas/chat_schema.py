@@ -96,3 +96,7 @@ class ChatDocSchema(BaseModel):
     tenant_id: Optional[str] = None  # 新增tenant_id字段
     create_time: Optional[datetime] = None
     update_time: Optional[datetime] = None
+
+class CreateDirectoryShema(BaseModel):
+    directory: str
+    tenantId: str

@@ -156,10 +156,10 @@ index_name = "chat_vector_index"
 # create_index(index_name)
 
 # 搜索所有文档
-search_documents(index_name)
+# search_documents(index_name)
 # search_documents(index_name,user_id="f71d6c016fa94cd29f9db53f71ec7b62")
 
 # get_mappering(index_name)
 
 # 删除文档
-# delete_by_user_or_doc_id(index_name,user_id="f71d6c016fa94cd29f9db53f71ec7b62",doc_id="4a3a67b9fa7442e09e3fbd2321fe8fbe")
+delete_by_user_or_doc_id(index_name,user_id="f71d6c016fa94cd29f9db53f71ec7b62")

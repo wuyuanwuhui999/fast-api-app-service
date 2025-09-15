@@ -107,3 +107,4 @@ async def delete_admin(
 ):
     """取消用户的管理员权限（需要超级管理员权限）"""
     return await tenants_service.delete_admin(tenant_data.tenantId, current_user.id, tenant_data.userId)
+

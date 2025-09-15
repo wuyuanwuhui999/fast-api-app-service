@@ -78,5 +78,5 @@ class TenantUserRoleUpdateSchema(BaseModel):
 
 # 在 tenants_schema.py 末尾添加
 class TenantAdminUpdateSchema(BaseModel):
-    userId: str
+    directory: str
     tenantId: str

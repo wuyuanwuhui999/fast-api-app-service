@@ -2,6 +2,7 @@ import asyncio
 import uuid
 import logging
 from datetime import timedelta
+from typing import List
 
 from fastapi import UploadFile, HTTPException, Depends
 from sqlalchemy.orm import Session
@@ -21,6 +22,7 @@ from langchain_ollama import OllamaLLM
 from langchain_core.documents import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from io import BytesIO
+from chat.schemas.chat_schema import DirectorySchema
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -52,7 +54,7 @@ class ChatService:
         self.redis = redis.Redis.from_url(settings.redis_url)
         self.upload_dir = settings.UPLOAD_DIR
         self.chat_repository = ChatRepository(db)
-
+        self.db = db
     async def chat_with_websocket(
             self,
             user_id: str,
@@ -400,3 +402,152 @@ class ChatService:
 
     async def get_doc_List(self,user_id:str,tenant_id:str = None) -> ResultEntity:
         return ResultUtil.success(data=self.chat_repository.get_doc_List(user_id,tenant_id))
+
+    # 在ChatService类中添加以下方法
+    async def get_directory_list(self, user_id: str, tenant_id: str) -> ResultEntity:
+        """
+        获取租户下的文件夹列表
+        需要先验证用户是否在该租户内且用户未被禁用
+        """
+        try:
+            # 首先验证用户是否存在且未被禁用
+            from user.repositories.user_repository import UserRepository
+            user_repo = UserRepository(self.db)
+
+            user = user_repo.get_user_by_id(user_id)
+            if not user:
+                return ResultUtil.fail(msg="用户不存在",data=None)
+
+            if user.disabled == 1:  # 检查用户是否被禁用
+                return ResultUtil.fail(msg="用户已被禁用，无法访问",data=None)
+
+            # 验证用户是否在租户内
+            from tenant.repositories.tenants_repository import TenantsRepository
+            tenants_repo = TenantsRepository(self.db)
+
+            tenant_user = await tenants_repo.get_tenant_user_role(tenant_id,user_id)
+            if not tenant_user:
+                return ResultUtil.fail(msg="用户不在该租户内或无访问权限",data=None)
+
+            # 查询文件夹列表
+            directory_list = await self._get_directory_list_by_tenant(tenant_id, user_id)
+
+            return ResultUtil.success(data=directory_list)
+
+        except Exception as e:
+            logger.error(f"获取文件夹列表失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"获取文件夹列表失败: {str(e)}",data=None)
+
+    async def _get_directory_list_by_tenant(self, tenant_id: str, user_id: str) -> List[DirectorySchema]:
+        """
+        根据租户ID和用户ID查询文件夹列表
+        """
+        try:
+            from chat.models.chat_model import ChatDocDirectory
+            from chat.schemas.chat_schema import DirectorySchema
+
+            # 查询当前租户下的文件夹，包括公共目录和用户自己的目录
+            directories = self.db.query(ChatDocDirectory).filter(
+                (ChatDocDirectory.tenant_id == tenant_id) &
+                (ChatDocDirectory.user_id == user_id)
+            ).order_by(
+                ChatDocDirectory.create_time.desc()
+            ).all()
+
+            return [
+                DirectorySchema(
+                    id=dir.id,
+                    user_id=dir.user_id,
+                    directory=dir.directory,
+                    tenant_id=dir.tenant_id,
+                    create_time=dir.create_time.strftime("%Y-%m-%d %H:%M:%S") if dir.create_time else None,
+                    update_time=dir.update_time.strftime("%Y-%m-%d %H:%M:%S") if dir.update_time else None
+                ) for dir in directories
+            ]
+
+        except Exception as e:
+            logger.error(f"查询文件夹列表失败: {str(e)}", exc_info=True)
+            return []
+
+    # 在ChatService类中修改_check_directory_exists方法
+    async def _check_directory_exists(self, tenant_id: str, user_id: str, directory_name: str) -> bool:
+        """
+        检查文件夹是否已存在（当前租户和当前用户下）
+        """
+        try:
+            # 检查用户个人文件夹是否已存在
+            user_dir_exists = await self.chat_repository.check_directory_exists(tenant_id, user_id, directory_name)
+
+            # 检查公共文件夹是否已存在
+            public_dir_exists = await self.chat_repository.check_public_directory_exists(tenant_id, directory_name)
+
+            return user_dir_exists or public_dir_exists
+
+        except Exception as e:
+            logger.error(f"检查文件夹是否存在失败: {str(e)}")
+            return False
+
+    # 修改create_directory方法，添加更详细的错误提示
+    async def create_directory(self, user_id: str, tenant_id: str, directory_name: str) -> ResultEntity:
+        """
+        创建文件夹
+        需要验证用户是否启用且在指定租户内，并检查文件夹是否已存在
+        """
+        try:
+            # 验证文件夹名称
+            directory_name = directory_name.strip()
+            if not directory_name:
+                return ResultUtil.fail(msg="文件夹名称不能为空")
+
+            if len(directory_name) > 255:
+                return ResultUtil.fail(msg="文件夹名称长度不能超过255个字符")
+
+            # 首先验证用户是否存在且未被禁用
+            from user.repositories.user_repository import UserRepository
+            user_repo = UserRepository(self.db)
+
+            user = user_repo.get_user_by_id(user_id)
+            if not user:
+                return ResultUtil.fail(msg="用户不存在")
+
+            if user.disabled == 1:  # 检查用户是否被禁用
+                return ResultUtil.fail(msg="用户已被禁用，无法创建文件夹")
+
+            # 验证用户是否在租户内
+            from tenant.repositories.tenants_repository import TenantsRepository
+            tenants_repo = TenantsRepository(self.db)
+
+            tenant_user = await tenants_repo.get_tenant_user_role(tenant_id,user_id)
+            if not tenant_user:
+                return ResultUtil.fail(msg="用户不在该租户内或无权限创建文件夹",data=None)
+
+            # 检查文件夹是否已存在（当前租户下，包括用户个人文件夹和公共文件夹）
+            if await self._check_directory_exists(tenant_id, user_id, directory_name):
+                return ResultUtil.fail(msg="文件夹名称已存在，请使用其他名称")
+
+            # 创建文件夹并获取完整的文件夹对象
+            directory_obj = await self._create_directory_in_db(tenant_id, user_id, directory_name)
+
+            # 通用的返回数据处理
+            if hasattr(directory_obj, 'model_dump'):
+                data = directory_obj.model_dump()
+            elif hasattr(directory_obj, 'dict'):
+                data = directory_obj.dict()
+            else:
+                data = directory_obj
+
+            return ResultUtil.success(data=data, msg="文件夹创建成功")
+
+        except Exception as e:
+            logger.error(f"创建文件夹失败: {str(e)}", exc_info=True)
+
+    async def _create_directory_in_db(self, tenant_id: str, user_id: str, directory_name: str) -> ResultEntity:
+        """
+        在数据库中创建文件夹
+        """
+        try:
+            directory = await self.chat_repository.create_directory(tenant_id, user_id, directory_name)
+            return ResultUtil.success(data=directory.model_dump())
+        except Exception as e:
+            logger.error(f"数据库创建文件夹失败: {str(e)}")
+            raise HTTPException(status_code=500, detail="创建文件夹失败")
