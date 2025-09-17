@@ -89,7 +89,6 @@ class ChatRepository:
             self,
             doc_id: str,
             user_id: str,
-            directory_id: str,
             tenant_id: Optional[str] = None
     ) -> Optional[ChatDocSchema]:
         """Get document by ID with user and directory validation"""
@@ -97,11 +96,7 @@ class ChatRepository:
             query = self.db.query(ChatDocModel).filter(
                 ChatDocModel.id == doc_id,
                 ChatDocModel.user_id == user_id,
-                ChatDocModel.directory_id == directory_id
             )
-
-            if tenant_id:
-                query = query.filter(ChatDocModel.tenant_id == tenant_id)
 
             doc = query.first()
 
@@ -125,21 +120,14 @@ class ChatRepository:
             self,
             doc_id: str,
             user_id: str,
-            directory_id: str,
-            tenant_id: Optional[str] = None
     ) -> bool:
         try:
             query = self.db.query(ChatDocModel).filter(
                 and_(
                     ChatDocModel.id == doc_id,
                     ChatDocModel.user_id == user_id,
-                    ChatDocModel.directory_id == directory_id
                 )
             )
-
-            if tenant_id:
-                query = query.filter(ChatDocModel.tenant_id == tenant_id)
-
             deleted_count = query.delete()
             self.db.commit()
             return deleted_count > 0

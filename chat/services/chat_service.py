@@ -339,8 +339,8 @@ class ChatService:
     async def get_model_list(self) -> ResultEntity:
         return ResultUtil.success(data=self.chat_repository.get_model_list())
 
-    async def delete_document(self, doc_id: str, user_id: str, directory_id: str):
-        doc = await self.chat_repository.get_doc_by_id(doc_id, user_id, directory_id)
+    async def delete_document(self, doc_id: str, user_id: str):
+        doc = await self.chat_repository.get_doc_by_id(doc_id, user_id)
         if not doc:
             raise HTTPException(status_code=404, detail="文档不存在或无权删除")
 

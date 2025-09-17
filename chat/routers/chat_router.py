@@ -4,7 +4,7 @@ from chat.services.chat_service import ChatService
 from common.dependencies.auth_dependency import get_current_user
 from common.schemas.user_schema import UserSchema
 
-router = APIRouter(prefix="/service/ai", tags=["chat"])
+router = APIRouter(prefix="/service/chat", tags=["chat"])
 
 
 @router.get("/getModelList")
@@ -40,11 +40,10 @@ async def upload_doc(
 @router.delete("/deleteDoc/{doc_id}")
 async def delete_document(
         doc_id: str,
-        directory_id: str,
         current_user: UserSchema = Depends(get_current_user),
         chat_service: ChatService = Depends()
 ):
-    return await chat_service.delete_document(doc_id, current_user.id, directory_id)
+    return await chat_service.delete_document(doc_id, current_user.id)
 
 
 @router.get("/getChatHistory")
