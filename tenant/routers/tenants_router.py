@@ -108,3 +108,12 @@ async def delete_admin(
     """取消用户的管理员权限（需要超级管理员权限）"""
     return await tenants_service.delete_admin(tenant_data.tenantId, current_user.id, tenant_data.userId)
 
+@router.delete("/deleteTenantUser/{tenantId}/{userId}", response_model=ResultEntity)
+async def delete_tenant_user(
+    tenantId: str,
+    userId:str,
+    current_user: UserSchema = Depends(get_current_user),
+    tenants_service: TenantsService = Depends()
+):
+    """管理员删除租户"""
+    return await tenants_service.delete_tenant_user(tenantId, userId, current_user.id)

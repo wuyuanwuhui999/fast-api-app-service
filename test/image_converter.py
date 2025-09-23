@@ -77,17 +77,16 @@ def convert_to_png(input_path, output_path=None, width=360):
 # 使用示例
 if __name__ == "__main__":
     try:
-        # 示例1: 只转换格式，不改变尺寸
-        result1 = convert_to_png("C:/Users/27501/Desktop/上传文档.png","F:/flutter/flutter-chat-app-ui/上传文档.png",360)
+        result1 = convert_to_png("C:/Users/27501/Desktop/添加用户.png","F:/flutter/flutter-chat-app-ui/添加用户.png",360)
         print(f"图片已保存到: {result1}")
 
-        # 示例2: 转换格式并调整宽度为800px
-        result2 = convert_to_png("C:/Users/27501/Desktop/上传文档.png","F:/uniapp/uniapp-chat-app-ui/上传文档.png",360)
+        result2 = convert_to_png("C:/Users/27501/Desktop/添加用户.png","F:/uniapp/uniapp-chat-app-ui/添加用户.png",360)
         print(f"图片已保存到: {result2}")
 
-        # # 示例3: 自定义输出路径和文件名
-        # result3 = convert_to_png("input.jpg", output_path="output/custom_image", width=600)
-        # print(f"图片已保存到: {result3}")
+        # 示例2: 转换格式并调整宽度为800px
+        result2 = convert_to_png("C:/Users/27501/Desktop/添加用户.png", "F:/Harmony/harmony-arkTs-chat-ui/添加用户.png",
+                                 360)
+        print(f"图片已保存到: {result2}")
 
     except Exception as e:
         print(f"错误: {e}")

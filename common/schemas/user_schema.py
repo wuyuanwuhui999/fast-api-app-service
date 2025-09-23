@@ -23,7 +23,7 @@ class UserSchema(UserBase):
     role: Optional[str] = None
     sign: Optional[str] = None
     region: Optional[str] = None
-    disabled: bool = False
+    disabled: int = 0
     permission: int = 0
 
     class Config:

@@ -11,7 +11,6 @@ router = APIRouter(prefix="/service/chat", tags=["chat"])
 async def get_model_list(chat_service: ChatService = Depends()):
     return await chat_service.get_model_list()
 
-#
 @router.websocket("/ws/chat")
 async def websocket_chat(
         websocket: WebSocket,
@@ -51,7 +50,7 @@ async def get_history(
         pageNum: int = 1,
         pageSize: int = 10,
         current_user: UserSchema = Depends(get_current_user),
-        chat_service: ChatService = Depends()
+        chat_service: ChatService =  Depends()
 ):
     return await chat_service.get_chat_history(current_user.id, pageNum, pageSize)
 

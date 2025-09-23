@@ -26,4 +26,5 @@ pypdf==5.9.0
 pdfplumber==0.11.7
 elasticsearch_dsl==8.18.0
 websockets==15.0.1
-
+websockets==15.0.1
+openai==1.108.2

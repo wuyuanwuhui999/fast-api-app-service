@@ -293,5 +293,37 @@ class TenantsService:
             logger.error(f"取消管理员权限失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg="取消管理员权限失败")
 
+    # 在 tenant/services/tenant_service.py 中添加以下方法
 
+    async def delete_tenant_user(
+            self,
+            tenant_id: str,
+            user_id_to_delete: str,
+            current_user_id: str
+    ) -> ResultEntity:
+        """
+        删除租户用户
+        只有租户管理员才能删除用户
 
+        Args:
+            tenant_id: 租户ID
+            user_id_to_delete: 要删除的用户ID
+            current_user_id: 当前操作的用户ID
+
+        Returns:
+            ResultEntity: 操作结果
+        """
+        try:
+            # 调用repository方法删除用户
+            success = await self.tenants_repository.delete_tenant_user(
+                tenant_id, user_id_to_delete, current_user_id
+            )
+
+            if success:
+                return ResultUtil.success(msg="用户删除成功",data=True)
+            else:
+                return ResultUtil.fail(msg="删除用户失败，请检查权限或用户状态",data=False)
+
+        except Exception as e:
+            logger.error(f"删除租户用户服务错误: {str(e)}")
+            return ResultUtil.fail(msg=f"删除用户失败: {str(e)}",data=None)

@@ -15,8 +15,19 @@ class ChatRepository:
         self.db = db
 
     def get_model_list(self) -> List[ChatModelSchema]:
-        model_list = self.db.query(ChatModel).all()
+        model_list = self.db.query(ChatModel).filter(ChatModel.disabled == 0).all()
         return [ChatModelSchema.model_validate(model).dict() for model in model_list]
+
+    def get_model_by_id(self, model_id: str) -> Optional[ChatModelSchema]:
+        """根据模型ID获取模型配置"""
+        try:
+            model = self.db.query(ChatModel).filter(ChatModel.id == model_id,ChatModel.disabled == 0).first()
+            if model:
+                return ChatModelSchema.model_validate(model)
+            return None
+        except Exception as e:
+            logger.error(f"获取模型配置失败: {str(e)}")
+            return None
 
     async def save_chat_history(self, chat_data: ChatSchema) -> bool:
         """保存聊天记录到数据库"""
@@ -38,18 +49,18 @@ class ChatRepository:
             )
 
             self.db.add(db_chat)
-            await self.db.commit()
+            self.db.commit()
             return True
 
         except Exception as e:
             logger.error(f"保存失败: {str(e)}", exc_info=True)
             if self.db:  # 确保db存在才执行rollback
-                await self.db.rollback()
+                self.db.rollback()
             return False
 
         except Exception as e:
             logger.error(f"保存失败: {str(e)}")
-            await self.db.rollback()
+            self.db.rollback()
             return False
 
     def get_chat_history(self,user_id:str, start:int, size:int)-> List[ChatSchema]:

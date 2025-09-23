@@ -47,12 +47,11 @@ class ChatParamsEntity(BaseModel):
     directoryId: str = "default"
     chatId: str
     token: str
-    modelName: str
+    modelId: str  # 改为modelId
     showThink: bool = False
     type: Optional[str] = None  # document/db
     language: Optional[str] = None  # zh/cn
     tenant_id: Optional[str] = None
-
 
 class ClientMessage(BaseModel):
     chat_id: str
@@ -74,8 +73,12 @@ class DirectorySchema(BaseModel):
 
 
 class ChatModelSchema(BaseModel):
-    id: int
-    model_name: Optional[str] = None  # 替代 str | None
+    id: str
+    type: str
+    api_key: Optional[str] = None
+    model_name: str
+    base_url: Optional[str] = None
+    disabled: int = 0  # 新增disabled字段
     create_time: Optional[datetime] = None
     update_time: Optional[datetime] = None
 
@@ -85,6 +88,7 @@ class ChatModelSchema(BaseModel):
             datetime: lambda v: v.strftime("%Y-%m-%d %H:%M:%S")
         }
     )
+
 
 
 class ChatDocSchema(BaseModel):

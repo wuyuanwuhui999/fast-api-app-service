@@ -2,13 +2,14 @@ import asyncio
 import uuid
 import logging
 from datetime import timedelta
-from typing import List
+from typing import List, Any
 
 from fastapi import UploadFile, HTTPException, Depends
+from langchain_community.chat_models import ChatOpenAI
 from sqlalchemy.orm import Session
 import os
 from chat.repositories.chat_repository import ChatRepository
-from chat.schemas.chat_schema import ChatDocSchema, ChatParamsEntity, ChatSchema
+from chat.schemas.chat_schema import ChatDocSchema, ChatParamsEntity, ChatSchema, ChatModelSchema
 from chat.utils.chat_util import PromptUtil
 from common.config.common_config import get_settings
 from common.config.common_database import get_db
@@ -39,22 +40,11 @@ class ChatService:
             embedding=OllamaEmbeddings(model="nomic-embed-text:latest")
         )
 
-        # 初始化模型映射字典
-        self.model_mapping = {
-            "deepseek-r1:8b": lambda show_think: OllamaLLM(
-                model="deepseek-r1:8b",
-                model_kwargs={"options": {"think": show_think}}
-            ),
-            "qwen3:8b": lambda show_think: OllamaLLM(
-                model="qwen3:8b",
-                model_kwargs={"options": {"think": show_think}}
-            )
-        }
-
         self.redis = redis.Redis.from_url(settings.redis_url)
         self.upload_dir = settings.UPLOAD_DIR
         self.chat_repository = ChatRepository(db)
         self.db = db
+
     async def chat_with_websocket(
             self,
             user_id: str,
@@ -64,7 +54,7 @@ class ChatService:
             user_id=user_id,
             chat_id=chat_params.chatId,
             prompt=chat_params.prompt,
-            model_name=chat_params.modelName,
+            model_name=chat_params.modelId,  # 使用modelId
             content="",
             think_content=None,
             response_content=None
@@ -73,6 +63,20 @@ class ChatService:
         response_collector = []
 
         try:
+            # 从数据库获取模型配置
+            model_config = self.chat_repository.get_model_by_id(chat_params.modelId)
+            if not model_config:
+                yield f"Error: 未找到模型配置 {chat_params.modelId}"
+                yield "[completed]"
+                return
+
+            # 根据模型类型创建对应的聊天模型
+            chat_model = await self._create_chat_model(model_config, chat_params.showThink)
+            if not chat_model:
+                yield f"Error: 不支持的模型类型 {model_config.type}"
+                yield "[completed]"
+                return
+
             # 从Redis获取或初始化会话记忆
             chat_history_key = f"chat_history:{user_id}:{chat_params.chatId}"
             chat_history = self.redis.get(chat_history_key)
@@ -91,16 +95,6 @@ class ChatService:
 
             # 添加当前用户消息
             messages.append(("human", chat_params.prompt))
-
-            # 根据 modelName 和 showThink 获取对应的模型实例
-            model_factory = self.model_mapping.get(chat_params.modelName)
-            if not model_factory:
-                yield f"Error: 不支持的大模型 {chat_params.modelName}"
-                yield "[completed]"
-                return
-
-            # 根据 showThink 参数创建模型实例
-            chat_model = model_factory(chat_params.showThink)
 
             chat_template = ChatPromptTemplate.from_messages(messages)
 
@@ -124,24 +118,32 @@ class ChatService:
 
             # 流式返回模型响应
             full_response = ""
-            async for chunk in chat_model.astream(
-                    formatted_prompt,
-                    config={"configurable": {"session_id": chat_params.chatId}},
-            ):
-                chunk_str = str(chunk)
-                response_collector.append(chunk_str)
-                full_response += chunk_str
-                yield chunk_str
+
+            # 根据模型类型调用不同的流式接口
+            if model_config.type == "ollama":
+                async for chunk in chat_model.astream(
+                        formatted_prompt,
+                        config={"configurable": {"session_id": chat_params.chatId}},
+                ):
+                    chunk_str = str(chunk)
+                    response_collector.append(chunk_str)
+                    full_response += chunk_str
+                    yield chunk_str
+            else:
+                # 在线大模型的流式处理
+                async for chunk in self._stream_online_model(chat_model, formatted_prompt):
+                    chunk_str = chunk
+                    response_collector.append(chunk_str)
+                    full_response += chunk_str
+                    yield chunk_str
 
             # 保存当前会话到Redis
             try:
-                # 只保留最近的10轮对话避免内存过大
                 updated_messages = messages.copy()
                 updated_messages.append(("ai", full_response))
-                if len(updated_messages) > 20:  # 10轮对话(每轮user+AI)
+                if len(updated_messages) > 20:
                     updated_messages = updated_messages[-20:]
 
-                # 设置过期时间为180天
                 await self.redis.setex(
                     chat_history_key,
                     timedelta(days=180),
@@ -161,6 +163,53 @@ class ChatService:
             logger.error(f"WebSocket chat error: {str(e)}", exc_info=True)
             yield f"Error occurred: {str(e)}"
             yield "[completed]"
+
+    async def _create_chat_model(self, model_config: ChatModelSchema, show_think: bool) -> Any:
+        """根据模型配置创建对应的聊天模型实例"""
+        try:
+            if model_config.type == "ollama":
+                return OllamaLLM(
+                    model=model_config.model_name,
+                    base_url=model_config.base_url or "http://localhost:11434",
+                    model_kwargs={"options": {"think": show_think}}
+                )
+
+            elif model_config.type in ["deepseek", "tongyi"]:
+                # 配置基础URL
+                base_url = model_config.base_url
+                if model_config.type == "deepseek":
+                    base_url = base_url or "https://api.deepseek.com/v1"
+                elif model_config.type == "tongyi":
+                    base_url = base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+                return ChatOpenAI(
+                    model=model_config.model_name,
+                    api_key=model_config.api_key,
+                    base_url=base_url,
+                    streaming=True,
+                    temperature=0.7
+                )
+
+            else:
+                logger.error(f"不支持的模型类型: {model_config.type}")
+                return None
+
+        except Exception as e:
+            logger.error(f"创建聊天模型失败: {str(e)}")
+            return None
+
+    async def _stream_online_model(self, chat_model, formatted_prompt):
+        """处理在线大模型的流式响应"""
+        try:
+            # 对于在线大模型，使用aiter的方式处理流式响应
+            async for chunk in chat_model.astream(formatted_prompt):
+                if hasattr(chunk, 'content'):
+                    yield chunk.content
+                else:
+                    yield str(chunk)
+        except Exception as e:
+            logger.error(f"在线大模型流式处理失败: {str(e)}")
+            yield f"模型响应错误: {str(e)}"
 
     async def save_chat_history_async(self, chat_entity: ChatSchema, content: str):
         """异步保存聊天记录的辅助方法"""
@@ -420,14 +469,14 @@ class ChatService:
 
             if user.disabled == 1:  # 检查用户是否被禁用
                 return ResultUtil.fail(msg="用户已被禁用，无法访问",data=None)
+            elif tenant_id != user_id:
+                # 验证用户是否在租户内
+                from tenant.repositories.tenants_repository import TenantsRepository
+                tenants_repo = TenantsRepository(self.db)
 
-            # 验证用户是否在租户内
-            from tenant.repositories.tenants_repository import TenantsRepository
-            tenants_repo = TenantsRepository(self.db)
-
-            tenant_user = await tenants_repo.get_tenant_user_role(tenant_id,user_id)
-            if not tenant_user:
-                return ResultUtil.fail(msg="用户不在该租户内或无访问权限",data=None)
+                tenant_user = await tenants_repo.get_tenant_user_role(tenant_id,user_id)
+                if not tenant_user:
+                    return ResultUtil.fail(msg="用户不在该租户内或无访问权限",data=None)
 
             # 查询文件夹列表
             directory_list = await self._get_directory_list_by_tenant(tenant_id, user_id)

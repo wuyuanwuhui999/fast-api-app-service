@@ -225,3 +225,55 @@ class TenantsRepository:
         except Exception as e:
             logger.error(f"获取租户用户角色失败: {str(e)}", exc_info=True)
             return None
+
+    async def delete_tenant_user(
+            self,
+            tenant_id: str,
+            user_id_to_delete: str,
+            current_user_id: str
+    ) -> bool:
+        """
+        删除租户用户
+        只有租户管理员才能删除用户
+
+        Args:
+            tenant_id: 租户ID
+            user_id_to_delete: 要删除的用户ID
+            current_user_id: 当前操作的用户ID
+
+        Returns:
+            bool: 删除是否成功
+        """
+        try:
+            # 首先验证当前用户是否是租户管理员且未被禁用
+            from user.repositories.user_repository import UserRepository
+            user_repo = UserRepository(self.db)
+
+            # 检查当前用户是否存在且未被禁用
+            current_user = user_repo.get_user_by_id(current_user_id)
+            if not current_user or current_user.disabled == 1:
+                return False
+
+            # 检查当前用户是否是租户管理员
+            tenant_user = self.db.query(TenantUserModel).filter(
+                TenantUserModel.tenant_id == tenant_id,
+                TenantUserModel.user_id == current_user_id,
+                TenantUserModel.role_type > 1  # 管理员角色
+            ).first()
+
+            if not tenant_user:
+                return False
+
+            # 删除指定的租户用户
+            delete_result = self.db.query(TenantUserModel).filter(
+                TenantUserModel.tenant_id == tenant_id,
+                TenantUserModel.user_id == user_id_to_delete
+            ).delete()
+
+            self.db.commit()
+            return delete_result > 0
+
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"删除租户用户失败: {str(e)}")
+            return False

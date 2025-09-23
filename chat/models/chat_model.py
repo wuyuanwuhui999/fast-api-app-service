@@ -60,11 +60,15 @@ class ChatModel(Base):
     __tablename__ = 'chat_model'
     __table_args__ = {
         'comment': '模型表',
-        'mysql_charset': 'utf8',
-        'mysql_collate': 'utf8_general_ci',
+        'mysql_charset': 'utf8mb4',
+        'mysql_collate': 'utf8mb4_general_ci',
         'mysql_engine': 'InnoDB'
     }
-    id = Column(Integer, primary_key=True, autoincrement=True, comment='主键')
+    id = Column(String(32), primary_key=True, comment='主键')
+    type = Column(String(255), nullable=True, comment='大模型类型，ollama本地大模型/deepseek/tongyi在线大模型')
+    api_key = Column(String(255), nullable=True, comment='在线大模型的api_key,ollama本地大模型则为空')
     model_name = Column(String(255), nullable=True, comment='模型名称')
+    base_url = Column(String(500), nullable=True, comment='API基础URL')
+    disabled = Column(Integer, default=0, comment='是否禁用：0启用，1禁用')
     create_time = Column(DateTime, nullable=True, comment='创建时间')
     update_time = Column(DateTime, nullable=True, comment='更新时间')
