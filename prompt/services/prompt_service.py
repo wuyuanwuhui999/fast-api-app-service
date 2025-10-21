@@ -16,10 +16,10 @@ class PromptService:
     async def get_prompt_category_list(self)->ResultEntity:
         return ResultUtil.success(data=self.repository.get_prompt_category_list())
 
-    async def get_system_prompt_list_by_category(self, tenant_id: str, category_id:str, user_id:str, page_num:int, page_size:int)->ResultEntity:
+    async def get_system_prompt_list_by_category(self, category_id:str, keyword:str, page_num:int, page_size:int)->ResultEntity:
         return ResultUtil.success(
-            data=self.repository.get_system_prompt_list_by_category(tenant_id,category_id,user_id,page_num,page_size),
-            total=self.repository.get_system_prompt_count_by_category(tenant_id,category_id,user_id)
+            data=self.repository.get_system_prompt_list_by_category(category_id,keyword,page_num,page_size),
+            total=self.repository.get_system_prompt_count_by_category(category_id,keyword)
         )
 
     async def insert_collect_prompt(self,tenant_id: str, prompt_id:str, user_id:str)->ResultEntity:
@@ -27,6 +27,9 @@ class PromptService:
 
     async def delete_collect_prompt(self,tenant_id: str, prompt_id:str, user_id:str)->ResultEntity:
         return ResultUtil.success(data=self.repository.delete_collect_prompt(tenant_id,prompt_id,user_id))
+
+    async def get_my_collect_prompt_category(self,tenant_id:str, user_id:str)->ResultEntity:
+        return ResultUtil.success(data=self.repository.get_my_collect_prompt_category(tenant_id, user_id))
 
     async def get_my_collect_prompt_list(self,tenant_id: str, category_id:str, user_id:str, page_num:int, page_size:int)->ResultEntity:
         return ResultUtil.success(

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from user.routers import user_router
+from prompt.routers import prompt_router
 from common.config.common_database import engine, Base
 
 Base.metadata.create_all(bind=engine)
@@ -15,11 +15,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(user_router.router)
+app.include_router(prompt_router.router)
 
 @app.get("/")
 async def root():
-    return {"message": "User Service is running"}
+    return {"message": "Prompt Service is running"}
 
 if __name__ == "__main__":
     import uvicorn

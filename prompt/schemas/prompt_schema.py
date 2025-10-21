@@ -59,6 +59,7 @@ class PromptSystemShema(BaseModel):
 class PromptCollectShema(BaseModel):
     id:str
     prompt_id: Optional[str] = Field(None, description="提示词id")
+    prompt: Optional[str] = Field(None, description="提示词")
     category_id: Optional[str] = Field(None, description="分类id")
     tenant_id: Optional[str] = Field(None, description="租户id")
     user_id: Optional[str] = Field(None, description="用户id")

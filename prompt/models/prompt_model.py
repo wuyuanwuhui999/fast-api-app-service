@@ -23,10 +23,6 @@ class PromptModel(Base):
     created_by = Column(String(32), nullable=False, comment='创建人ID')
     updated_by = Column(String(32), nullable=True, comment='更新人ID')
 
-    # 定义关系（可选）
-    tenant = relationship("Tenant", back_populates="prompts")
-    user = relationship("UserMode", back_populates="prompts")
-
     def __repr__(self):
         return f"<Prompt(id={self.id}, title={self.title})>"
 
