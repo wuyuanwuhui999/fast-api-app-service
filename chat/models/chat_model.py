@@ -51,6 +51,7 @@ class ChatHistory(Base):
     files = Column(String(1000), nullable=True, comment='文件')
     chat_id = Column(String(128), nullable=True, comment='会话id')
     prompt = Column(Text, nullable=True, comment='问题')
+    system_prompt = Column(Text,nullable=True, comment='系统提示词')
     think_content = Column(Text, nullable=True, comment='思考内容')
     response_content = Column(Text, nullable=True, comment='正文')
     content = Column(Text, nullable=True, comment='回复内容')

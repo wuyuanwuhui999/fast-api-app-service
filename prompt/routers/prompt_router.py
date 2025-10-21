@@ -1,9 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import List
+from fastapi import APIRouter, Depends
 
-from ..dependencies import get_db
-from prompt.schemas.prompt_schema import PromptCreateSchema, PromptUpdateSchema, Prompt
+from common.dependencies.auth_dependency import get_current_user
+from common.schemas.user_schema import UserSchema
+from common.utils.result_util import ResultEntity
 from prompt.services.prompt_service import PromptService
 
 router = APIRouter(
@@ -12,65 +11,50 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-@router.post("/", response_model=Prompt, status_code=status.HTTP_201_CREATED)
-async def create_prompt(
-    prompt_create: PromptCreateSchema,
+@router.get("/getPromptCategoryList",response_model=ResultEntity)
+async def get_prompt_category_list(
     prompt_service: PromptService = Depends()
 ):
-    return prompt_service.create_prompt(prompt_create)
+    return await prompt_service.get_prompt_category_list()
 
-@router.get("/", response_model=List[Prompt])
-async def read_prompts(
-    skip: int = 0,
-    limit: int = 100,
-    prompt_service: PromptService = Depends()
-):
-    return prompt_service.get_prompts(skip, limit)
 
-@router.get("/{prompt_id}", response_model=Prompt)
-async def read_prompt(
-    prompt_id: str,
-    prompt_service: PromptService = Depends()
+@router.get("/getSystemPromptListByCategory",response_model=ResultEntity)
+async def get_system_prompt_list_by_category(
+        tenantId: str,
+        categoryId: str = None,
+        pageNum: int = 1,
+        pageSize: int = 10,
+        current_user: UserSchema = Depends(get_current_user),
+        prompt_service: PromptService = Depends()
 ):
-    prompt = prompt_service.get_prompt(prompt_id)
-    if not prompt:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Prompt not found"
-        )
-    return prompt
+    return await prompt_service.get_system_prompt_list_by_category(tenantId, categoryId, current_user.id, pageNum, pageSize)
 
-@router.put("/{prompt_id}", response_model=Prompt)
-async def update_prompt(
-    prompt_id: str,
-    prompt_update: PromptUpdateSchema,
-    prompt_service: PromptService = Depends()
+@router.post("/insertCollectPrompt/{tenantId}/{promptId}",response_model=ResultEntity)
+async def insert_collect_prompt(
+        tenantId: str,
+        promptId: str,
+        current_user: UserSchema = Depends(get_current_user),
+        prompt_service: PromptService = Depends()
 ):
-    prompt = prompt_service.update_prompt(prompt_id, prompt_update)
-    if not prompt:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Prompt not found"
-        )
-    return prompt
+    return await prompt_service.insert_collect_prompt(tenantId, promptId,current_user.id)
 
-@router.delete("/{prompt_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_prompt(
-    prompt_id: str,
-    prompt_service: PromptService = Depends()
+@router.delete("/deleteCollectPrompt/{tenantId}/{promptId}",response_model=ResultEntity)
+async def delete_collect_prompt(
+        tenantId: str,
+        promptId: str,
+        current_user: UserSchema = Depends(get_current_user),
+        prompt_service: PromptService = Depends()
 ):
-    if not prompt_service.delete_prompt(prompt_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Prompt not found"
-        )
-    return None
+    return await prompt_service.delete_collect_prompt(tenantId, promptId,current_user.id)
 
-@router.get("/search/", response_model=List[Prompt])
-async def search_prompts(
-    keyword: str,
-    skip: int = 0,
-    limit: int = 100,
-    prompt_service: PromptService = Depends()
+
+@router.get("/getMyCollectPromptList",response_model=ResultEntity)
+async def get_my_collect_prompt_list(
+        tenantId: str,
+        categoryId: str = None,
+        pageNum: int = 1,
+        pageSize: int = 10,
+        current_user: UserSchema = Depends(get_current_user),
+        prompt_service: PromptService = Depends()
 ):
-    return prompt_service.search_prompts(keyword, skip, limit)
+    return await prompt_service.get_my_collect_prompt_list(tenantId, categoryId, current_user.id,pageNum,pageSize)

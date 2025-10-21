@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class PromptSchema(BaseModel):
@@ -41,3 +41,28 @@ class PromptInDBSchema(PromptSchema):
 
 class Prompt(PromptInDBSchema):
     pass
+
+class PromptCategorySchema(BaseModel):
+    id: str
+    category: Optional[str] = None
+    create_time: Optional[datetime] = None
+    update_time: Optional[datetime] = None
+
+class PromptSystemShema(BaseModel):
+    id:str
+    categoryId: Optional[str] = Field(None, description="分类id")
+    prompt: Optional[str] = Field(None, description="提示词内容")
+    disabled: Optional[int] = Field(0, description="是否禁用：0-启用，1-禁用")
+    create_time: Optional[datetime] = None
+    update_time: Optional[datetime] = None
+
+class PromptCollectShema(BaseModel):
+    id:str
+    prompt_id: Optional[str] = Field(None, description="提示词id")
+    category_id: Optional[str] = Field(None, description="分类id")
+    tenant_id: Optional[str] = Field(None, description="租户id")
+    user_id: Optional[str] = Field(None, description="用户id")
+    create_time: Optional[datetime] = None
+    update_time: Optional[datetime] = None
+
+

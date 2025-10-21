@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.mysql import TINYINT
@@ -27,3 +29,47 @@ class PromptModel(Base):
 
     def __repr__(self):
         return f"<Prompt(id={self.id}, title={self.title})>"
+
+
+class PromptCategoryModel(Base):
+    __tablename__ = "prompt_category"
+
+    id = Column(String(32), primary_key=True, comment="组件ID")
+    category = Column(String(255), nullable=True, comment="提示词类别")
+    create_time = Column(DateTime, default=datetime.now, comment="创建时间")
+    update_time = Column(DateTime, default=datetime.now, onupdate=datetime.now, comment="更新时间")
+
+    def __repr__(self):
+        return f"<PromptCategory(id='{self.id}', category='{self.category}')>"
+
+
+class PromptSystemModel(Base):
+    __tablename__ = "prompt_system"
+
+    id = Column(String(64), primary_key=True, comment="主键ID")
+    categoryId = Column(String(32), nullable=True, comment="分类id")
+    prompt = Column(Text, nullable=False, comment="提示词内容")
+    disabled = Column(Integer, nullable=False, default=0, comment="是否禁用：0-启用，1-禁用")
+    create_time = Column(DateTime, nullable=False, default=datetime.now, comment="创建时间")
+    update_time = Column(DateTime, default=datetime.now, onupdate=datetime.now, comment="更新时间")
+
+    # 如果需要关联查询，可以添加关系（可选）
+    # category = relationship("PromptCategory", back_populates="prompt_systems")
+
+    def __repr__(self):
+        return f"<PromptSystem(id='{self.id}', categoryId='{self.categoryId}', disabled={self.disabled})>"
+
+
+class PromptCollectModel(Base):
+    __tablename__ = "prompt_collect"
+
+    id = Column(String(32), primary_key=True, comment="主键")
+    prompt_id = Column(String(32), nullable=True, comment="提示词id")
+    category_id = Column(String(32), nullable=True, comment="分类id")
+    tenant_id = Column(String(32), nullable=True, comment="租户id")
+    user_id = Column(String(32), nullable=True, comment="用户id")
+    create_time = Column(DateTime, default=datetime.now, comment="创建时间")
+    update_time = Column(DateTime, default=datetime.now, onupdate=datetime.now, comment="更改时间")
+
+    def __repr__(self):
+        return f"<PromptCollect(id='{self.id}', user_id='{self.user_id}', prompt_id='{self.prompt_id}')>"

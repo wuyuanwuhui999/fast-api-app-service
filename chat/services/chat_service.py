@@ -54,6 +54,7 @@ class ChatService:
             user_id=user_id,
             chat_id=chat_params.chatId,
             prompt=chat_params.prompt,
+            system_prompt = chat_params.systemPrompt,
             model_name=chat_params.modelId,  # 使用modelId
             content="",
             think_content=None,
@@ -83,7 +84,7 @@ class ChatService:
 
             # 初始化聊天模板
             messages = [
-                ("system", "你叫小吴同学，是一个无所不能的AI助手，上知天文下知地理，请用小吴同学的身份回答问题。")
+                ("system", chat_params.systemPrompt if chat_params.systemPrompt is None or chat_params.systemPrompt == '' else "你叫小吴同学，是一个无所不能的AI助手，上知天文下知地理，请用小吴同学的身份回答问题。")
             ]
 
             # 如果有历史会话，添加到消息中

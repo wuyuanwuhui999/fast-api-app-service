@@ -3,8 +3,9 @@ from fastapi import HTTPException, status, Depends
 from sqlalchemy.orm import Session
 
 from common.config.common_database import get_db
+from common.utils.result_util import ResultEntity, ResultUtil
 from prompt.models.prompt_model import PromptModel
-from prompt.schemas.prompt_schema import PromptCreateSchema, PromptUpdateSchema, Prompt
+from prompt.schemas.prompt_schema import PromptCreateSchema, PromptUpdateSchema, Prompt, PromptCategorySchema
 from prompt.repositories.prompt_repository import PromptRepository
 
 
@@ -12,39 +13,23 @@ class PromptService:
     def __init__(self, db: Session = Depends(get_db)):
         self.repository = PromptRepository(db)
 
-    def get_prompt(self, prompt_id: str) -> Optional[Prompt]:
-        prompt = self.repository.get_prompt_by_id(prompt_id)
-        if not prompt:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Prompt not found"
-            )
-        return prompt
+    async def get_prompt_category_list(self)->ResultEntity:
+        return ResultUtil.success(data=self.repository.get_prompt_category_list())
 
-    def get_prompts(self, skip: int = 0, limit: int = 100) -> List[Prompt]:
-        return self.repository.get_all_prompt(skip, limit)
+    async def get_system_prompt_list_by_category(self, tenant_id: str, category_id:str, user_id:str, page_num:int, page_size:int)->ResultEntity:
+        return ResultUtil.success(
+            data=self.repository.get_system_prompt_list_by_category(tenant_id,category_id,user_id,page_num,page_size),
+            total=self.repository.get_system_prompt_count_by_category(tenant_id,category_id,user_id)
+        )
 
-    def create_prompt(self, prompt_create: PromptCreateSchema) -> Prompt:
-        # 可以在这里添加业务逻辑验证
-        prompt = PromptModel(**prompt_create.model_dump())
-        return self.repository.create_prompt(prompt)
+    async def insert_collect_prompt(self,tenant_id: str, prompt_id:str, user_id:str)->ResultEntity:
+        return ResultUtil.success(data=self.repository.insert_collect_prompt(tenant_id,prompt_id,user_id))
 
-    def update_prompt(self, prompt_id: str, prompt_update: PromptUpdateSchema) -> Optional[Prompt]:
-        existing_prompt = self.get_prompt(prompt_id)
-        if not existing_prompt:
-            return None
+    async def delete_collect_prompt(self,tenant_id: str, prompt_id:str, user_id:str)->ResultEntity:
+        return ResultUtil.success(data=self.repository.delete_collect_prompt(tenant_id,prompt_id,user_id))
 
-        update_data = prompt_update.model_dump(exclude_unset=True)
-        return self.repository.update_prompt_by_id(prompt_id, update_data)
-
-    def delete_prompt(self, prompt_id: str) -> bool:
-        existing_prompt = self.get_prompt(prompt_id)
-        if not existing_prompt:
-            return False
-        return self.repository.delete_prompt_by_id(prompt_id)
-
-    def search_prompts(self, keyword: str, skip: int = 0, limit: int = 100) -> List[Prompt]:
-        # 这里可以实现更复杂的搜索逻辑
-        prompts = self.repository.get_all_prompt(skip, limit)
-        return [p for p in prompts if keyword.lower() in p.title.lower() or
-                (p.content and keyword.lower() in p.content.lower())]
+    async def get_my_collect_prompt_list(self,tenant_id: str, category_id:str, user_id:str, page_num:int, page_size:int)->ResultEntity:
+        return ResultUtil.success(
+            data=self.repository.get_my_collect_prompt_list(tenant_id,category_id,user_id,page_num,page_size),
+            total=self.repository.get_my_collect_prompt_count(tenant_id,category_id,user_id)
+        )

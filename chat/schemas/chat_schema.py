@@ -9,6 +9,7 @@ class ChatSchema(BaseModel):
     files: Optional[str] = None
     chat_id: str
     prompt: str
+    system_prompt: Optional[str] = None
     model_name: str
     content: Optional[str] = None
     think_content: Optional[str] = None
@@ -44,6 +45,7 @@ class ChatSchema(BaseModel):
 
 class ChatParamsEntity(BaseModel):
     prompt: str
+    systemPrompt: Optional[str] = None
     directoryId: str = "default"
     chatId: str
     token: str

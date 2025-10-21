@@ -77,14 +77,14 @@ def convert_to_png(input_path, output_path=None, width=360):
 # 使用示例
 if __name__ == "__main__":
     try:
-        result1 = convert_to_png("C:/Users/27501/Desktop/添加用户.png","F:/flutter/flutter-chat-app-ui/添加用户.png",360)
+        result1 = convert_to_png("C:/Users/27501/Desktop/设置提示词.png","F:/flutter/flutter-chat-app-ui/设置提示词.png",360)
         print(f"图片已保存到: {result1}")
 
-        result2 = convert_to_png("C:/Users/27501/Desktop/添加用户.png","F:/uniapp/uniapp-chat-app-ui/添加用户.png",360)
+        result2 = convert_to_png("C:/Users/27501/Desktop/设置提示词.png","F:/uniapp/uniapp-chat-app-ui/设置提示词.png",360)
         print(f"图片已保存到: {result2}")
 
         # 示例2: 转换格式并调整宽度为800px
-        result2 = convert_to_png("C:/Users/27501/Desktop/添加用户.png", "F:/Harmony/harmony-arkTs-chat-ui/添加用户.png",
+        result2 = convert_to_png("C:/Users/27501/Desktop/设置提示词.png", "F:/Harmony/harmony-arkTs-chat-ui/设置提示词.png",
                                  360)
         print(f"图片已保存到: {result2}")
 
