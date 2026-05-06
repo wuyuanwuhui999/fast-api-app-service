@@ -1,0 +1,6186 @@
+// App.vue
+<script setup lang="ts">
+import { onLaunch, onShow, onHide } from "@dcloudio/uni-app";
+onLaunch(() => {
+  console.log("App Launch");
+});
+onShow(() => {
+  console.log("App Show");
+});
+onHide(() => {
+  console.log("App Hide");
+});
+</script>
+<style>
+	uni-page-body{
+		height: 100%;
+	}
+  scroll-view ::-webkit-scrollbar {
+    display: none;
+  }
+</style>
+
+
+// main.ts
+
+import { createSSRApp } from "vue";
+import { createPinia } from 'pinia'
+import App from "./App.vue";
+import router from './routers/index';  
+import uniIcons from '@dcloudio/uni-ui/lib/uni-icons/uni-icons.vue'
+
+export function createApp() {
+  const app = createSSRApp(App);
+  const pinia = createPinia()
+  // 全局注册组件
+  app.component("uni-icons",uniIcons)
+  app.use(pinia);
+  app.use(router);
+  return {
+    app,
+	pinia
+  };
+}
+
+
+// env.d.ts
+/// <reference types="vite/client" />
+
+declare module '*.vue' {
+  import { DefineComponent } from 'vue'
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/ban-types
+  const component: DefineComponent<{}, {}, any>
+  export default component
+}
+
+
+// uni.scss
+/**
+ * 这里是uni-app内置的常用样式变量
+ *
+ * uni-app 官方扩展插件及插件市场（https://ext.dcloud.net.cn）上很多三方插件均使用了这些样式变量
+ * 如果你是插件开发者，建议你使用scss预处理，并在插件代码中直接使用这些变量（无需 import 这个文件），方便用户通过搭积木的方式开发整体风格一致的App
+ *
+ */
+
+/**
+ * 如果你是App开发者（插件使用者），你可以通过修改这些变量来定制自己的插件主题，实现自定义主题功能
+ *
+ * 如果你的项目同样使用了scss预处理，你也可以直接在你的 scss 代码中使用如下变量，同时无需 import 这个文件
+ */
+
+/* 颜色变量 */
+
+/* 行为相关颜色 */
+$uni-color-primary: #007aff;
+$uni-color-success: #4cd964;
+$uni-color-warning: #f0ad4e;
+$uni-color-error: #dd524d;
+
+/* 文字基本颜色 */
+$uni-text-color: #333; // 基本色
+$uni-text-color-inverse: #fff; // 反色
+$uni-text-color-grey: #999; // 辅助灰色，如加载更多的提示信息
+$uni-text-color-placeholder: #808080;
+$uni-text-color-disable: #c0c0c0;
+
+/* 背景颜色 */
+$uni-bg-color: #fff;
+$uni-bg-color-grey: #f8f8f8;
+$uni-bg-color-hover: #f1f1f1; // 点击状态颜色
+$uni-bg-color-mask: rgba(0, 0, 0, 0.4); // 遮罩颜色
+
+/* 边框颜色 */
+$uni-border-color: #c8c7cc;
+
+/* 尺寸变量 */
+
+/* 文字尺寸 */
+$uni-font-size-sm: 12px;
+$uni-font-size-base: 14px;
+$uni-font-size-lg: 16;
+
+/* 图片尺寸 */
+$uni-img-size-sm: 20px;
+$uni-img-size-base: 26px;
+$uni-img-size-lg: 40px;
+
+/* Border Radius */
+$uni-border-radius-sm: 2px;
+$uni-border-radius-base: 3px;
+$uni-border-radius-lg: 6px;
+$uni-border-radius-circle: 50%;
+
+/* 水平间距 */
+$uni-spacing-row-sm: 5px;
+$uni-spacing-row-base: 10px;
+$uni-spacing-row-lg: 15px;
+
+/* 垂直间距 */
+$uni-spacing-col-sm: 4px;
+$uni-spacing-col-base: 8px;
+$uni-spacing-col-lg: 12px;
+
+/* 透明度 */
+$uni-opacity-disabled: 0.3; // 组件禁用态的透明度
+
+/* 文章场景相关 */
+$uni-color-title: #2c405a; // 文章标题颜色
+$uni-font-size-title: 20px;
+$uni-color-subtitle: #555; // 二级标题颜色
+$uni-font-size-subtitle: 18px;
+$uni-color-paragraph: #3f536e; // 文章段落颜色
+$uni-font-size-paragraph: 15px;
+
+// manifest.json
+{
+    "name" : "在线音乐",
+    "appid" : "__UNI__0D01F9F",
+    "description" : "",
+    "versionName" : "1.0.0",
+    "versionCode" : "100",
+    "transformPx" : false,
+    "statusbar" : {
+        "style" : "hidden"
+    },
+    "app-plus" : {
+        "usingComponents" : true,
+        "nvueStyleCompiler" : "uni-app",
+        "compilerVersion" : 3,
+        "splashscreen" : {
+            "alwaysShowBeforeRender" : true,
+            "waiting" : true,
+            "autoclose" : true,
+            "delay" : 0
+        },
+        "modules" : {},
+        "distribute" : {
+            "android" : {
+                "permissions" : [
+                    "<uses-feature android:name=\"android.hardware.camera\"/>",
+                    "<uses-feature android:name=\"android.hardware.camera.autofocus\"/>",
+                    "<uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\"/>",
+                    "<uses-permission android:name=\"android.permission.ACCESS_WIFI_STATE\"/>",
+                    "<uses-permission android:name=\"android.permission.CAMERA\"/>",
+                    "<uses-permission android:name=\"android.permission.CHANGE_NETWORK_STATE\"/>",
+                    "<uses-permission android:name=\"android.permission.CHANGE_WIFI_STATE\"/>",
+                    "<uses-permission android:name=\"android.permission.FLASHLIGHT\"/>",
+                    "<uses-permission android:name=\"android.permission.GET_ACCOUNTS\"/>",
+                    "<uses-permission android:name=\"android.permission.INTERNET\"/>",
+                    "<uses-permission android:name=\"android.permission.MOUNT_UNMOUNT_FILESYSTEMS\"/>",
+                    "<uses-permission android:name=\"android.permission.READ_LOGS\"/>",
+                    "<uses-permission android:name=\"android.permission.READ_PHONE_STATE\"/>",
+                    "<uses-permission android:name=\"android.permission.VIBRATE\"/>",
+                    "<uses-permission android:name=\"android.permission.WAKE_LOCK\"/>",
+                    "<uses-permission android:name=\"android.permission.WRITE_SETTINGS\"/>"
+                ]
+            },
+            "ios" : {
+                "dSYMs" : false
+            },
+            "sdkConfigs" : {
+                "ad" : {
+                    "gdt" : {},
+                    "ks" : {},
+                    "ks-content" : {},
+                    "sigmob" : {},
+                    "hw" : {},
+                    "bd" : {},
+                    "gm" : {},
+                    "fl" : {},
+                    "jl" : {}
+                }
+            },
+            "splashscreen" : {
+                "iosStyle" : "storyboard"
+            },
+            "icons" : {
+                "android" : {
+                    "hdpi" : "unpackage/res/icons/72x72.png",
+                    "xhdpi" : "unpackage/res/icons/96x96.png",
+                    "xxhdpi" : "unpackage/res/icons/144x144.png",
+                    "xxxhdpi" : "unpackage/res/icons/192x192.png"
+                },
+                "ios" : {
+                    "appstore" : "unpackage/res/icons/1024x1024.png",
+                    "ipad" : {
+                        "app" : "unpackage/res/icons/76x76.png",
+                        "app@2x" : "unpackage/res/icons/152x152.png",
+                        "notification" : "unpackage/res/icons/20x20.png",
+                        "notification@2x" : "unpackage/res/icons/40x40.png",
+                        "proapp@2x" : "unpackage/res/icons/167x167.png",
+                        "settings" : "unpackage/res/icons/29x29.png",
+                        "settings@2x" : "unpackage/res/icons/58x58.png",
+                        "spotlight" : "unpackage/res/icons/40x40.png",
+                        "spotlight@2x" : "unpackage/res/icons/80x80.png"
+                    },
+                    "iphone" : {
+                        "app@2x" : "unpackage/res/icons/120x120.png",
+                        "app@3x" : "unpackage/res/icons/180x180.png",
+                        "notification@2x" : "unpackage/res/icons/40x40.png",
+                        "notification@3x" : "unpackage/res/icons/60x60.png",
+                        "settings@2x" : "unpackage/res/icons/58x58.png",
+                        "settings@3x" : "unpackage/res/icons/87x87.png",
+                        "spotlight@2x" : "unpackage/res/icons/80x80.png",
+                        "spotlight@3x" : "unpackage/res/icons/120x120.png"
+                    }
+                }
+            }
+        }
+    },
+    "quickapp" : {},
+    "mp-weixin" : {
+        "appid" : "",
+        "setting" : {
+            "urlCheck" : false
+        },
+        "usingComponents" : true
+    },
+    "mp-alipay" : {
+        "usingComponents" : true
+    },
+    "mp-baidu" : {
+        "usingComponents" : true
+    },
+    "mp-toutiao" : {
+        "usingComponents" : true
+    },
+    "uniStatistics" : {
+        "enable" : false
+    },
+    "vueVersion" : "3",
+    "locale" : "zh-Hans",
+    "app-harmony" : {
+        "distribute" : {
+            "icons" : {
+                "foreground" : "F:/app效果图/音乐logo.png",
+                "background" : "F:/app效果图/音乐logo.png"
+            },
+            "splashScreens" : {
+                "startWindowIcon" : "F:/app效果图/音乐logo.png"
+            }
+        }
+    }
+}
+
+
+// shime-uni.d.ts
+export {}
+
+declare module "vue" {
+  type Hooks = App.AppInstance & Page.PageInstance;
+  interface ComponentCustomOptions extends Hooks {}
+}
+
+// pages.json
+{
+	"pages": [
+		{
+			"path" : "pages/LaunchPage",
+			"style" : 
+			{
+				"navigationBarTitleText" : "",
+				"enablePullDownRefresh" : false
+			}
+		},
+		{
+			"path" : "pages/LoginPage",
+			"style" : 
+			{
+				"navigationBarTitleText" : "",
+				"enablePullDownRefresh" : false
+			}
+		},
+		{
+			"path" : "pages/ForgetPasswordPage",
+			"style" : 
+			{
+				"navigationBarTitleText" : "",
+				"enablePullDownRefresh" : false
+			}
+		},
+		{
+			"path" : "pages/ResetPasswordPage",
+			"style" : 
+			{
+				"navigationBarTitleText" : "",
+				"enablePullDownRefresh" : false
+			}
+		},
+		{
+			"path" : "pages/RegisterPage",
+			"style" : 
+			{
+				"navigationBarTitleText" : "",
+				"enablePullDownRefresh" : false
+			}
+		},
+		{
+			"path" : "pages/UpdatePasswordPage",
+			"style" : 
+			{
+				"navigationBarTitleText" : "",
+				"enablePullDownRefresh" : false
+			}
+		},
+		{
+			"path" : "pages/UserPage",
+			"style" : 
+			{
+				"navigationBarTitleText" : "",
+				"enablePullDownRefresh" : false
+			}
+		},
+		{
+			"path" : "pages/ChatPage",
+			"style" : 
+			{
+				"navigationBarTitleText" : "",
+				"enablePullDownRefresh" : false
+			}
+		},
+		{
+			"path" : "pages/TenantManagePage",
+			"style" : 
+			{
+				"navigationBarTitleText" : "",
+				"enablePullDownRefresh" : false
+			}
+		},
+		{
+			"path" : "pages/PromptPage",
+			"style" : 
+			{
+				"navigationBarTitleText" : "",
+				"enablePullDownRefresh" : false
+			}
+		},
+		{
+			"path" : "pages/SettingPromptPage",
+			"style" : 
+			{
+				"navigationBarTitleText" : "",
+				"enablePullDownRefresh" : false
+			}
+		},{
+			"path" : "pages/MyPromptPage",
+			"style" : 
+			{
+				"navigationBarTitleText" : "",
+				"enablePullDownRefresh" : false
+			}
+		}
+	],
+	"globalStyle": {
+		"navigationStyle": "custom",
+		"navigationBarTextStyle": "white",
+		"navigationBarTitleText": "uni-app",
+		"navigationBarBackgroundColor": "#F8F8F8",
+		"backgroundColor": "#F8F8F8"
+	}
+}
+
+
+// index.ts
+import { createRouter } from 'uni-mini-router'  
+// 导入pages.json  
+import pagesJson from '../pages.json'  
+// 引入uni-parse-pages  
+import pagesJsonToRoutes from 'uni-parse-pages'  
+// 生成路由表  
+const routes = pagesJsonToRoutes(pagesJson)  
+const router = createRouter({  
+  routes: [...routes] // 路由表信息  
+})  
+export default router
+
+// index.ts
+import type { PositionEnum } from '../enum/index';
+
+export type UserDataType = {
+	id?: string;
+  userAccount:     string;
+  createDate?: string;
+  updateDate?: string;
+  username:   string;
+  telephone:  string;
+  email:      string;
+  avater?:     string;
+  birthday:   string;
+  sex:        number;
+  role?:       string;
+  password:   string;
+  sign:       string;
+  region:     string;
+  disabled?:   number;
+  permission?: number;
+}
+
+// 主体数据结构，键是时间前缀，值是该时间前缀下的消息组
+export type ChatStructure = {
+	timeAgo:string,
+	list:Array<Array<ChatHistoryType>>
+}
+
+export type ChatModelType = {
+  id:string,
+  modelName:string,
+  updateTime:string,
+  createTime:string
+}
+
+// 聊天气泡
+export type ChatType = {
+  text?:string,
+  position:PositionEnum,
+  thinkContent?:string,
+  responseContent?:string,
+  start?:boolean,
+  type?:string;
+}
+// 聊天气泡
+export type ChatHistoryType = {
+  id: number;          // 主键
+  modelName:string,      // 模型id
+  userId: string;      // 用户id
+  files?: string;       // 文件（
+  chatId: string;      // 会话id
+  prompt: string;      // 提示词
+  SystemPrompt: string;// 系统提示词
+  content: string;     // 内容
+  createTime: string;  // 创建时间
+  thinkContent?:string,// 思考内容
+  responseContent?:string,// 正文内容
+  timeAgo:string;// xx分钟、小时、天、月前
+}
+
+export type GroupedByChatIdType = {
+  [chatId: string]: ChatHistoryType[];
+}
+
+export type GroupedByTimeAgoType = {
+  [timeAgo: string]:  ChatHistoryType[][];
+}
+
+export type FileType = 'txt' | 'pdf';
+
+export interface UploadFile {
+  path: string;
+  name: string;
+  size: number;
+  type: string;
+}
+
+export interface UploadResponse {
+  code: number;
+  message: string;
+  data?: any;
+  status:string;
+}
+
+export interface PayloadInterface {
+  modelId: string;
+  chatId:string; // 替换为实际聊天ID
+  tenantId:string;
+  type: string;
+  docIds?:string[];// 文档列表
+  prompt: string;// 用户提示词
+  systemPrompt:string;// 系统提示词
+  showThink:boolean;
+  directoryId?:string;
+  language:string;
+};
+
+export interface DocumentInterface {
+  id: string;// 文档id
+  name: string; // 文档名称
+  ext:string; // 文档格式
+  userId: string;// 用户id
+  createTime: string;//创建时间
+  updateTime: string// 更新时间
+  directoryId:string// 目录id
+  directoryName:string;// 目录名称
+  checked?:boolean;// 是否选中
+};
+
+export interface OptionType {
+  text:string,
+  value:string | number
+}
+
+// 文档的目录
+export interface DirectoryInterce {
+  id?:string;// 目录id
+  userId?:string;// 用户id
+  directory:string;// 目录名称
+  tenantId: string;// 租户id
+  createTime?:string;// 创建时间
+  updateTime?:string;// 更新时间
+}
+
+export interface DirectoryCheckInterface{
+  directoryName:string;
+  expand?:boolean;
+  docList:DocumentInterface[]
+}
+
+// 租户
+export interface TenantUserType {
+  id: string; // 主键
+  tenantId: string; // 租户id
+  tenantName: string;
+  userId: string; // 用户id
+  roleType: number; // 用户角色 (0-普通用户，1-租户管理员，2-超级管理员)
+  joinDate: string; // 加入日期
+  createBy: string; // 创建时间
+  username: string; // 用户名
+  avater?: string; // 头像
+  disabled: number;// 是否禁用
+  email: string;// 邮箱
+}
+
+/** 租户状态枚举 */
+export enum TenantStatus {
+  DISABLED = 0,// 禁用
+  ENABLED = 1// 启用
+}
+
+export interface TenantType {
+  id: string;// 租户ID（主键）
+  name: string;// 租户名称
+  code: string;// 租户编码（唯一）
+  description?: string | null;// 租户描述（可选）
+  status: TenantStatus;// 租户状态
+  create_date?: Date;// 创建时间
+  update_date?: Date | null;// 更新时间（可选）
+  created_by: string;// 创建人ID
+  updated_by?: string | null;// 更新人ID（可选）
+}
+
+export interface AppStoreStateType {
+  userData: UserDataType;
+  token: string;
+  platform: string;
+  device: string;
+  prompt:string;
+  version: string;
+  tenantUser: TenantUserType;
+}
+
+// 或者使用接口继承的方式
+export interface UserWithChecked extends UserDataType {
+  checked: number;
+}
+
+// 提示词类别
+export interface PromptCategoryType {
+  id: string;
+  category: string;
+  createTime: string
+  updateTime: string;
+}
+
+// 提示词类别
+export interface SystemPromptType {
+  id: string;
+  prompt: string;
+  category:string;
+  isCollect?:number;
+  disabled:number;
+  createTime: string
+  updateTime: string;
+}
+
+export interface PromptInterface {
+  id: string;
+  tenantId: string;
+  userId: string;
+  prompt: string;
+  createTime?: string;
+  updateTime?: string;
+}
+
+
+// index.ts
+export enum PositionEnum {
+    LEFT="LEFT",
+    RIGHT="RIGHT"
+}
+
+export enum LanguageEnum {
+    zh="中文",
+    en="英文"
+}
+
+export const LanguageMap =  {
+    "中文":"zh",
+    "英文":"en"
+}
+
+// useStore.ts
+import { defineStore } from 'pinia'
+import type {UserDataType, AppStoreStateType, TenantUserType} from '../types/index';
+import {DEFAULT_TENANT_USER,DEFAULT_PROMPT} from "../common/constant";
+export const useStore = defineStore("myStore", {
+     state: (): AppStoreStateType => ({
+		userData: {} as UserDataType,
+		token: '',
+		platform: '', // 平台
+		device: '',
+		version: '',
+		prompt:DEFAULT_PROMPT,
+		tenantUser: DEFAULT_TENANT_USER
+	}),
+    actions: {
+		setUserData(userData:UserDataType){
+			this.userData = userData;
+		},
+
+		setDeviceInfo(deviceInfo:any){
+			this.platform = deviceInfo.platform;
+			this.device = deviceInfo.deviceModel;
+			this.version = deviceInfo.osVersion;
+		},
+
+		setToken(token:string){
+			this.token = token
+		},
+
+		setTenantUser(tenantUser:TenantUserType){
+            const mTenantUser:TenantUserType = {...tenantUser}
+            if(!mTenantUser.tenantId){
+                mTenantUser.tenantId = mTenantUser.userId;
+            }
+			this.tenantUser = mTenantUser;
+		},
+		setPrompt(prompt:string){
+			this.prompt = prompt;
+			uni.setStorage({key:`${this.userData.id}:prompt`,data:prompt})
+		}
+    }
+})
+
+
+// eventBus.ts
+import mitt from 'mitt';
+const emitter = mitt();
+export default emitter;
+
+// util.ts
+import { HOST } from "../common/constant";
+export const zerofull=(value:number):string|number=>{
+    return value < 9 ? "0"+value:value
+}
+
+export const formatTime=(value:any):string=>{
+    var date =new Date(value);
+    var nowDate = new Date()
+    let diff = Math.ceil((nowDate.getTime()-date.getTime())/1000);
+    if(diff < 60){
+        return "刚刚"
+    }else if(diff < 60*60){
+        return Math.ceil(diff/60) + "分前"
+    }else if(diff < 60*60*24){
+        return Math.ceil(diff/(60*60))+"小时前"
+    }else if(diff < 60*60*24*30){
+        return Math.ceil(diff/(60*60*24))+"天前"
+    }else if(diff < 60*60*24*30*12){
+        return Math.ceil(diff/(60*60*24*30))+"个月前"
+    }
+    const year = zerofull(date.getFullYear());
+    const month = zerofull(date.getMonth()+1);
+    const dates = zerofull(date.getDate());
+    const hour = zerofull(date.getHours());
+    const minutes = zerofull(date.getMinutes());
+    const seconds = zerofull(date.getSeconds());
+    return `${year}-${month}-${dates} ${hour}:${minutes}:${seconds}`
+};
+
+export const formatSecond=(value:number,showHour:boolean = false):string => {
+	if(showHour){
+		return `${zerofull(Math.floor(value / (60 * 60)))}:${zerofull(Math.floor(value % (60 * 60) / 60))}:${zerofull(Math.floor(value % (60 * 60) % 60))}`
+	}else{
+		return `${zerofull(Math.floor(value / 60))}:${zerofull(Math.floor(value % 60))}`
+	}
+};
+
+export const getMusicCover = (cover:string) => /http[s]?:\/\//.test(cover) ? cover.replace('{size}', '480') : HOST + cover
+
+export const generateSecureID = () => {
+    const array = new Uint8Array(16); // 16 字节（128 位）
+    window.crypto.getRandomValues(array); // 填充随机字节
+    return Array.from(array)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+      .slice(0, 32); // 截取前 32 位
+  }
+
+export const formatTimeAgo = (createTime:string)=> {
+    // 获取当前时间和目标时间
+    const now = new Date()
+    const targetDate = new Date(createTime)
+    
+    // 计算时间差（毫秒）
+    const diff = now.getTime() - targetDate.getTime();
+    
+    // 处理未来时间
+    if (diff < 0) return '刚刚'
+  
+    // 计算各时间单位
+    const seconds = Math.floor(diff / 1000)
+    const minutes = Math.floor(seconds / 60)
+    const hours = Math.floor(minutes / 60)
+    const days = Math.floor(hours / 24)
+    
+    // 计算精确的月份和年份差
+    const targetYear = targetDate.getFullYear()
+    const targetMonth = targetDate.getMonth()
+    const targetDay = targetDate.getDate()
+    const nowYear = now.getFullYear()
+    const nowMonth = now.getMonth()
+    const nowDay = now.getDate()
+  
+    let monthsDiff = (nowYear - targetYear) * 12 + (nowMonth - targetMonth)
+    if (nowDay < targetDay) monthsDiff--
+  
+    let yearsDiff = nowYear - targetYear
+    if (nowMonth < targetMonth || (nowMonth === targetMonth && nowDay < targetDay)) {
+      yearsDiff--
+    }
+  
+    // 判断并返回结果
+    if (seconds < 60) {
+      return '刚刚'
+    } else if (minutes < 60) {
+      return `${minutes}分钟前`
+    } else if (hours < 24) {
+      return `${hours}小时前`
+    } else if (days <= 31) {
+      return `${days}天前`
+    } else if (monthsDiff < 12) {
+      return `${monthsDiff}个月前`
+    } else {
+      return `${yearsDiff}年前`
+    }
+  }
+  
+
+// HttpUtils.ts
+import {HOST} from '../common/constant';
+import type { RequestTask } from '@dcloudio/types'
+import axios from 'axios';
+import type {ChatType} from '../types'; 
+axios.defaults.responseType = 'text'; // 或者 'stream'，取决于你的后端如何处理流
+
+enum StatusEnum {
+    FAIL="FAIL",
+    SUCCESS="SUCCESS",
+}
+
+
+/**
+ * @description: HTTP请求方法枚举
+ */
+enum HttpMethod {
+	GET = "GET",
+	POST = "POST",
+	OPTIONS = "OPTIONS",
+	PUT = "PUT",
+	DELETE = "DELETE"
+}
+
+/**
+ * @description: HTTP请求配置
+*/
+interface RequestConfig {
+	/** API路径 */
+	url?: string
+	/** Method类型 */
+	method?: HttpMethod
+	/** 接口返回数据 */
+	data?: any
+	/** Header头部 */
+	header?: object
+	/** 返回的数据格式 */
+	dataType?: string
+	/** 请求报错时，是否弹出message提示（默认弹出）*/
+	noShowMsg?: boolean
+	enableChunked?:boolean
+}
+
+/**
+ * @description: 声明业务数据类型
+*/
+export type MyAwesomeData<T> = {
+	data: T,
+    token: string,
+    status:string,
+    msg:string,
+    total:number
+}
+
+class HttpRequest {
+    private static instance: HttpRequest;
+    private token: string = '';
+	private constructor() { }
+	/** 请求函数(单例模式)
+	*
+	* **注意：**
+	* `method`需使用`HttpMethod`枚举类，切勿自行定义
+	*
+	* **示例代码**
+	* ```js
+	 HttpRequest.getInstance().request({
+		 url: "/Api",
+		 method: HttpMethod.GET
+	 })
+	* ```
+    */
+    public setToken(token:string){
+        this.token = token;
+    }
+
+	public getToken():string{
+		return this.token;
+	}
+
+	public static getInstance(): HttpRequest {
+		if (!this.instance) {
+			this.instance = new HttpRequest()
+		}
+		return this.instance;
+	}
+
+	// 处理请求异常状态码
+	private handerErrorStatus(statusCode: number, requestConfig: RequestConfig) {
+		let msg = "服务找不到"
+		if (statusCode === 502 || statusCode === 503) {
+			msg = "服务器开小差了~"
+		}
+		!requestConfig.noShowMsg && uni.showToast({
+			title: `${msg}，错误码：${statusCode}`,
+			icon: "none"
+		})
+		return msg
+	}
+
+	// 处理请求异常
+	private handerError(err: { errMsg: string }, requestConfig: RequestConfig) {
+		let msg = `请求异常`
+		if (/timeout/.test(err.errMsg)) {
+			msg = "请求超时"
+		}
+		!requestConfig.noShowMsg && uni.showToast({
+			title: msg,
+			icon: "none"
+		});
+		return msg
+	}
+
+	// 服务器接口请求
+	public request<T>(requestConfig: RequestConfig): Promise<MyAwesomeData<T>> {
+		return new Promise((resolve, reject) => {
+			// 默认header
+			const header = {
+                "content-type": "application/json",
+                "Authorization": `Bearer ${this.token}`
+			}
+			uni.request({
+				method: requestConfig.method,
+				url: HOST + requestConfig.url,
+				data: requestConfig.data,
+				header: Object.assign(header, requestConfig?.header),
+				dataType: !requestConfig.dataType ? "json" : "其他",
+				enableChunked: requestConfig.enableChunked,
+				success:  (res) => {
+					// console.log("发送返回:", res) //res:{cookies, data, header, statusCode}
+					const code = res.statusCode || -404;
+					const respond:MyAwesomeData<T> = res.data as MyAwesomeData<T>;
+					/** 接口请求成功*/
+					if (code == 200 && respond.status === StatusEnum.SUCCESS) {
+						resolve(respond)
+					} else if (code === 401) {
+						// 未授权
+						!requestConfig.noShowMsg && uni.showModal({
+							title: "登录失效",
+							content: "登录失效，请重新登录",
+						}).then(resModa => {
+							if (resModa.confirm) { }
+						})
+						reject({ code, msg: "未登录", data: res.data })
+					} else {
+						//非200及401状态码-数据处理
+						const errMsg = this.handerErrorStatus(code, requestConfig)
+						reject({ code, msg: respond.msg || errMsg || res.errMsg, data:res.data })
+					}
+				},
+				fail: err => {
+					let msg = this.handerError(err, requestConfig)
+					reject({ msg })
+				}
+			})
+		})
+	}
+
+	/**
+	 * @description: get请求函数
+	 * @param {string} url 请求地址
+	 * @param {Object} data 请求参数
+	 * @param {RequestConfig} OtherConfig request其他配置
+	 * @return {*}
+	 */
+	public get<T>(url: string, data?: Object, OtherConfig?: RequestConfig):Promise<MyAwesomeData<T>> {
+		return this.request<T>({ method: HttpMethod.GET, url, data, ...OtherConfig })
+	}
+
+	/**
+	 * @description: post请求函数
+	 * @param {string} url 请求地址
+	 * @param {Object} data 请求参数
+	 * @param {RequestConfig} OtherConfig request其他配置
+	 * @return {*}
+	 */
+	public post<T>(url: string, data?: Object|Array<any>, OtherConfig?: RequestConfig) {
+		return this.request<T>({ method: HttpMethod.POST, url, data, ...OtherConfig })
+	}
+
+	/**
+	 * @description: delete请求函数
+	 * @param {string} url 请求地址
+	 * @param {Object} data 请求参数
+	 * @param {RequestConfig} OtherConfig request其他配置
+	 * @return {*}
+	 */
+	public delete<T>(url: string, data?: Object, OtherConfig?: RequestConfig):Promise<MyAwesomeData<T>> {
+		return this.request<T>({ method: HttpMethod.DELETE, url, data, ...OtherConfig })
+	}
+
+	/**
+	 * @description: put请求函数
+	 * @param {string} url 请求地址
+	 * @param {Object} data 请求参数
+	 * @param {RequestConfig} OtherConfig request其他配置
+	 * @return {*}
+	 */
+	public put<T>(url: string, data?: Object|Array<any>, OtherConfig?: RequestConfig):Promise<MyAwesomeData<T>> {
+		return this.request<T>({ method: HttpMethod.PUT, url, data, ...OtherConfig })
+	}
+}
+
+export const httpRequest = HttpRequest.getInstance()
+
+// 封装流式请求函数
+export const streamRequest = (url:string):RequestTask<string> => {
+	// return new Promise((resolve, reject) => {
+		// const requestTask = uni.request({
+		// url,
+		// method: "GET",
+		// header: {
+		// 	"Content-Type": "application/json",
+		// 	"Accept": "text/event-stream", // 声明接受流式响应
+		// 	"Authorization": `Bearer ${httpRequest.getToken()}`
+		// },
+		// responseType: "text", // 或 "arraybuffer" 处理二进制流
+		// enableChunked: true, // 开启分块传输
+		// success: (res) => resolve(res),
+		// fail: (err) => reject(err)
+		// });
+
+		// // 监听分块数据到达事件
+		// requestTask.onChunkReceived((res) => {
+		// 	console.log("接收分块数据:", res);
+		// 	// 处理数据（如追加到页面）
+		// });
+
+		// // 监听请求头接收完成事件
+		// requestTask.onHeadersReceived((headers) => {
+		// 	console.log("响应头:", headers);
+		// });
+		return uni.request({
+			url, // 替换为你的实际接口地址
+			method: 'GET', // Spring接口默认使用GET，如需POST需修改
+			enableChunked: true,
+			header: {
+				"Accept": "text/event-stream", // 声明接受流式响应
+			  'Authorization':  `Bearer ${httpRequest.getToken()}`, // 添加Bearer认证头
+			  'Content-Type': 'application/json' // 根据实际情况设置
+			},
+
+			fail: (err) => {
+			  reject(err);
+			}
+		  });
+	// });
+};
+
+export const fetchApi = (url:string,chatItem:ChatType)=>{ 
+	return axios.get(url, {
+		responseType: 'text', // 或者 'stream'，具体取决于你的后端实现
+		headers: {
+			'Accept': 'text/event-stream', // 对于 SSE (Server-Sent Events) 流
+			'Authorization':  `Bearer ${httpRequest.getToken()}`, // 添加Bearer认证头
+		},
+		onDownloadProgress: (progressEvent) => {
+			// 处理流式数据，例如更新UI显示接收到的文本
+			const data = progressEvent.target.response;
+			if (data) {
+				// 处理数据，例如解析事件流中的消息
+				const lines = data.split('\n\n'); // SSE通常以双换行符分隔事件
+				lines.forEach((line) => {
+					console.log(line);
+					chatItem.responseContent = line;
+					if (line.trim() !== '') {
+						// const event = JSON.parse(`{${line.split('\n').slice(1).join('')}}`); // 解析事件数据
+						// console.log(event.data); // 输出或处理数据内容
+						// 更新UI等操作
+					}
+				});
+			}
+		}
+	}).then(response => {
+		// 完整的响应处理（如果有的话）
+		console.log("response",response)
+	}).catch(error => {
+		console.error('Error during request:', error);
+	});
+	
+}
+
+
+// OptionsDialog.vue
+<template>
+	<uni-popup ref="popup" class="popup-wrapper"  type="dialog">
+		<view class="dialog-wrapper sex-dialog-wrapper">
+				<view class="option-wrapper">
+					<text class="option-item" :key="item + '' + index" v-for="item,index in options" @click="useCheck(item.value)">
+						<slot :name="index">
+							{{item.text}}
+						</slot>
+					</text>
+				</view>			
+			<view class="option-btn" @click="useCloseDialog">取消</view>
+		</view>
+	</uni-popup>
+</template>
+
+<script lang="ts" setup>
+	import uniPopup from '@dcloudio/uni-ui/lib/uni-popup/uni-popup.vue';
+	import {ref} from 'vue';
+	import type {OptionType} from "../types";
+	
+	const popup= ref<null | InstanceType<typeof uniPopup>>(null);
+	const emits = defineEmits(['onCheck']);
+
+	const {options} = defineProps({
+		options:{
+			type:Array<OptionType>,
+			reqiure:true,
+			default:[]
+		}
+	});
+	
+	const useCheck = (value:string|number) => {
+		popup.value?.close()
+		emits('onCheck',value)
+	}
+	
+	const useCloseDialog = () => {
+		popup.value?.close()
+	}
+</script>
+
+<style  lang="less">
+	@import '../theme/color.less';
+	@import '../theme/size.less';
+	@import '../theme/style.less';
+	.popup-wrapper{
+		width: 100%;
+		height: 100%;
+		background-color: rgba(0,0,0,0.2);
+		top: 0;
+		left: 0;
+		.dialog-wrapper{
+			display: flex;
+			height: 100vh;
+			width: 100%;
+			align-items: center;
+			justify-content: center;
+			&.sex-dialog-wrapper{
+				flex-direction: column;
+				justify-content: flex-end;
+				padding: @middle-padding;
+				box-sizing: border-box;
+				.option-wrapper{
+					display: flex;
+					flex-direction: column;
+					background-color: @white-color;
+					width: 100%;
+					border-radius: @module-border-radius;
+					.option-item{
+						display: block;
+						width: 100%;
+						text-align: center;
+						padding: @middle-padding 0;
+						border-bottom: 1rpx solid @page-background-color;
+						&:last-child{
+							border-bottom:none;
+						}
+					}
+				}
+				.option-btn{
+					margin-top: @middle-padding;
+					width: 100%;
+					text-align: center;
+					padding: @middle-padding 0;
+					background-color: @white-color;
+					border-radius: @module-border-radius;
+				}
+			}
+			.dialog-box{
+				width: 80%;
+				left: 50%;
+				top: 50%;		
+				border-radius: @module-border-radius;
+				background-color: @white-color;
+				.dialog-header{
+					padding: @middle-padding;
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					font-weight: bold;
+					border-bottom: 1rpx solid @page-background-color;
+				}
+				.dialog-content{
+					padding: @middle-padding;
+					display: flex;
+					align-items: center;
+					.field-text{
+						margin-right: @middle-padding;
+					}
+					.text-input{
+						flex: 1;
+						background-color: @page-background-color;
+						padding: @middle-padding;
+						color: @sub-title-color;
+						border-radius: @module-border-radius;
+					}
+				}
+				.dialog-btn{
+					display: flex;
+					border-top: 1rpx solid @page-background-color;
+					.btn-cancle{
+						flex: 1;
+						padding: @middle-padding;
+						text-align: center;
+						color: @sub-title-color;
+					}
+					.btn-sure{
+						flex: 1;
+						padding: @middle-padding;
+						text-align: center;
+						color: @gray-color;
+						font-weight: bold;
+						border-left: 1rpx solid @page-background-color;;
+					}
+				}
+			}
+		}
+	}
+</style>
+
+// PopupComponent.vue
+<template>
+    <uni-popup ref="popup" class="popup-wrapper"  type="dialog">
+        <view class="dialog-wrapper">
+            <view class="dialog-box">
+                <view class="dialog-header"><text>提示</text></view>
+                <view class="dialog-content">
+                    <text class="field-text">{{ text }}</text>
+                </view>
+                <view class="dialog-btn">
+                    <text class="btn-cancle" @click="onCancle">取消</text>
+                    <text class="btn-sure" @click="onSure">确定</text>
+                </view>
+            </view>
+        </view>
+    </uni-popup>
+</template>
+<script lang="ts" setup>
+    import {type PropType,ref} from "vue";
+    import uniPopup from '@dcloudio/uni-ui/lib/uni-popup/uni-popup.vue';
+    
+    const popup = ref<null | InstanceType<typeof uniPopup>>(null);
+
+    const {text} = defineProps({
+        text:{
+            type:String as PropType<string>,
+            default:""
+        }
+    })
+    const emit = defineEmits(["onSure","onCancle"])
+
+    const onSure = () => {
+        emit("onSure");
+    }
+
+    const onCancle = () => {
+        emit("onCancle");
+        popup.value?.close()
+    }
+
+    defineExpose({
+        popup
+    })
+</script>
+<style lang="less" scoped>
+    @import '../theme/size.less';
+	@import '../theme/color.less';
+    .popup-wrapper{
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.2);
+        top: 0;
+        left: 0;
+        .dialog-wrapper{
+            display: flex;
+            height: 100vh;
+            width: 100%;
+            align-items: center;
+            justify-content: center;
+            .dialog-box{
+                width: 80%;
+                left: 50%;
+                top: 50%;
+                border-radius: @module-border-radius;
+                background-color: @white-color;
+                .dialog-header{
+                    padding: @middle-padding;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: bold;
+                    box-sizing: border-box;
+                }
+                .dialog-content{
+                    padding: calc(@middle-padding * 2);
+                    display: flex;
+                    box-sizing: border-box;
+                    justify-content: center;
+                }
+                .dialog-btn{
+                    display: flex;
+                    border-top: 1rpx solid @page-background-color;
+                    .btn-cancle{
+                        height: @btn-height;
+                        flex: 1;
+                        justify-content: center;
+                        align-items: center;
+                        display: flex;
+                        color: @sub-title-color;
+                    }
+                    .btn-sure{
+                        flex: 1;
+                        color: @gray-color;
+                        height: @btn-height;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        font-weight: bold;
+                        border-left: 1rpx solid @page-background-color;;
+                    }
+                }
+            }
+        }
+    }
+</style>
+
+// MusicTitleComponent.vue
+<template>
+	<view class="classify-title-wrapper">
+		<image class="icon-classify-arrow" :class="props.isFold ? 'icon-classify-arrow-fold' : ''" @click="useFold" :src="icon_down" />
+		<text class="classify-name">{{props.classifyItem.classifyName}}</text>
+		<slot>
+			<text class="classify-more" v-if="props.showMore" @click="useMore">更多</text>
+		</slot>
+	</view>
+</template>
+
+<script setup lang="ts">
+	import icon_down from "../../static/icon_down.png";
+	const props = defineProps({
+		classifyItem: {
+			type: Object,
+			reqiure: true,
+			default: {}
+		},
+		showMore:{
+			reqiure: false,
+			default: true
+		},
+		isFold:{// 是否折叠
+			reqiure: false,
+			default: false
+		}
+	});
+
+	const emits = defineEmits(['useMore','onFold']);
+
+	/**
+	 * @description: 点击更多
+	 * @date: 2024-07-21 14:45
+	 * @author wuwenqiang
+	 */
+	const useMore = ()=>{
+		emits('useMore');
+	}
+
+	/**
+	 * @description: 点击折叠图标
+	 * @date: 2024-07-21 14:45
+	 * @author wuwenqiang
+	 */
+	const useFold = ()=>{
+		emits('onFold',!props.isFold)
+	}
+</script>
+
+<style lang="less">
+	@import '../theme/size.less';
+	@import '../theme/color.less';
+	.classify-title-wrapper {
+		display: flex;
+
+		.icon-classify-arrow {
+			width: @small-icon-size;
+			height: @small-icon-size;
+			opacity: 0.2;
+			&.icon-classify-arrow-fold{
+				transform: rotate(90deg);
+			}
+		}
+
+		.classify-name {
+			padding-left: @middle-padding;
+			flex: 1;
+		}
+		
+		.classify-more{
+			color: @gray-color;
+			text-decoration: underline;
+		}
+	}
+</style>
+
+// NavigatorTitleComponent.vue
+<template>
+	<view class="page-header">
+        <image class="icon-back" @click="useBack" :src="icon_back"/>
+        <text class="my-favorite">{{ title }}</text>
+        <slot><view class="icon-back"/></slot>
+    </view>
+</template>
+
+<script setup lang="ts">
+    import { defineProps } from 'vue';
+	import icon_back from '../../static/icon_back.png';
+	
+    const { title } = defineProps({
+		title: {
+			type: String,
+			reqiure: true,
+			default: ''
+		}
+	});
+    /**
+	 * @description: 返回按钮
+	 * @date: 2024-05-10 22:10
+	 * @author wuwenqiang
+	 */
+     const useBack = ()=>{
+		uni.navigateBack()
+	}
+</script>
+
+<style lang="less">
+	@import '../theme/color.less';
+	@import '../theme/size.less';
+
+	.page-header {
+		padding: @middle-padding;
+		display: flex;
+		justify-content: space-between;
+		background: @white-color;
+
+		.icon-back{
+			width: @small-icon-size;
+			height: @small-icon-size;
+			opacity: 0.2;
+		}
+	}
+</style>
+
+// AvaterComponent.vue
+<template>
+	<image @click="useNavigateTo" class="user-avater" :class="'user-avater-' + size" :src="store.userData.avater ? HOST + store.userData.avater : defaulAvater"/>
+</template>
+
+<script setup lang="ts">
+	import { defineProps } from 'vue';
+	import { useStore } from '../stores/useStore';
+	import {HOST} from '../common/constant';
+	import defaulAvater from '../../static/default_avater.png';
+	const store = useStore();
+	const {size} = defineProps({
+		size:{
+			type:String,
+			reqiure:true,
+			default:'middle'
+		}
+	})
+
+	const useNavigateTo = () => {
+		uni.navigateTo({
+			url: `../pages/UserPage`
+		})
+	}
+
+
+</script>
+
+<style lang="less">
+	@import '../theme/size.less';
+	.user-avater{
+	    border-radius: 50%;
+		&.user-avater-small{
+	        width: @small-avater;
+	        height: @small-avater;
+	    }
+	    &.user-avater-middle{
+	        width: @middle-avater;
+	        height: @middle-avater;
+	    }
+		&.user-avater-big{
+		    width: @big-avater;
+		    height: @big-avater;
+		}
+	}
+</style>
+
+
+// TitleComponent.vue
+<template>
+	<view class="title-wrapper">
+	    <view class="title-line"></view>
+	    <text class="title-text">{{title}}</text>
+	</view>
+</template>
+
+<script setup lang="ts">
+	import { defineProps } from 'vue';
+	const prop = defineProps({
+		title:{
+			type:String,
+			require:true,
+			default:''
+		}
+	})
+</script>
+
+<style lang="less" scoped>
+	@import '../theme/size.less';
+	@import '../theme/color.less';
+	.title-wrapper{
+	    display: flex;
+	    align-items: center;
+	    .title-line{
+	        margin-right: @small-padding;
+	        height: @line-height;
+	        width: @line-width;
+	        background-color: @gray-color;
+	    }
+	    .title-line{
+	        font-size: @normal-font-size;
+	    }
+	}
+</style>
+
+// DialogComponent.vue
+<template>
+    <view class="dialog-wrapper">
+        <view class="mask" @click="onClose"></view>
+        <view class="dialog-body-wrapper">
+            <view class="dialog-header">
+                <slot name="header"/>
+                <image class="icon-close icon-mini" @click="onClose" :src="icon_close"/>
+            </view>
+            <slot name="content"></slot>
+        </view>
+        
+    </view>
+</template>
+
+<script setup lang="ts">
+    import icon_close from "../../static/icon_close.png"
+    const emits = defineEmits(['onClose']);
+
+    /**
+	 * @description: 关闭弹窗
+	 * @date: 2024-05-18 16:27
+	 * @author wuwenqiang
+	 */
+    const onClose = () => {
+        emits('onClose');
+    }
+</script>
+
+
+<style scoped lang="less">
+@import '../theme/color.less';
+@import '../theme/size.less';
+@import '../theme/style.less';
+.dialog-wrapper{
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    left: 0;
+    top: 0;
+    z-index: 2;
+    .mask{
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        left: 0;
+        top: 0;
+        background: @black-color;
+        opacity: 0.5;
+    }
+    .dialog-body-wrapper{
+        height: 80%;
+        background: @white-color;
+        position: absolute;
+        width: 100%;
+        z-index: 1;
+        bottom: 0;
+        border-top-right-radius: @module-border-radius;
+        border-top-left-radius: @module-border-radius;
+        display: flex;
+        flex-direction: column;
+        
+        .dialog-header{
+            position: relative;
+            height: 10%;
+            border-bottom: 1rpx solid @page-background-color;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            .icon-close{
+                position: absolute;
+                right: @middle-padding;
+                top: 50%;
+                transform: translateY(-50%);
+                opacity: 0.5;
+            }
+        }
+    }
+}
+</style>
+
+// constant.ts
+import type{ TenantType, TenantUserType} from "../types";
+
+// export const HOST:string = 'http://254a2y1767.qicp.vip';
+export const HOST:string = 'http://127.0.0.1:3000';
+
+export const EMAIL_REG:RegExp = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;// 邮箱正则表达式
+
+export const PAGE_SIZE:number = 20;// 每页的数量
+
+type CommonType = {
+    0:string,
+    1:string
+} 
+
+export const SexMap:CommonType = {
+    0: '男',
+    1: '女'
+}
+
+export const DEFAULT_TENANT:TenantType = {
+    id: "0",
+    name: "私人空间",
+    code: "personal",
+    status: 1,
+    created_by:"system"
+}
+
+export const DEFAULT_TENANT_USER:TenantUserType = {
+    id: "", // 主键
+    tenantId: '', // 租户id
+    tenantName: "私人空间",
+    userId: "", // 用户id
+    roleType: 0, // 用户角色 (0-普通用户，1-租户管理员，2-超级管理员)
+    joinDate: '', // 加入日期
+    createBy: "", // 创建时间
+    username: '', // 用户名
+    avater: '', // 头像
+    disabled: 0,// 是否禁用
+    email: ''// 邮箱
+}
+
+export const DEFAULT_PROMPT = "你叫小吴同学，是一个无所不能的AI助手，上知天文下知地理，请用小吴同学的身份回答问题。"
+
+// size.less
+@middle-padding: 20rpx;
+@small-padding: 10rpx;
+@btn-border-radius: 10rpx;
+@module-border-radius: 20rpx;
+@big-border-radius: 50rpx;
+@small-avater: 60rpx;
+@middle-avater: 80rpx;
+@big-avater: 120rpx;
+@mini-icon-size: 30rpx;
+@small-icon-size: 40rpx;
+@middle-icon-size: 50rpx;
+@big-icon-size: 70rpx;
+@normal-font-size: 30rpx;
+@big-font-size: 40rpx;
+@line-height: 30rpx;
+@line-width: 5rpx;
+@input-height: 80rpx;
+@popup-menu-width: 300rpx;
+@popup-menu-height: 80rpx;
+@popup-menu-left: -300rpx;
+@popup-menu-top: -20rpx;
+@border-size: 5rpx;
+@btn-height: 100rpx;
+@btn-border-radius: 50rpx;
+@arrow-size: 15rpx;
+
+// color.less
+@page-background-color: #efefef;
+@primary-color: #ffae00;
+@white-color: #fff;
+@gray-color: #ddd;
+@black-color: #000;
+@sub-title-color: #999;
+@warn-color:#f7453b;
+@pop-background-color: #333;
+@pop-line-color: #444;
+
+// style.less
+@import './size.less';
+@import './color.less';
+@tab-border-buttom: 1rpx solid #e9e9e9;
+.page-wrapper{
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	background-color: @page-background-color;
+}
+.module-block{
+    background-color: @white-color;
+    border-radius: @module-border-radius;
+    padding: @middle-padding;
+    font-size: @normal-font-size;
+    margin-top: @middle-padding;
+    box-sizing: border-box;
+	&.module-block-row{
+		display: flex;
+	}
+	&.module-block-column{
+		display: flex;
+		flex-direction: column;
+	}
+	&.module-block-last{
+		margin-bottom: @middle-padding;
+	}
+}
+
+.icon-mini{
+	width: @mini-icon-size;
+	height: @mini-icon-size;
+}
+.icon-small{
+	width: @small-icon-size;
+	height: @small-icon-size;
+}
+.icon-middle{
+	width: @middle-icon-size;
+	height: @middle-icon-size;
+}
+.icon-big{
+	width: @big-icon-size;
+	height: @big-icon-size;
+}
+.small-margin{
+	margin-left: @small-padding;
+}
+.no-data {
+	display: flex;
+	width: 100%;
+	height: @big-avater;
+	justify-content: center;
+	align-items: center;
+	color: @gray-color;
+}
+
+// index.ts
+export default {
+  login: '/service/user/login', //登录
+  getUserData: '/service/user/getUserData', // 获取用户信息
+  updateUser: '/service/user/updateUser',//更新用户信息
+  register: '/service/user/register',//注册
+  vertifyUser: '/service/user/vertifyUser',// 校验账号是否存在
+  sendEmailVertifyCode: '/service/user/sendEmailVertifyCode',// 找回密码
+  resetPassword: '/service/user/resetPassword',// 重置密码
+  updateAvater:'/service/user/updateAvater',//更新头像
+  updatePassword: '/service/user/updatePassword',//更新密码
+  loginByEmail: '/service/user/loginByEmail',//邮箱登录
+  searchUsers: "/service/user/searchUsers",// 搜索用户
+  chat:"/service/chat/chat",// ai聊天
+  getChatHistory: "/service/chat/getChatHistory",// ai聊天
+  // chatWs: "/service/music/ws/chat",// ai聊天
+  chatWs: "/service/chat/ws/chat",// ai聊天
+  getModelList: "/service/chat/getModelList",// ai聊天
+  uploadDoc: "/service/chat/uploadDoc",// 生成向量
+  getDocList: "/service/chat/getDocList",// 查询我的文档
+  deleteDoc: "/service/chat/deleteDoc/",// 查询我的文档
+  getDirectoryList: "/service/chat/getDirectoryList",// 查询目录列表
+  createDir: "/service/chat/createDir",// 创建目录
+  renameDir: "/service/chat/renameDir",// 重命名目录
+  deleteDir: "/service/chat/deleteDir/",// 删除目录
+  getUserTenantList: "/service/tenant/getUserTenantList",// 获取用户当前的所有租户列表
+  getTenantUserList: "/service/tenant/getTenantUserList",// 获取当前租户下的用户列表
+  getTenantUser: "/service/tenant/getTenantUser",// 获取当前租户下当前用户角色信息
+  addTenantUser:"/service/tenant/addTenantUser/",// 添加用户
+  addAdmin:"/service/tenant/addAdmin",// 设置为管理员
+  deleteAdmin:"/service/tenant/deleteAdmin",// 取消管理员
+  deleteTenantUser:"/service/tenant/deleteTenantUser",// 取消管理员
+  getPromptCategoryList: "/service/prompt/getPromptCategoryList",// 获取提示词类别
+  getSystemPromptListByCategory: "/service/prompt/getSystemPromptListByCategory",// 获取系统提示词列表
+  insertCollectPrompt: "/service/prompt/insertCollectPrompt/",// 插入收藏
+  deleteCollectPrompt: "/service/prompt/deleteCollectPrompt/",// 删除收藏
+  getMyCollectPromptCategory: "/service/prompt/getMyCollectPromptCategory",// 获取我收藏的提示词分类
+  getMyCollectPromptList: "/service/prompt/getMyCollectPromptList",// 获取我收藏的提示词列表
+  getDocListByDirId: "/service/chat/getDocListByDirId",// 获取我收藏的提示词列表
+  getPrompt: '/service/prompt/getPrompt',// 获取提示词
+  updatePrompt: '/service/prompt/updatePrompt',// 更新提示词
+};
+
+
+// index.ts
+import {httpRequest} from '../utils/HttpUtils';
+import type {MyAwesomeData} from '../utils/HttpUtils';
+import api from '../api';
+import type * as types from '../types';
+import md5 from 'md5';
+
+/**
+ * @description: 根据token获取用户信息
+ * @date: 2023-12-1 23:39
+ * @author wuwenqiang
+ */
+export const getUserDataService = (token:string):Promise<MyAwesomeData<types.UserDataType>> => {
+	httpRequest.setToken(token);
+	return httpRequest.get<types.UserDataType>(api.getUserData,{},{noShowMsg:true});
+}
+
+/**
+ * @author: wuwenqiang
+ * @description: 更新用户信息
+ * @date: 2023-12-28 23:18
+ */
+export const updateUserDataService = (userData:types.UserDataType):Promise<MyAwesomeData<number>> => {
+    return httpRequest.put<number>(api.updateUser,userData)
+};
+
+/**
+ * @description: 登录
+ * @date: 2024-01-15 21:32
+ * @author wuwenqiang
+ */
+export const loginService = (userAccount:string,password:string):Promise<MyAwesomeData<types.UserDataType>> => {
+	password = md5(password);
+	return httpRequest.post<types.UserDataType>(api.login,{userAccount,password})
+};
+
+
+/**
+ * @description: 注册
+ * @date: 2024-01-19 23:51
+ * @author wuwenqiang
+ */
+export const registerService = (userData:types.UserDataType):Promise<MyAwesomeData<types.UserDataType>> => {
+	userData.password = md5(userData.password);
+	return httpRequest.post<types.UserDataType>(api.register,userData)
+};
+
+/**
+ * @description: 校验账号和密码是否存在
+ * @date: 2024-01-19 23:51
+ * @author wuwenqiang
+ */
+export const vertifyUserService = (userData:types.UserDataType):Promise<MyAwesomeData<number>> => {
+	return httpRequest.post<number>(api.vertifyUser,userData)
+};
+
+/**
+ * @description: 找回密码
+ * @date: 2025-01-19 22:59
+ * @author wuwenqiang
+ */
+export const sendEmailVertifyCodeService = (email:string):Promise<MyAwesomeData<number>> => {
+    return httpRequest.post<number>(api.sendEmailVertifyCode,{email})
+}; 
+
+export const resetPasswordService = (email:string,password:string,code:number):Promise<MyAwesomeData<types.UserDataType>> => {
+    password = md5(password);
+    return httpRequest.post<types.UserDataType>(api.resetPassword,{email,password,code})
+}; 
+
+/**
+ * @description: 更新密码
+ * @date: 2025-01-28 14:22
+ * @author wuwenqiang
+ */
+export const updatePasswordService = (oldPassword:string,newPassword:string):Promise<MyAwesomeData<number>> => {
+    oldPassword = md5(oldPassword);
+    newPassword = md5(newPassword);
+    return httpRequest.put<number>(api.updatePassword,{oldPassword,newPassword},{noShowMsg:true})
+}; 
+
+/**
+ * @description: 邮箱验证码登录
+ * @date: 2025-01-28 14:22
+ * @author wuwenqiang
+ */
+export const loginByEmailService = (email:string,code:string):Promise<MyAwesomeData<types.UserDataType>> => {
+    return httpRequest.post<types.UserDataType>(api.loginByEmail,{email,code})
+}; 
+
+/**
+ * @description: 获取聊天对话历史记录
+ * @date: 2025-05-16 00:19
+ * @author wuwenqiang
+ */
+export const getChatHistoryService = (tenantId:string,pageNum:number,pageSize:number):Promise<MyAwesomeData<Array<types.ChatHistoryType>>> => {
+    return httpRequest.get<Array<types.ChatHistoryType>>(`${api.getChatHistory}?pageNum=${pageNum}&pageSize=${pageSize}&tenantId=${tenantId}`);
+}
+
+/**
+ * @description: 获取模型列表
+ * @date: 2025-05-16 00:19
+ * @author wuwenqiang
+ */
+export const getModelListService = ():Promise<MyAwesomeData<Array<types.ChatModelType>>> => {
+  return httpRequest.get<Array<types.ChatModelType>>(api.getModelList)
+}
+
+/**
+ * @description: 上传文档
+ * @date: 2025-06-21 13:48
+ * @author wuwenqiang
+ */
+export const getMyDocumentService = (tenantId:string):Promise<MyAwesomeData<Array<types.DocumentInterface>>> => {
+    return httpRequest.get<Array<types.DocumentInterface>>(`${api.getDocList}?tenantId=${tenantId}`);
+}
+
+/**
+ * @description: 删除文档
+ * @date: 2025-07-12 11:31
+ * @author wuwenqiang
+ */
+export const deleteMyDocumentService = (docId:string,directoryId:string):Promise<MyAwesomeData<number>> => {
+  return httpRequest.delete<number>(`${api.deleteDoc}${docId}?directoryId=${directoryId}`);
+}
+
+/**
+ * @description: 获取目录列表
+ * @date: 2025-07-26 20:21
+ * @author wuwenqiang
+ */
+export const getDirectoryListService = (tenantId:string):Promise<MyAwesomeData<types.DirectoryInterce[]>> => {
+  return httpRequest.get<types.DirectoryInterce[]>(`${api.getDirectoryList}?tenantId=${tenantId}`);
+}
+
+/**
+ * @description: 创建目录
+ * @date: 2025-07-27 12:42
+ * @author wuwenqiang
+ */
+export const createDirectoryService = (directory:types.DirectoryInterce):Promise<MyAwesomeData<types.DirectoryInterce>> => {
+  return httpRequest.post<types.DirectoryInterce>(api.createDir,directory);
+}
+
+/**
+ * @description: 获取租户列表
+ * @date: 2025-08-10 18:25
+ * @author wuwenqiang
+ */
+export const getTenantListService = ():Promise<MyAwesomeData<types.TenantType[]>> => {
+  return httpRequest.get<types.TenantType[]>(api.getUserTenantList);
+}
+
+/**
+ * @description: 获取租户下的所有
+ * @date: 2025-08-16 20:14
+ * @author wuwenqiang
+ */
+export const getTenantUserListService = (tenantId:string,pageNum:number,pageSize:number):Promise<MyAwesomeData<types.TenantUserType[]>> => {
+  return httpRequest.get<types.TenantUserType[]>(`${api.getTenantUserList}?tenantId=${tenantId}&pageNum=${pageNum}&pageSize=${pageSize}`);
+}
+
+/**
+ * @description: 获取当前租户下当前用户的角色信息
+ * @date: 2025-09-7 18:56
+ * @author wuwenqiang
+ */
+export const getTenantUserService = (tenantId:string):Promise<MyAwesomeData<types.TenantUserType|null>> => {
+    return httpRequest.get<types.TenantUserType|null>(`${api.getTenantUser}?tenantId=${tenantId}`);
+}
+
+/**
+ * @description: 模糊搜索用户
+ * @date: 2025-08-16 20:14
+ * @author wuwenqiang
+ */
+export const searchUserListService = (keyword:string,tenantId:string,pageNum:number,pageSize:number):Promise<MyAwesomeData<types.UserWithChecked[]>> => {
+  return httpRequest.get<types.UserWithChecked[]>(`${api.searchUsers}?keyword=${keyword}&tenantId=${tenantId}&pageNum=${pageNum}&pageSize=${pageSize}`);
+}
+
+/**
+ * @description: 添加租户
+ * @date: 2025-09-01 22:04
+ * @author wuwenqiang
+ */
+export const addTenantUserService = (tenantId:string,userId:string):Promise<MyAwesomeData<types.TenantUserType>> => {
+  return httpRequest.post<types.TenantUserType>(`${api.addTenantUser}${tenantId}/${userId}`);
+}
+
+/**
+ * @description: 设置为管理员
+ * @date: 2025-09-01 22:04
+ * @author wuwenqiang
+ */
+export const addAdminService = (tenantId:string,userId:string):Promise<MyAwesomeData<types.TenantUserType>> => {
+    return httpRequest.post<types.TenantUserType>(api.addAdmin,{tenantId,userId});
+}
+
+/**
+ * @description: 设置为管理员
+ * @date: 2025-09-07 09:05
+ * @author wuwenqiang
+ */
+export const deleteAdminService = (tenantId:string,userId:string):Promise<MyAwesomeData<types.TenantUserType>> => {
+    return httpRequest.delete<types.TenantUserType>(api.deleteAdmin,{tenantId,userId});
+}
+
+/**
+ * @description: 删除租户
+ * @date: 2025-09-07 09:05
+ * @author wuwenqiang
+ */
+export const deleteTenantUserService = (tenantId:string,userId:string):Promise<MyAwesomeData<types.TenantUserType>> => {
+    return httpRequest.delete<types.TenantUserType>(`${api.deleteTenantUser}/${tenantId}/${userId}`);
+}
+
+/**
+ * @description: 查询提示词类别
+ * @date: 2025-10-12 22:26
+ * @author wuwenqiang
+ */
+export const getPromptCategoryListService = ():Promise<MyAwesomeData<types.PromptCategoryType[]>> => {
+    return httpRequest.get<types.PromptCategoryType[]>(api.getPromptCategoryList);
+}
+
+/**
+ * @description: 查询提示词类别
+ * @date: 2025-10-12 22:26
+ * @author wuwenqiang
+ */
+export const getSystemPromptListByCategoryService = (categoryId:string,keyword:string,pageNum:number,pageSize:number):Promise<MyAwesomeData<types.SystemPromptType[]>> => {
+    return httpRequest.get<types.SystemPromptType[]>(`${api.getSystemPromptListByCategory}?categoryId=${categoryId}&keyword=${keyword}&pageNum=${pageNum}&pageSize=${pageSize}`);
+}
+
+
+/**
+ * @description: 添加收藏提示词
+ * @date: 2025-10-18 10:46
+ * @author wuwenqiang
+ */
+export const insertCollectPromptService = (tenantId:string,promptId:string):Promise<MyAwesomeData<number>> => {
+    return httpRequest.post<number>(`${api.insertCollectPrompt}${tenantId}/${promptId}`);
+}
+
+/**
+ * @description: 插入提示词
+ * @date: 2025-10-18 10:46
+ * @author wuwenqiang
+ */
+export const getMyCollectPromptCategoryService = (tenantId:string):Promise<MyAwesomeData<types.PromptCategoryType[]>> => {
+    return httpRequest.get<types.PromptCategoryType[]>(`${api.getMyCollectPromptCategory}?tenantId=${tenantId}`);
+}
+
+/**
+ * @description: 插入提示词
+ * @date: 2025-10-18 10:46
+ * @author wuwenqiang
+ */
+export const getMyCollectPromptListService = (tenantId:string,categoryId:string,pageNum:number,pageSize:number):Promise<MyAwesomeData<types.SystemPromptType[]>> => {
+    return httpRequest.get<types.SystemPromptType[]>(`${api.getMyCollectPromptList}?tenantId=${tenantId}&categoryId=${categoryId}&pageNum=${pageNum}&pageSize=${pageSize}`);
+}
+
+/**
+ * @description: 删除提示词
+ * @date: 2025-10-18 10:46
+ * @author wuwenqiang
+ */
+export const deleteCollectPromptService = (tenantId:string,categoryId:string,promptId:string):Promise<MyAwesomeData<types.SystemPromptType[]>> => {
+    return httpRequest.delete<types.SystemPromptType[]>(`${api.getMyCollectPromptList}?tenantId=${tenantId}&categoryId=${categoryId}&promptId=${promptId}`);
+}
+
+/**
+ * @description: 根据目录id获取文档
+ * @date: 2025-11-02 11:37
+ * @author wuwenqiang
+ */
+export const getDocListByDirIdService = (tenantId:string,directoryId:string):Promise<MyAwesomeData<types.DocumentInterface[]>> => {
+    return httpRequest.get<types.DocumentInterface[]>(`${api.getDocListByDirId}?tenantId=${tenantId}&directoryId=${directoryId}`);
+}
+
+/**
+ * @description: 获取提示词
+ * @date: 2026-04-14
+ * @author wuwenqiang
+ */
+export const getPromptService = (tenantId: string): Promise<MyAwesomeData<types.PromptInterface>> => {
+  return httpRequest.get<types.PromptInterface>(`${api.getPrompt}?tenantId=${tenantId}`);
+}
+
+/**
+ * @description: 更新提示词
+ * @date: 2026-04-15
+ * @author wuwenqiang
+ */
+export const updatePromptService = (promptData: types.PromptInterface): Promise<MyAwesomeData<PromptInterface>> => {
+  return httpRequest.put<types.PromptInterface>(api.updatePrompt, promptData);
+}
+
+// RegisterPage.vue
+<template>
+	<view class="page-wrapper">
+		<NavigatorTitleComponent title="注册"/>
+		<scroll-view scroll-y show-scrollbar="false" class="scroll-view">
+			<view class="module-block module-block-column">
+				<view class="row">
+					<view class="title">
+						<text class="require">*</text>
+						<text>账号</text>
+					</view>
+					<input @blur="vertify('userAccount')" class="input" v-model="userData.userAccount" placeholder="请输入账号名称"/>
+				</view>
+				<view class="row">
+					<view class="title">
+						<text class="require">*</text>
+						<text>密码</text>
+					</view>
+					<input type="password" class="input" @blur="vertify('password')" v-model="userData.password" placeholder="请输入6-18位的密码"/>
+				</view>
+				<view class="row">
+					<view class="title">
+						<text class="require">*</text>
+						<text>确认密码</text>
+					</view>
+					<input type="password" @blur="vertify('confirmPassowrd')" v-model="confirmPassowrd" class="input" placeholder="请输入6-18位的确认密码"/>
+				</view>
+				<view class="row">
+					<view class="title">
+						<text class="require">*</text>
+						<text>昵称</text>
+					</view>
+					<input class="input" v-model="userData.username" @blur="vertify('username')" placeholder="请输入昵称"/>
+				</view>
+				<view class="row">
+					<view class="title">
+						<text class="require">*</text>
+						<text>邮箱</text>
+					</view>
+					<input class="input" @blur="vertify('email')" v-model="userData.email" placeholder="请输入邮箱"/>
+				</view>
+				<view class="row">
+					<view class="title">
+						<text>区域</text>
+					</view>
+					<input class="input" v-model="userData.region" placeholder="请输入区域"/>
+				</view>
+				<view class="row">
+					<view class="title">
+						<text>个性签名</text>
+					</view>
+					<input class="input" v-model="userData.sign" placeholder="请输入个性签名"/>
+				</view>
+			</view>
+
+			<view class="login-btn" @click="useRegister">注册</view>
+		</scroll-view>
+		<OptionsDialog ref="sexOptionsDialog" @onCheck= "useCheckSex" :options="[{value:0,text:'男'},{value:1,text:'女'}]"/>
+	</view>
+</template>
+
+<script setup lang="ts">
+	import { ref, reactive } from 'vue';
+	import type { UserDataType } from '../types';
+	import { registerService, vertifyUserService } from '../service';
+	import OptionsDialog from '../components/OptionsDialog.vue';
+	import { EMAIL_REG } from "../common/constant";
+ 	import { useStore } from '../stores/useStore'
+	import {httpRequest} from '../utils/HttpUtils';
+	import NavigatorTitleComponent from '../components/NavigatorTitleComponent.vue';
+
+	const store = useStore();
+	let loading:boolean = false;
+
+	const sexOptionsDialog = ref<null | InstanceType<typeof OptionsDialog>>(null);
+	// 用户信息
+	const userData = reactive<UserDataType>({
+		userAccount: '',
+		username: '',
+		telephone: '',
+		email: '',
+		birthday: '',
+		sex: 0,
+		password: '',
+		sign: '',
+		region: ''
+	});
+	const confirmPassowrd = ref<string>('');// 企鹅人密码
+
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 性别选择
+	 * @date: 2024-01-19 23:20
+	 */
+	const useEditSex = () => {
+		sexOptionsDialog.value?.$refs.popup.open('top')
+	}
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 性别选择
+	 * @date: 2024-01-16 22:49
+	 */
+	const useCheckSex = (sex:number) => {
+		userData.sex = sex
+	}
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 校验账号和密码
+	 * @date: 2024-01-20 00:17
+	 */
+	const useCheckUser = (): Promise<boolean> => {
+		return vertifyUserService(userData).then((res)=>{
+			if(res.data > 0){
+				uni.showToast({
+					title: res.msg,
+					icon: "none"
+				});
+				return false;
+			}
+			return true;
+		});
+	}
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 校验账号和密码
+	 * @date: 2025-01-22 21:49
+	 */
+	const vertify = (field:string)=>{
+		if(field == "userAccount" && userData.userAccount.trim() === ""){
+			uni.showToast({
+				title: '账号不能为空',
+				icon: "none"
+			});
+		}else if(field == "userAccount" && userData.userAccount.trim() !== ""){
+			useCheckUser();
+		}else if(field === "password" && userData.password.trim() === "" ){
+			uni.showToast({
+				title: '请输入密码',
+				icon: "none"
+			});
+		}else if(field === "password" && userData.password.trim().length < 6){
+			uni.showToast({
+				title: '密码长度不能小于6位数',
+				icon: "none"
+			});
+		}else if(field === "comfirmPassword" && confirmPassowrd.value.trim() === "" ){
+			uni.showToast({
+				title: '确认密码不能为空',
+				icon: "none"
+			});
+		}else if(field === "comfirmPassword" && confirmPassowrd.value.trim() !== userData.password.trim() ){
+			uni.showToast({
+				title: '密码和确认密码不一致',
+				icon: "none"
+			});		
+		}else if(field === "username" && userData.username.trim() === "" ){
+			uni.showToast({
+				title: '用户名不能为空',
+				icon: "none"
+			});
+		}else if(field === "email" && userData.email.trim() === "" ){
+			uni.showToast({
+				title: '邮箱不能为空',
+				icon: "none"
+			});
+		}else if(field === "email" && !EMAIL_REG.test(userData.email.trim())){
+			uni.showToast({
+				title: '邮箱格式错误',
+				icon: "none"
+			});
+		}
+	}
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 注册
+	 * @date: 2024-01-10 22:13
+	 */
+	const useRegister = async() => {
+		if(!userData.userAccount){
+			uni.showToast({
+				title: '请输入账号',
+				icon: "none"
+			});
+		}else if(!userData.password){
+			uni.showToast({
+				title: '请输入6-18位数字或者字母的密码',
+				icon: "none"
+			});
+		}else if(!confirmPassowrd.value){
+			uni.showToast({
+				title: '请输入确认密码',
+				icon: "none"
+			});
+		}else if(!userData.username){
+			uni.showToast({
+				title: '请输入昵称',
+				icon: "none"
+			});
+		}else if(!userData.email){
+			uni.showToast({
+				title: '请输入邮箱',
+				icon: "none"
+			});
+		}else if(userData.password !== confirmPassowrd.value){
+			uni.showToast({
+				title: '确认密码错误',
+				icon: "none"
+			});
+		}else{
+			if(loading)return;
+			loading = true;
+			const verify = await useCheckUser();
+			if(verify){
+				await registerService({...userData}).then((res)=>{
+					store.setUserData(res.data)
+					store.setToken(res.token)
+					uni.setStorage({key:'token',data:res.token});
+					httpRequest.setToken(res.token);
+					uni.redirectTo({url: '../pages/MusicIndexPage'})
+					uni.showToast({
+						duration:2000,
+						position:'center',
+						title:'注册成功'
+					})
+				})
+			}
+			loading = false;
+		}
+	}
+</script>
+
+<style lang="less" scoped>
+	@import '../theme/color.less';
+	@import '../theme/size.less';
+	@import '../theme/style.less';
+	.page-wrapper{
+		height: 100vh;
+		display: flex;
+		flex-direction: column;
+		box-sizing: border-box;
+		background-color: @page-background-color;
+		.scroll-view{
+			flex: 1;
+			padding: 0 @middle-padding;
+			box-sizing: border-box;
+			/deep/.uni-scroll-view-content {
+				height: auto;
+				&::-webkit-scrollbar {
+					display: none;
+				}
+			}
+			.module-block{
+				align-items: center;
+				.row{
+					width: 100%;
+					display: flex;
+					align-items: center;
+					margin-top: @middle-padding;
+					border-bottom: 1rpx solid @page-background-color;
+					&:first-child{
+						margin-top:0;
+					}
+					.title{
+						width: 25%;
+						.require{
+							color: @warn-color;
+						}
+					}
+					.input{
+						flex: 1;
+						padding-left: @small-padding;
+						height: @input-height
+					}
+					/deep/.icon-calendar{
+						display: none;
+					}
+				}
+			}
+			.login-btn{
+				text-align: center;
+				width: 100%;
+				padding: @middle-padding;
+				box-sizing: border-box;
+				border-radius: @big-border-radius;
+				margin:  @middle-padding 0;
+				background-color: @warn-color;
+				color: @white-color;
+				display: inline-block;
+			}
+		}
+		
+	}
+</style>
+
+
+// SettingPromptPage.vue
+<template>
+    <view class="page-wrapper">
+        <NavigatorTitleComponent title="设置提示词"/>
+        <view class="page-body">
+            <view class="module-block">
+                <textarea class="prompt-area" v-model="inputValue" @input="onPromptInput" placeholder="请输出提示词" maxlength="3000"></textarea>
+            </view>
+            <view class="save-btn" :class="{'save-btn-active': isSaveEnabled, 'save-btn-disabled': !isSaveEnabled}" @click="onSavePrompt">保存</view>
+        </view>
+       
+    </view>        
+</template>
+
+<script lang="ts" setup>
+    import { ref, computed, onMounted } from "vue";
+    import NavigatorTitleComponent from "../components/NavigatorTitleComponent.vue";
+	import { useStore } from "../stores/useStore";
+    import { getPromptService, updatePromptService } from "../service";
+    import type { PromptInterface } from "../types";
+
+    const store = useStore();
+    const inputValue = ref<string>("");
+    const promptId = ref<string>("");
+
+    /**
+     * @description: 判断保存按钮是否可用
+     * @date: 2026-04-15
+     * @author wuwenqiang
+     */
+    const isSaveEnabled = computed(() => {
+        return inputValue.value && inputValue.value.trim() !== "";
+    });
+
+    /**
+     * @description: 监听输入变化
+     * @date: 2026-04-15
+     * @author wuwenqiang
+     */
+    const onPromptInput = () => {
+        // 触发计算属性重新计算
+    };
+
+    /**
+     * @description: 获取当前租户的提示词
+     * @date: 2026-04-15
+     * @author wuwenqiang
+     */
+    const getPrompt = () => {
+        const tenantId = store.tenantUser?.tenantId;
+        if (!tenantId) return;
+        
+        getPromptService(tenantId).then((res) => {
+            if (res.data && res.data.prompt) {
+                inputValue.value = res.data.prompt;
+                promptId.value = res.data.id;
+            } else if (store.prompt) {
+                // 如果没有从后端获取到，使用 store 中的提示词
+                inputValue.value = store.prompt;
+            }
+        }).catch((err) => {
+            console.error('获取提示词失败:', err);
+            // 获取失败时使用 store 中的提示词
+            if (store.prompt) {
+                inputValue.value = store.prompt;
+            }
+        });
+    };
+
+    /**
+     * @description: 保存提示词
+     * @date: 2026-04-15
+     * @author wuwenqiang
+     */
+    const onSavePrompt = () => {
+        if (!isSaveEnabled.value) {
+            uni.showToast({
+                duration: 2000,
+                position: 'center',
+                title: '提示词不能为空'
+            });
+            return;
+        }
+
+        uni.showLoading({
+            title: '保存中...',
+            mask: true
+        });
+
+        const tenantId = store.tenantUser?.tenantId;
+        if (!tenantId) {
+            uni.hideLoading();
+            uni.showToast({
+                duration: 2000,
+                position: 'center',
+                title: '租户信息不存在'
+            });
+            return;
+        }
+
+        const promptData: PromptInterface = {
+            id: promptId.value,
+            tenantId: tenantId,
+            userId: store.userData.id!,
+            prompt: inputValue.value.trim()
+        };
+
+        updatePromptService(promptData).then((res) => {
+            if (res.data) {
+                // 更新成功，同步到 store
+                store.setPrompt(inputValue.value.trim());
+                uni.showToast({
+                    duration: 2000,
+                    position: 'center',
+                    title: '保存成功'
+                });
+                // 返回上一页
+                setTimeout(() => {
+                    uni.navigateBack();
+                }, 1500);
+            } else {
+                uni.showToast({
+                    duration: 2000,
+                    position: 'center',
+                    title: res.msg || '保存失败'
+                });
+            }
+        }).catch((err) => {
+            console.error('保存提示词失败:', err);
+            uni.showToast({
+                duration: 2000,
+                position: 'center',
+                title: err.msg || '保存失败，请稍后重试'
+            });
+        }).finally(() => {
+            uni.hideLoading();
+        });
+    };
+
+    // 页面加载时获取提示词
+    onMounted(() => {
+        getPrompt();
+    });
+</script>
+
+<style lang="less" scoped>
+    @import '../theme/color.less';
+	@import '../theme/size.less';
+	@import '../theme/style.less';
+    .page-wrapper{
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        background-color: @page-background-color;
+        .page-body{
+            margin: 0 @middle-padding;
+            flex: 1;
+            display: flex;
+            height: 0;
+            flex-direction: column;
+            .module-block{
+                flex: 1;
+                height: 0;
+                margin-top: @middle-padding;
+                .prompt-area{
+                    width: 100%;
+                    height: 100%;
+                    padding: @middle-padding;
+                    box-sizing: border-box;
+                    background-color: @white-color;
+                    border-radius: @module-border-radius;
+                    font-size: @normal-font-size;
+                }
+            }
+            .save-btn{
+                text-align: center;
+                width: 100%;
+                padding: @middle-padding;
+                box-sizing: border-box;
+                border-radius: @big-border-radius;
+                margin: @middle-padding 0;
+                display: inline-block;
+                height: @btn-height;
+                &.save-btn-active{
+                    background-color: @primary-color;
+                    color: @white-color;
+                }
+                &.save-btn-disabled{
+                    background-color: @gray-color;
+                    color: @white-color;
+                }
+            }
+        }
+    }
+</style>
+
+// LoginPage.vue
+<template>
+	<view class="page-wrapper">
+		<view class="module-block module-block-column">
+			<image :src="icon_logo" class="icon-logo"/>
+
+			<view class="tab-container">
+				<view class="tab-item">
+					<text @click="useTab(0)" :class="tabIndex === 0 ? 'tab-text-active' : ''">账号密码登录</text>
+				</view>
+				<view class="tab-item">
+					<text @click="useTab(1)" :class="tabIndex === 1 ? 'tab-text-active' : ''">邮箱验证码登录</text>
+				</view>
+			</view>
+
+			<view class="login-input-wrapper" v-show="tabIndex === 0">
+				<image :src="icon_user_active" class="icon-login"/>
+				<input v-model="userAccount" @blur="userVertify('userAccount')" @input="onAccountInput" class="login-input" placeholder="请输入账号或者邮箱"/>
+			</view>
+
+			<view class="login-input-wrapper" v-show="tabIndex === 0">
+				<image :src="icon_password" class="icon-login"/>
+				<input type="password" v-model="password" @blur="userVertify('password')" @input="onAccountInput" class="login-input" placeholder="请输入密码"/>
+			</view>
+
+			<view class="login-input-wrapper" v-show="tabIndex === 1">
+				<image :src="icon_user_active" class="icon-login"/>
+				<input v-model="email" class="login-input" @blur="userVertify('email')" @input="onEmailInput" placeholder="请输入邮箱"/>
+				<image @click="useSendEmailVertifyCode" :src="icon_send" class="icon-login icon-send"/>
+			</view>
+
+			<view class="login-input-wrapper" v-show="tabIndex === 1">
+				<image :src="icon_user_active" class="icon-login"/>
+				<input v-model="code" class="login-input" @blur="userVertify('code')" @input="onEmailInput" placeholder="请输入验证码"/>
+			</view>
+
+			<view class="login-btn" :class="{'login-btn-active': isAccountLoginDisabled, 'login-btn-disabled': !isAccountLoginDisabled}" v-show="tabIndex === 0" @click="useLogin">登录</view>
+			<view class="login-btn" :class="{'login-btn-active': isEmailLoginDisabled, 'login-btn-disabled': !isEmailLoginDisabled}" v-show="tabIndex === 1" @click="useLogin">登录</view>
+
+			<view class="register-btn" @click="useRegister">注册</view>
+
+			<view class="forget-password-btn" @click="useForgetPassword">忘记密码？</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="ts">
+	import { ref, computed } from 'vue';
+	import { loginService, loginByEmailService, sendEmailVertifyCodeService} from '../service';
+	import { useStore } from '../stores/useStore';
+	import {httpRequest} from '../utils/HttpUtils';
+	import { EMAIL_REG } from '../common/constant';
+	import icon_logo from '../../static/icon_ai.png';
+	import icon_user_active from '../../static/icon_user_active.png';
+	import icon_password from '../../static/icon_password.png';
+	import icon_send from '../../static/icon_send.png';
+	
+	const userAccount = ref<string>('吴怨吴悔');
+	const password = ref<string>('123456');
+	const tabIndex = ref<number>(0);
+	const email = ref<string>('');
+	const code = ref<string>('');
+
+	const store = useStore();
+	
+	// 设置初始值，处理可能为 undefined 的情况
+	if (store.userData && store.userData.userAccount) {
+		userAccount.value = store.userData.userAccount;
+	}
+	
+	uni.getStorage({key: userAccount.value || 'default'}).then(res=>{
+		password.value = (res && res.data) || ""
+	}).catch(()=>{
+		password.value = ""
+	});
+
+	/**
+	 * @description: 账号密码登录按钮是否可用
+	 * @date: 2026-04-14
+	 * @author wuwenqiang
+	 */
+	const isAccountLoginDisabled = computed(() => {
+		const account = userAccount.value || '';
+		const pwd = password.value || '';
+		return account.trim() !== '' && pwd.trim() !== '';
+	});
+
+	/**
+	 * @description: 邮箱登录按钮是否可用
+	 * @date: 2026-04-14
+	 * @author wuwenqiang
+	 */
+	const isEmailLoginDisabled = computed(() => {
+		const emailValue = email.value || '';
+		const codeValue = code.value || '';
+		return emailValue.trim() !== '' && codeValue.trim() !== '';
+	});
+
+	/**
+	 * @description: 账号密码输入监听
+	 * @date: 2026-04-14
+	 * @author wuwenqiang
+	 */
+	const onAccountInput = () => {
+		// 触发计算属性重新计算
+	};
+
+	/**
+	 * @description: 邮箱验证码输入监听
+	 * @date: 2026-04-14
+	 * @author wuwenqiang
+	 */
+	const onEmailInput = () => {
+		// 触发计算属性重新计算
+	};
+
+	const useTab = (index:number)=>{
+		tabIndex.value = index;
+	}
+
+	 /**
+	 * @description: 失去焦点校验输入框
+	 * @date: 2025-03-02 10:54
+	 * @author wuwenqiang
+	 */
+	const userVertify = (field:string)=>{
+		if(field === "userAccount" && (!userAccount.value || userAccount.value.trim() === "")){
+			uni.showToast({
+				duration:2000,
+				position:'center',
+				title:'请输入账号'
+			})
+		}else if(field === "password" && (!password.value || password.value.trim().length < 6 || password.value.trim().length > 18)){
+			uni.showToast({
+				duration:2000,
+				position:'center',
+				title:'请输入6-18位的密码'
+			})
+		}else if(field === 'email' && (!email.value || !EMAIL_REG.test(email.value.trim()))){
+			uni.showToast({
+				duration:2000,
+				position:'center',
+				title:'请输入正确的邮箱格式'
+			})
+		}else if(field === 'code' && (!code.value || code.value.trim().length !== 4)){
+			uni.showToast({
+				duration:2000,
+				position:'center',
+				title:'请输入四位数的验证码'
+			})
+		}
+	}
+
+	const useLogin = () => {
+		if(tabIndex.value === 0){
+			if(!userAccount.value || !userAccount.value.trim()){
+				uni.showToast({
+					duration:2000,
+					position:'center',
+					title:'账号不能为空'
+				})
+			}else if(!password.value || password.value.trim().length > 18 || password.value.trim().length < 6){
+				uni.showToast({
+					duration:2000,
+					position:'center',
+					title:'请输入6-18位的密码'
+				})
+			}else{
+				uni.showLoading();
+				// 登录方法，userAccount:账号或邮箱，password密码
+				loginService(userAccount.value,password.value).then((res)=>{
+					uni.setStorage({key:userAccount.value,data:password.value});// 登录成功后保存账号和密码到缓存中
+					store.setUserData(res.data);// 将用户信息保存到全局状态管理器中
+					store.setToken(res.token);// 将token保存到状态管理中 
+					uni.setStorage({key:'token',data:res.token});// 将token保存到缓存中,以便下次进入时自动登录
+					httpRequest.setToken(res.token);// 设置请求头token值
+					uni.reLaunch({// 重定向到首页
+						url: `../pages/ChatPage`
+					})
+					uni.showToast({// 弹出提示
+						duration:2000,
+						position:'center',
+						title:'登录成功'
+					})
+				}).catch(()=>{// 登录失败，弹出提示
+					uni.showToast({
+						duration:2000,
+						position:'center',
+						title:'账号或密码错误'
+					})
+				}).finally(()=>{
+					uni.hideLoading();// 隐藏loading框
+				})
+			}
+		}else{
+			if(!email.value || !EMAIL_REG.test(email.value.trim())){
+				uni.showToast({
+					duration:2000,
+					position:'center',
+					title:'请输入正确的邮箱格式'
+				})	
+			}else if(!code.value || code.value.trim().length !== 4){
+				uni.showToast({
+					duration:2000,
+					position:'center',
+					title:'请输入4位数的验证码'
+				})
+			}else{
+				uni.showLoading();
+				loginByEmailService(email.value,code.value).then((res)=>{
+					store.setUserData(res.data)
+					store.setToken(res.token)
+					uni.setStorage({key:'token',data:res.token});
+					httpRequest.setToken(res.token);
+					uni.reLaunch({
+						url: `../pages/ChatPage`
+					})
+					uni.showToast({
+						duration:2000,
+						position:'center',
+						title:'登录成功'
+					})
+				}).catch(()=>{
+					uni.showToast({
+						duration:2000,
+						position:'center',
+						title:'邮箱或者验证码错误'
+					})
+				}).finally(()=>{
+					uni.hideLoading();
+				})
+			}
+		}
+	}
+
+	const useSendEmailVertifyCode = () => {
+		if(email.value && EMAIL_REG.test(email.value.trim())){
+			uni.showLoading()
+			sendEmailVertifyCodeService(email.value).then((res)=>{
+				uni.showToast({
+					duration:2000,
+					position:'center',
+					title: res.msg
+				});
+			}).finally(()=>{
+				uni.hideLoading();
+			})
+		}else{
+			uni.showToast({
+				duration:2000,
+				position:'center',
+				title: "请输入正确的邮箱格式"
+			});
+		}
+	}
+
+	/**
+	 * @description: 注册
+	 * @date: 2025-01-19 14:13
+	 * @author wuwenqiang
+	 */
+	const useRegister = () => {
+		uni.navigateTo({
+			url: `../pages/RegisterPage`
+		})
+	}
+
+	/**
+	 * @description: 忘记密码
+	 * @date: 2025-01-19 14:13
+	 * @author wuwenqiang
+	 */
+	const useForgetPassword = ()=>{
+		uni.navigateTo({
+			url: `../pages/ForgetPasswordPage`
+		})
+	}
+</script>
+
+<style lang="less" scoped>
+	@import '../theme/color.less';
+	@import '../theme/size.less';
+	@import '../theme/style.less';
+	.page-wrapper{
+		height: 100vh;
+		display: flex;
+		flex-direction: column;
+		box-sizing: border-box;
+		padding: 0 @middle-padding @middle-padding;
+		background-color: @page-background-color;
+		.tab-container{
+				display: flex;
+				gap: @middle-padding;
+				width: 100%;
+				.tab-item{
+					padding-bottom: @small-padding;
+					flex: 1;
+					text-align: center;
+					.tab-text-active{
+						color: @primary-color;
+						border-bottom: @border-size solid @primary-color;
+					}
+				}
+			}
+		.module-block{
+			height: 100%;
+			align-items: center;
+			.icon-logo{
+				width: @big-avater;
+				height: @big-avater;
+				margin: @middle-icon-size 0;
+			}
+			.login-input-wrapper{
+				margin-top: @middle-padding;
+				display: flex;
+				align-items: center;
+				width: 100%;
+				border: 1rpx solid @gray-color;
+				padding: @middle-padding;
+				box-sizing: border-box;
+				border-radius: @big-border-radius;
+				.icon-login{
+					width: @small-icon-size;
+					height: @middle-icon-size;
+					&.icon-send{
+						margin-right: @middle-padding;
+					}
+				}
+				.login-input{
+					flex: 1;
+					margin-left: @middle-padding;
+				}
+			}
+
+			.login-btn{
+				text-align: center;
+				width: 100%;
+				padding: @middle-padding;
+				box-sizing: border-box;
+				border-radius: @big-border-radius;
+				margin-top:  @middle-padding;
+				display: inline-block;
+				height: @btn-height;
+				line-height: calc(@btn-height - @middle-padding * 2);
+				&.login-btn-active{
+					background-color: @primary-color;
+					color: @white-color;
+				}
+				&.login-btn-disabled{
+					background-color: @gray-color;
+					color: @white-color;
+				}
+			}
+
+			.register-btn{
+				text-align: center;
+				width: 100%;
+				border: 1rpx solid @gray-color;
+				padding: @middle-padding;
+				box-sizing: border-box;
+				border-radius: @big-border-radius;
+				margin-top:  @middle-padding;
+				display: inline-block;
+				background-color: transparent;
+			}
+
+			.forget-password-btn{
+				text-align: center;
+				width: 100%;
+				padding: @middle-padding;
+				box-sizing: border-box;
+				margin-top: @middle-padding;
+				display: inline-block;
+				background-color: transparent;
+				color: @gray-color;
+			}
+		}
+	}
+</style>
+
+// ResetPasswordPage.vue
+<template>
+	<view class="page-wrapper">
+		<NavigatorTitleComponent title="重置密码"/>
+		<view class="page-body">
+			<view class="module-block module-block-column">
+
+				<view class="login-input-wrapper">
+					<image :src="icon_user_active" class="icon-login"/>
+					<input type="text" v-model="code" class="login-input" placeholder="请输入验证码"/>
+				</view>
+
+				<view class="login-input-wrapper">
+					<image :src="icon_password" class="icon-login"/>
+					<input type="password" v-model="password" class="login-input" placeholder="请输入密码"/>
+				</view>
+
+				<view class="login-input-wrapper">
+					<image :src="icon_password" class="icon-login"/>
+					<input type="password" v-model="confirmPassword" class="login-input" placeholder="请输入确定密码"/>
+				</view>
+
+
+				</view>
+				<view class="login-btn" @click="useSumbit">提交</view>
+		</view>
+		
+	</view>
+</template>
+
+<script setup lang="ts">
+	import { ref } from 'vue';
+	import NavigatorTitleComponent from '../components/NavigatorTitleComponent.vue';
+	import { resetPasswordService } from '../service';
+	import { useStore } from '../stores/useStore'
+	import {httpRequest} from '../utils/HttpUtils';
+	import icon_user_active from "../../static/icon_user_active.png";
+	import icon_password from "../../static/icon_password.png"
+	import { onLoad } from '@dcloudio/uni-app'; 
+
+	const password = ref<string>("")
+	const confirmPassword = ref<string>("");
+	const code = ref<number>();
+
+	const store = useStore()
+	let email:string = ""
+
+	onLoad((option)=>{
+		email = decodeURIComponent(option!.email) as string
+	})
+
+	const useSumbit = () => {
+		if(!code.value){
+			uni.showToast({
+				duration:2000,
+				position:'center',
+				title:'请输入验证码'
+			})
+		}else if(!password.value.trim()){
+			uni.showToast({
+				duration:2000,
+				position:'center',
+				title:'密码不能为空'
+			})
+		}else if(!confirmPassword.value.trim()){
+			uni.showToast({
+				duration:2000,
+				position:'center',
+				title:'确定密码不能为空'
+			})
+		}else if(password.value != confirmPassword.value){
+			uni.showToast({
+				duration:2000,
+				position:'center',
+				title:'密码和确定密码不一致'
+			})
+		}else{
+			// 重置密码，email:邮箱，password:新密码，code:验证码
+			resetPasswordService(email,password.value,code.value).then((res)=>{
+				if(res.data !== null){// 重置密码成功
+					uni.showToast({// 弹出提示
+						duration:2000,
+						position:'center',
+						title:'重置密码成功'
+					});
+					store.setUserData(res.data);// 把用户信息保存到全局状态管理器中
+					store.setToken(res.token);// 把token保存到全局状态管理器中
+					uni.setStorage({key:'token',data:res.token});// 把token保存到缓存中
+					httpRequest.setToken(res.token);// 设置请求头的token值
+					uni.redirectTo({url: '../pages/MusicIndexPage'});// 重定向到首页
+				}else{// 重置密码失败
+					uni.showToast({
+						duration:2000,
+						position:'center',
+						title:'重置密码失败'
+					});
+				}
+			})
+		}
+	}
+</script>
+
+<style lang="less" scoped>
+	@import '../theme/color.less';
+	@import '../theme/size.less';
+	@import '../theme/style.less';
+	.page-wrapper{
+		.page-body{
+			padding: 0 @middle-padding;
+		}
+		.module-block{
+			align-items: center;
+			.login-input-wrapper{
+				margin-top: @middle-padding;
+				display: flex;
+				align-items: center;
+				width: 100%;
+				border: 1rpx solid @gray-color;
+				padding: @middle-padding;
+				box-sizing: border-box;
+				border-radius: @big-border-radius;
+				.icon-login{
+					width: @small-icon-size;
+					height: @middle-icon-size;
+				}
+				.login-input{
+					flex: 1;
+					margin-left: @middle-padding;
+				}
+			}
+		}
+		.login-btn{
+			text-align: center;
+			width: 100%;
+			padding: @middle-padding;
+			box-sizing: border-box;
+			border-radius: @big-border-radius;
+			margin-top:  @middle-padding;
+			background-color: @warn-color;
+			color: @white-color;
+			display: inline-block;
+		}
+
+		.register-btn{
+			text-align: center;
+			width: 100%;
+			border: 1rpx solid @gray-color;
+			padding: @middle-padding;
+			box-sizing: border-box;
+			border-radius: @big-border-radius;
+			margin-top:  @middle-padding;
+			display: inline-block;
+			background-color: transparent;
+		}
+	}
+</style>
+
+
+// ForgetPasswordPage.vue
+<template>
+	<view class="page-wrapper">
+        <NavigatorTitleComponent title="忘记密码"/>
+		<view class="page-body">
+			<view class="module-block module-block-column">
+				<view class="row">
+					<view class="title">
+						<text class="require">*</text>
+						<text>邮箱地址</text>
+					</view>
+					<input class="input" v-model="email" placeholder="请输入您的保密邮箱"/>
+				</view>
+			</view>
+			<view class="login-btn" @click="useSumbit">提交</view>
+		</view>
+		
+	</view>
+</template>
+
+<script setup lang="ts">
+
+    import { ref } from 'vue';
+    import NavigatorTitleComponent from '../components/NavigatorTitleComponent.vue';
+	import { sendEmailVertifyCodeService } from '../service';
+	import { EMAIL_REG } from '../common/constant';
+    const email = ref<string>("");
+	let loading:boolean = false;
+
+    /**
+	 * @author: wuwenqiang
+	 * @description: 注册
+	 * @date: 2024-01-10 22:13
+	 */
+	const useSumbit = async() => {
+		if(!email.value){
+			uni.showToast({
+				title: '请输入邮箱',
+				icon: "none"
+			});
+		}else if(!EMAIL_REG.test(email.value)){
+			uni.showToast({
+				title: '请输入正确的邮箱地址',
+				icon: "none"
+			});
+		}else{
+			if(loading)return;
+			loading = true;
+			uni.showLoading()
+            sendEmailVertifyCodeService(email.value).then((res)=>{
+				uni.showToast({
+					title: res.msg,
+					icon: "none"
+				});
+				uni.navigateTo({
+					url: `../pages/ResetPasswordPage?email=${encodeURIComponent(email.value)}`
+				})
+			}).finally(()=>{
+				loading = false;
+				uni.hideLoading();
+			})
+		}	
+	}
+</script>
+
+<style lang="less" scoped>
+	@import '../theme/color.less';
+	@import '../theme/size.less';
+	@import '../theme/style.less';
+	.page-wrapper{
+		height: 100vh;
+		display: flex;
+		flex-direction: column;
+		box-sizing: border-box;
+		background-color: @page-background-color;
+		.page-body{
+			flex: 1;
+			padding: 0 @middle-padding @middle-padding;
+			.module-block{
+				align-items: center;
+				.row{
+					width: 100%;
+					display: flex;
+					align-items: center;
+					.title{
+						width: 25%;
+						.require{
+							color: @warn-color;
+						}
+					}
+					.input{
+						flex: 1;
+						padding-left: @small-padding;
+						height: @input-height
+					}
+					/deep/.icon-calendar{
+						display: none;
+					}
+				}
+			}
+			.login-btn{
+				text-align: center;
+				width: 100%;
+				padding: @middle-padding;
+				box-sizing: border-box;
+				border-radius: @big-border-radius;
+				margin-top:  @middle-padding;
+				background-color: @warn-color;
+				color: @white-color;
+				display: inline-block;
+			}
+		}
+		
+	}
+</style>
+
+
+// UserPage.vue
+<template>
+	<view class="page-wrapper">
+		<NavigatorTitleComponent :title="store.tenantUser?.tenantName"/>
+		<view class="page-body">
+			<view class="module-block">
+				<view class="row">
+					<text class="text">头像</text>
+					<image class="big-avater" :src="store.userData.avater ? HOST + store.userData.avater:defaulAvater"/>
+					<image class="icon-arrow" :src="icon_arrow"/>
+				</view>
+				<view class="row" @click="useEditUserData('昵称','username')">
+					<text class="text">昵称</text>
+					<text>{{store.userData.username}}</text>
+					<image class="icon-arrow" :src="icon_arrow"/>
+				</view>
+				<view class="row" @click="useEditUserData('邮箱','email')">
+					<text class="text">邮箱</text>
+					<text>{{store.userData.email}}</text>
+					<image class="icon-arrow" :src="icon_arrow"/>
+				</view>
+				<view class="row" @click="useEditSex">
+					<text class="text">性别</text>
+					<text>{{SexMap[store.userData.sex] || ''}}</text>
+					<image class="icon-arrow" :src="icon_arrow"/>
+				</view>
+				<view class="row last-row" @click="useEditUserData('个性签名','sign')">
+					<text class="text">个性签名</text>
+					<text>{{store.userData.sign}}</text>
+					<image class="icon-arrow" :src="icon_arrow"/>
+				</view>
+			</view>
+			<button class="btn-user" @click="onTabTenant">切换租户</button>
+			<button class="btn-user" v-if="(store.tenantUser?.roleType??0) > 0" @click="onManageTenant">租户管理</button>
+			<button class="btn-user" @click="useUpdatePassword">修改密码</button>
+			<button class="btn-user btn-logout" @click="useLogout">退出登录</button>
+		</view>
+		
+		<uni-popup ref="popup1" class="popup-wrapper"  type="dialog">
+			<view class="dialog-wrapper">
+				<view class="dialog-box">
+					<view class="dialog-header"><text>请输入</text></view>
+					<view class="dialog-content">
+						<view class="field-text">{{title}}:</view>
+						<input class="text-input" v-model="inputValue"/>
+					</view>
+					<view class="dialog-btn">
+						<view class="btn-cancle" @click="useCloseDialog">取消</view>
+						<view class="btn-sure" @click="useSure">确定</view>
+					</view>
+				</view>
+			</view>
+		</uni-popup>
+		<OptionsDialog ref="sexOptionsDialog" @onCheck= "useCheckSex" :options="[{value:0,text:'男'},{value:1,text:'女'}]"/>
+		<OptionsDialog ref="tenantOptionsDialog" @onCheck= "onSelectTenant" :options="tenantOptionList"/>
+	</view>
+</template>
+
+<script setup lang="ts">
+	import uniPopup from '@dcloudio/uni-ui/lib/uni-popup/uni-popup.vue';
+	import { useStore } from '../stores/useStore';
+	import OptionsDialog from '../components/OptionsDialog.vue';
+	import { reactive, ref } from 'vue';
+	import type { UserDataType,TenantType,OptionType,TenantUserType } from '../types';
+	import {updateUserDataService,getTenantListService,getTenantUserService} from '../service';
+	import defaulAvater from '../../static/default_avater.png';
+	import { SexMap,HOST, DEFAULT_TENANT_USER,DEFAULT_TENANT} from '../common/constant';
+	import icon_arrow from "../../static/icon_arrow.png"
+	import NavigatorTitleComponent from '../components/NavigatorTitleComponent.vue';
+
+	const title = ref<string>('');
+	const field = ref<string>('');
+	const popup1= ref<null | InstanceType<typeof uniPopup>>(null);
+	const sexOptionsDialog = ref<null | InstanceType<typeof OptionsDialog>>(null);
+	const tenantOptionsDialog = ref<null | InstanceType<typeof OptionsDialog>>(null);
+	const inputValue = ref<string>('');
+	const tenantList = reactive<TenantType[]>([DEFAULT_TENANT]);
+  const store = useStore();
+	const tenantOptionList = reactive<OptionType[]>([{
+		value: store.userData.id!,
+		text: "私人空间"
+	}]);
+	const tenantUser = ref<TenantUserType|null>(null);
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 确定修改用户信息
+	 * @date: 2024-01-06 12:05
+	 */
+	 const useSure = () => {
+		const mUserData = {...store.userData};// 用户信息浅拷贝，防止修改原有的信息
+		mUserData[field.value] = inputValue.value;// 更改用户信息
+		updateUserDataService(mUserData).then(res=>{// 保存更改
+			store.setUserData(mUserData);// 保存成功后更新页面上的用户信息
+			popup1.value?.close();// 关闭弹窗
+		})
+	}
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 编辑用户信息
+	 * @date: 2024-01-16 22:49
+	 */
+	const useEditUserData = (mTitle:string,mField:string) => {
+		title.value = mTitle;// 修改的个人信息字段名称
+		field.value = mField;// 修改的个人信息的字段
+		inputValue.value = store.userData[mField];// 修改后的值
+		popup1.value?.open('top');// 显示修改弹窗
+	}
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 性别选择
+	 * @date: 2024-01-16 22:49
+	 */
+	 const useCheckSex = (sex:number) => {
+		const mUserData:UserDataType = {...store.userData};
+		mUserData.sex = sex;
+		updateUserDataService(mUserData).then(res=>{
+			store.setUserData(mUserData);
+		})
+	}
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 关闭用户信息编辑对话框
+	 * @date: 2024-01-16 22:49
+	 */
+	const useCloseDialog = () => {
+		popup1.value?.close()
+	}
+
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 退出登录
+	 * @date: 2024-01-06 12:05
+	 */
+	const useLogout = () => {
+		uni.showModal({
+		    title: '提示',
+		    content: '是否退出登录',
+				success:  res => {
+				if (res.confirm) {
+					uni.setStorageSync('token','');
+					uni.reLaunch({
+						url: `./LoginPage`
+					})
+				} else if (res.cancel) {
+					console.log('用户点击取消');
+				}
+		    }
+		})
+	}
+
+	const useEditSex = () => {
+		sexOptionsDialog.value?.$refs.popup.open('top')
+	}
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 修改密码
+	 * @date: 2025-01-28 14:12
+	 */
+	const useUpdatePassword = ()=>{
+		uni.navigateTo({
+			url: `./UpdatePasswordPage`
+		})
+	}
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 切换租户
+	 * @date: 2025-8-10 18:06
+	 */
+	const onTabTenant = ()=>{
+		getTenantListService().then((res)=>{
+			tenantList.splice(1,tenantList.length,...res.data)
+			tenantOptionList.splice(1,tenantOptionList.length,...res.data.map(item=>{
+				return {value:item.id,text:item.name}
+			}))
+			tenantOptionsDialog.value?.$refs.popup.open('top')
+		})
+	}
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 切换租户
+	 * @date: 2025-8-10 18:06
+	 */
+	const onSelectTenant=(value:string)=>{
+    getTenantUserService(value).then(res=>{
+      const data:TenantUserType = res.data ? res.data as TenantUserType : {
+        id: "", // 主键
+        tenantId: store.userData.id!, // 租户id
+        tenantName: "私人空间",
+        userId: store.userData.id!, // 用户id
+        roleType: 0, // 用户角色 (0-普通用户，1-租户管理员，2-超级管理员)
+        joinDate: "", // 加入日期
+        createBy: "", // 创建时间
+        username: store.userData.username, // 用户名
+        avater: store.userData.avater, // 头像
+        disabled: 0,// 是否禁用
+        email: store.userData.email// 邮箱
+      } as TenantUserType;
+      store.setTenantUser(data);
+      uni.setStorage({key:`${store.userData.id}:tenantId`,data:data.tenantId??""});
+    })
+	}
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 租户管理
+	 * @date: 2025-8-16 20:20
+	 */
+	const onManageTenant = ()=>{
+		uni.navigateTo({
+			url: `../pages/TenantManagePage`
+		})
+	}
+</script>
+
+<style lang="less">
+	@import '../theme/color.less';
+	@import '../theme/size.less';
+	@import '../theme/style.less';
+	.page-wrapper{
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		background-color: @page-background-color;
+		box-sizing: border-box;
+		.page-body{
+			margin: 0 @middle-padding;
+			.module-block{
+				.row{
+					display: flex;
+					padding: @middle-padding;
+					align-items: center;
+					border-bottom: 1rpx solid @page-background-color;
+					&.last-row{
+						border-bottom:none
+					}
+					.text{
+						flex: 1;
+					}
+					.big-avater{
+						width: @big-avater;
+						height: @big-avater;
+						border-radius: @big-avater;
+					}
+					.icon-arrow{
+						margin-left: @middle-padding;
+						width: @small-icon-size;
+						height: @small-icon-size;
+						opacity: 0.5;
+					}
+				}
+			}
+			.btn-user{
+				overflow: hidden;
+				margin-top: @middle-padding;
+				background-color: @white-color;
+				border: 1px solid @gray-color;
+				border-radius: @big-border-radius;
+				&::after{
+					display: none;
+				}
+				&.btn-logout{
+					border-radius: @big-border-radius;
+					background-color: @warn-color;
+					border: none;
+					color: @white-color;
+				}
+			}
+		}
+		.popup-wrapper{
+			width: 100%;
+			height: 100%;
+			background-color: rgba(0,0,0,0.2);
+			top: 0;
+			left: 0;
+			.dialog-wrapper{
+				display: flex;
+				height: 100vh;
+				width: 100%;
+				align-items: center;
+				justify-content: center;
+				&.sex-dialog-wrapper{
+					flex-direction: column;
+					justify-content: flex-end;
+					padding: @middle-padding;
+					box-sizing: border-box;
+					.option-wrapper{
+						display: flex;
+						flex-direction: column;
+						background-color: @white-color;
+						width: 100%;
+						border-radius: @module-border-radius;
+						.option-item{
+							display: block;
+							width: 100%;
+							text-align: center;
+							padding: @middle-padding 0;
+							border-bottom: 1rpx solid @page-background-color;
+							&:last-child{
+								border-bottom:none;
+							}
+						}
+					}
+					.option-btn{
+						margin-top: @middle-padding;
+						width: 100%;
+						text-align: center;
+						padding: @middle-padding 0;
+						background-color: @white-color;
+						border-radius: @module-border-radius;
+					}
+				}
+				.dialog-box{
+					width: 80%;
+					left: 50%;
+					top: 50%;
+					border-radius: @module-border-radius;
+					background-color: @white-color;
+					.dialog-header{
+						padding: @middle-padding;
+						display: flex;
+						align-items: center;
+						justify-content: center;
+						font-weight: bold;
+						border-bottom: 1rpx solid @page-background-color;
+					}
+					.dialog-content{
+						padding: @middle-padding;
+						display: flex;
+						align-items: center;
+						.field-text{
+							margin-right: @middle-padding;
+						}
+						.text-input{
+							flex: 1;
+							background-color: @page-background-color;
+							padding: @middle-padding;
+							color: @sub-title-color;
+							border-radius: @module-border-radius;
+						}
+					}
+					.dialog-btn{
+						display: flex;
+						border-top: 1rpx solid @page-background-color;
+						.btn-cancle{
+							flex: 1;
+							padding: @middle-padding;
+							text-align: center;
+							color: @sub-title-color;
+						}
+						.btn-sure{
+							flex: 1;
+							padding: @middle-padding;
+							text-align: center;
+							color: @gray-color;
+							font-weight: bold;
+							border-left: 1rpx solid @page-background-color;;
+						}
+					}
+				}
+			}
+		}
+	}
+</style>
+
+
+// MyPromptPage.vue
+<template>
+    <view class="page-wrapper">
+        <NavigatorTitleComponent title="我收藏的提示词">
+            <image :src="icon_search" class="icon-small"></image>
+        </NavigatorTitleComponent>
+        <view class="page-body">
+            <template v-if="promptCategoryList.length !== 0">
+                <view class="module-block category-wrapper" v-if="promptCategoryList.length !== 0">
+                    <text :class="activeIndex === index ? 'category-lable-active': ''" @click="onTabLable(index)" v-for="item,index in promptCategoryList" class="category-lable" :key="item.category">{{ item.category }}</text>
+                </view>
+                <scroll-view  v-if="systemPromptTypeList.length !== 0" class="scroll-view" scroll-y show-scrollbar="false" @scrolltolower="onLoadMoreUser">
+                    <view class="prompt-wrapper">
+                        <view class="module-block prompt-list">
+                            <uniSwipeAction>
+                                <template v-for="item,index in systemPromptTypeList" :key="'prompt-item'+index">
+                                    <uniSwipeActionItem>
+                                        <view class="prompt-item" :class="{'prompt-item-first':index == 0,'prompt-item-last':index === systemPromptTypeList.length - 1}">
+                                            <text class="prompt-text">{{ item.prompt }}</text>
+                                            <view class="prompt-icon-wrapper">
+                                                <image :src="icon_copy" class="icon-small" @click="onCopy"/>
+                                            </view>
+                                        </view>
+                                        <template v-slot:right>
+                                            <view class="button-wrapper">
+                                                <view class="op-button set-admin-button">
+                                                    <text @click="onUsePrompt(item.prompt)" class="button-text">{{store.prompt === item.prompt ? '取消使用提示词' :'使用提示词'}}</text>
+                                                </view>
+                                                <view class="op-button set-admin-button">
+                                                    <text @click="onDeletePrompt(index)" class="button-text">取消收藏</text>
+                                                </view>
+                                            </view>
+                                        </template>
+                                    </uniSwipeActionItem>
+                                    <view class="line" v-if="index < systemPromptTypeList.length - 1"></view>
+                                </template>
+                            </uniSwipeAction>
+                        </view>
+                    </view>
+                    
+                </scroll-view>
+            </template>
+            <view v-else class="module-block">
+                <text class="no-data">暂无数据</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script lang="ts" setup>
+    import { reactive,ref } from "vue";
+    import NavigatorTitleComponent from "../components/NavigatorTitleComponent.vue";
+    import { getMyCollectPromptCategoryService,getMyCollectPromptListService,deleteCollectPromptService} from "../service";
+    import type { PromptCategoryType,SystemPromptType } from "../types";
+    import icon_search from "../../static/icon_search.png";
+    import { PAGE_SIZE } from "../common/constant";
+    import icon_copy from "../../static/icon_copy.png";
+	import { useStore } from "../stores/useStore";
+    const promptCategoryList = reactive<PromptCategoryType[]>([]);
+    const systemPromptTypeList = reactive<SystemPromptType[]>([]);
+    const activeIndex = ref<number>(0);
+    const pageNum = ref<number>(1);
+    const keyword = ref<string>("");
+    const total = ref<number>(0);
+	const store = useStore();
+
+    getMyCollectPromptCategoryService(store.tenantUser.tenantId).then((res)=>{
+        if(res.data.length === 0){
+            return;
+        } else if(res.data.length > 1){
+            promptCategoryList.push({
+                id:"",
+                category:"全部",
+                createTime:"",
+                updateTime:"",
+            })
+        };
+        promptCategoryList.push(...res.data);
+        getMyCollectPromptList()
+    })
+
+    const getMyCollectPromptList = ()=>{
+        getMyCollectPromptListService(store.tenantUser.tenantId,promptCategoryList[activeIndex.value].id,pageNum.value,PAGE_SIZE).then((res)=>{
+            systemPromptTypeList.push(...res.data);
+            total.value = res.total;
+        })
+    }
+
+    
+
+    const onTabLable = (index:number)=>{
+        activeIndex.value = index;
+        systemPromptTypeList.length = 0;
+        pageNum.value = 1
+        getMyCollectPromptList()
+    }
+
+    const onLoadMoreUser = ()=>{
+        if(total.value > pageNum.value * PAGE_SIZE){
+            pageNum.value++;
+            getMyCollectPromptList()
+        }
+    }
+
+    const onCopy = (text:string)=>{
+        uni.setClipboardData({
+            data: text,
+            success: () => uni.showToast({
+                duration: 2000,
+                position: 'center',
+                title: '复制成功'
+            }),
+            fail: (err) => {
+            uni.showToast({
+                duration: 2000,
+                position: 'center',
+                title: '复制失败'
+            })
+            }
+        })        
+    }
+    
+     /**
+	 * @author: wuwenqiang
+	 * @description: 新增和取消收藏
+	 * @date: 2025-10-18 11:22
+	 */
+    const onDeletePrompt = (item:SystemPromptType)=>{
+        deleteCollectPromptService(item.id).then((res)=>{
+            uni.showToast({
+                duration: 2000,
+                position: 'center',
+                title: `取消收藏${res.data > 0 ? '成功' : '失败'}`
+            })
+            if(res.data > 0)item.isCollect = 0;
+        })
+    }
+
+     /**
+	 * @author: wuwenqiang
+	 * @description: 使用或者取消提示词
+	 * @date: 2025-10-18 11:22
+	 */
+    const onUsePrompt = (prompt:string)=>{
+        if(store.prompt === prompt)prompt=""
+        store.setPrompt(prompt)
+    }
+</script>
+
+<style lang="less">
+    @import '../theme/color.less';
+	@import '../theme/size.less';
+	@import '../theme/style.less';
+    .page-wrapper{
+		.page-body{
+			margin: 0 @middle-padding;
+            flex: 1;
+            display: flex;
+            height: 0;
+            flex-direction: column;
+            .category-wrapper{
+                display: grid;
+                grid-template-columns: repeat(5,1fr);
+                gap:@middle-padding;
+                .category-lable{
+                    border-radius: @module-border-radius;
+                    padding:@middle-padding 0;
+                    display: flex;
+                    justify-content: center;
+                    border: 1rpx solid @gray-color;
+                    &.category-lable-active{
+                        border-color:@primary-color;
+                        color: @primary-color;
+                    }
+                }
+            }
+            .scroll-view{
+                flex: 1;
+                height: 0;
+                padding-top: @middle-padding;
+                box-sizing: border-box;
+                .prompt-wrapper{
+                    padding-bottom: @middle-padding;
+                    box-sizing: border-box;
+                    .prompt-list{
+                        margin-top: 0;
+                        .prompt-item{
+                            padding-top: @middle-padding;
+                            padding-bottom: @middle-padding;
+                            display: flex;
+                            &.prompt-item-first{
+                                padding-top: 0;
+                            }
+                            &.prompt-item-last{
+                                padding-bottom: 0;
+                            }
+                            .prompt-text{
+                                flex: 1;
+                                width: 0;
+                                 display: -webkit-box;
+                                -webkit-box-orient: vertical;
+                                overflow: hidden;
+                                text-overflow: ellipsis;
+                                -webkit-line-clamp: 3;
+                                text-overflow: ellipsis;
+                            }
+                            .prompt-icon-wrapper{
+                                display: flex;
+                                gap: @middle-padding;
+                                margin-left: @middle-padding;
+                                align-items: center;
+                            }
+                        }
+                        .line{
+                            height: 1rpx;
+                            background: @gray-color;
+                        }
+                        .button-wrapper{
+                            display: flex;
+                            .op-button{
+                                display: flex;
+                                height: 100%;
+                                flex-direction: row;
+                                justify-content: center;
+                                align-items: center;
+
+                                margin-left: @middle-padding;
+                                &.delete-button{
+                                background-color: @warn-color;
+                                color: @white-color;
+                                }
+                                &.set-admin-button{
+                                background-color: @gray-color;
+                                color: @white-color;
+                                }
+                                .button-text{
+                                padding: 0 calc(@middle-padding * 2);
+                                }
+                            }
+                            }
+                        
+                    }
+                    
+                }
+                
+            }
+        }
+    }
+</style>
+
+// PromptPage.vue
+<template>
+    <view class="page-wrapper">
+        <NavigatorTitleComponent title="设置提示词">
+            <image :src="icon_search" class="icon-small"></image>
+        </NavigatorTitleComponent>
+        <view class="page-body">
+            <view class="module-block category-wrapper" v-if="promptCategoryList.length !== 0">
+                <text :class="activeIndex === index ? 'category-lable-active': ''" @click="onTabLable(index)" v-for="item,index in promptCategoryList" class="category-lable" :key="item.category">{{ item.category }}</text>
+            </view>
+            <scroll-view  v-if="systemPromptTypeList.length !== 0" class="scroll-view" scroll-y show-scrollbar="false" @scrolltolower="onLoadMoreUser">
+                <view class="prompt-wrapper">
+                    <view class="module-block prompt-list">
+                        <uniSwipeAction>
+                            <template v-for="item,index in systemPromptTypeList" :key="'prompt-item'+index">
+                                <uniSwipeActionItem>
+                                    <view class="prompt-item" :class="{'prompt-item-first':index == 0,'prompt-item-last':index === systemPromptTypeList.length - 1}">
+                                        <text class="prompt-text">{{ item.prompt }}</text>
+                                        <view class="prompt-icon-wrapper">
+                                            <image :src="icon_copy" class="icon-small" @click="onCopy"/>
+                                        </view>
+                                    </view>
+                                    <template v-slot:right>
+                                        <view class="button-wrapper">
+                                            <view class="op-button set-admin-button">
+                                                <text @click="onUsePrompt(item.prompt)" class="button-text">{{store.prompt === item.prompt ? '取消使用提示词' :'使用提示词'}}</text>
+                                            </view>
+                                            <view class="op-button set-admin-button">
+                                                <text @click="onCollectPrompt(item)" class="button-text">{{item.isCollect ? '取消收藏' : '收藏'}}</text>
+                                            </view>
+                                        </view>
+                                    </template>
+                                </uniSwipeActionItem>
+                                <view class="line" v-if="index < systemPromptTypeList.length - 1"></view>
+                            </template>
+                        </uniSwipeAction>
+                    </view>
+                </view>
+                
+            </scroll-view>
+        </view>
+    </view>
+</template>
+
+<script lang="ts" setup>
+    import { reactive,ref } from "vue";
+    import NavigatorTitleComponent from "../components/NavigatorTitleComponent.vue";
+    import { getPromptCategoryListService,getSystemPromptListByCategoryService,insertCollectPromptService, deleteCollectPromptService } from "../service";
+    import type { PromptCategoryType,SystemPromptType } from "../types";
+    import icon_search from "../../static/icon_search.png";
+    import { PAGE_SIZE } from "../common/constant";
+    import icon_copy from "../../static/icon_copy.png";
+	import { useStore } from "../stores/useStore";
+    const promptCategoryList = reactive<PromptCategoryType[]>([]);
+    const systemPromptTypeList = reactive<SystemPromptType[]>([]);
+    const activeIndex = ref<number>(0);
+    const pageNum = ref<number>(1);
+    const keyword = ref<string>("");
+    const total = ref<number>(0);
+	const store = useStore();
+
+    const getSystemPromptListByCategory = ()=>{
+        getSystemPromptListByCategoryService(promptCategoryList[activeIndex.value].id,keyword.value,pageNum.value,PAGE_SIZE).then((res)=>{
+            systemPromptTypeList.push(...res.data);
+            total.value = res.total;
+        })
+    }
+
+    getPromptCategoryListService().then((res)=>{
+        promptCategoryList.push({
+            id:"",
+            category:"全部",
+            createTime:"",
+            updateTime:"",
+        })
+        promptCategoryList.push(...res.data);
+        getSystemPromptListByCategory()
+    })
+
+    const onTabLable = (index:number)=>{
+        activeIndex.value = index;
+        systemPromptTypeList.length = 0;
+        pageNum.value = 1
+        getSystemPromptListByCategory()
+    }
+
+    const onLoadMoreUser = ()=>{
+        if(total.value > pageNum.value * PAGE_SIZE){
+            pageNum.value++;
+            getSystemPromptListByCategory()
+        }
+    }
+
+    const onCopy = (text:string)=>{
+        uni.setClipboardData({
+            data: text,
+            success: () => uni.showToast({
+                duration: 2000,
+                position: 'center',
+                title: '复制成功'
+            }),
+            fail: (err) => {
+            uni.showToast({
+                duration: 2000,
+                position: 'center',
+                title: '复制失败'
+            })
+            }
+        })        
+    }
+    
+     /**
+	 * @author: wuwenqiang
+	 * @description: 新增和取消收藏
+	 * @date: 2025-10-18 11:22
+	 */
+    const onCollectPrompt = (item:SystemPromptType)=>{
+        if(item.isCollect){
+            deleteCollectPromptService(item.id).then((res)=>{
+                uni.showToast({
+                    duration: 2000,
+                    position: 'center',
+                    title: `取消收藏${res.data > 0 ? '成功' : '失败'}`
+                })
+                if(res.data > 0)item.isCollect = 0;
+            })
+        }else{
+            insertCollectPromptService(item.id).then((res)=>{
+                uni.showToast({
+                    duration: 2000,
+                    position: 'center',
+                    title: `新增收藏${res.data > 0 ? '成功' : '失败'}`
+                })
+                if(res.data > 0)item.isCollect = 1;
+            })
+        }
+    }
+
+     /**
+	 * @author: wuwenqiang
+	 * @description: 使用或者取消提示词
+	 * @date: 2025-10-18 11:22
+	 */
+    const onUsePrompt = (prompt:string)=>{
+        if(store.prompt === prompt)prompt=""
+        store.setPrompt(prompt)
+    }
+</script>
+
+<style lang="less">
+    @import '../theme/color.less';
+	@import '../theme/size.less';
+	@import '../theme/style.less';
+    .page-wrapper{
+		.page-body{
+			margin: 0 @middle-padding;
+            flex: 1;
+            display: flex;
+            height: 0;
+            flex-direction: column;
+            .category-wrapper{
+                display: grid;
+                grid-template-columns: repeat(5,1fr);
+                gap:@middle-padding;
+                .category-lable{
+                    border-radius: @module-border-radius;
+                    padding:@middle-padding 0;
+                    display: flex;
+                    justify-content: center;
+                    border: 1rpx solid @gray-color;
+                    &.category-lable-active{
+                        border-color:@primary-color;
+                        color: @primary-color;
+                    }
+                }
+            }
+            .scroll-view{
+                flex: 1;
+                height: 0;
+                padding-top: @middle-padding;
+                box-sizing: border-box;
+                .prompt-wrapper{
+                    padding-bottom: @middle-padding;
+                    box-sizing: border-box;
+                    .prompt-list{
+                        margin-top: 0;
+                        .prompt-item{
+                            padding-top: @middle-padding;
+                            padding-bottom: @middle-padding;
+                            display: flex;
+                            &.prompt-item-first{
+                                padding-top: 0;
+                            }
+                            &.prompt-item-last{
+                                padding-bottom: 0;
+                            }
+                            .prompt-text{
+                                flex: 1;
+                                width: 0;
+                                 display: -webkit-box;
+                                -webkit-box-orient: vertical;
+                                overflow: hidden;
+                                text-overflow: ellipsis;
+                                -webkit-line-clamp: 3;
+                                text-overflow: ellipsis;
+                            }
+                            .prompt-icon-wrapper{
+                                display: flex;
+                                gap: @middle-padding;
+                                margin-left: @middle-padding;
+                                align-items: center;
+                            }
+                        }
+                        .line{
+                            height: 1rpx;
+                            background: @gray-color;
+                        }
+                        .button-wrapper{
+                            display: flex;
+                            .op-button{
+                                display: flex;
+                                height: 100%;
+                                flex-direction: row;
+                                justify-content: center;
+                                align-items: center;
+
+                                margin-left: @middle-padding;
+                                &.delete-button{
+                                background-color: @warn-color;
+                                color: @white-color;
+                                }
+                                &.set-admin-button{
+                                background-color: @gray-color;
+                                color: @white-color;
+                                }
+                                .button-text{
+                                padding: 0 calc(@middle-padding * 2);
+                                }
+                            }
+                            }
+                        
+                    }
+                    
+                }
+                
+            }
+        }
+    }
+</style>
+
+// LaunchPage.vue
+<template>
+  <view class="page-wrapper">
+      <text>欢迎使用</text>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { useStore } from '../stores/useStore'
+import {getUserDataService} from '../service';
+import {httpRequest} from '../utils/HttpUtils';
+const store = useStore()
+const token:string = uni.getStorageSync('token');
+uni.getSystemInfo({
+  success:  (info)=> {
+    store.setDeviceInfo(info);
+  }
+});
+
+setTimeout(()=>{
+    if(token){
+        getUserDataService(token).then((res)=>{
+          store.setUserData(res.data)
+          store.setToken(res.token)
+          uni.setStorage({key:'token',data:res.token});
+          httpRequest.setToken(res.token);
+          uni.redirectTo({url: '../pages/ChatPage'})
+        }).catch((err)=>{
+          uni.redirectTo({url: '../pages/LoginPage'})
+        })
+    }else{
+        uni.redirectTo({url: '../pages/LoginPage'})
+    }
+},1000)
+
+
+</script>
+
+<style lang="less" scoped>
+@import '../theme/color.less';
+@import '../theme/size.less';
+@import '../theme/style.less';
+.page-wrapper{
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: @page-background-color;
+}
+</style>
+
+
+// UpdatePasswordPage.vue
+<template>
+	<view class="page-wrapper">
+		<NavigatorTitleComponent title="修改密码"/>
+		<view class="module-block module-block-column">
+
+			<view class="login-input-wrapper">
+				<image :src="icon_password" class="icon-login"/>
+				<input type="password" v-model="oldPassword" class="login-input" placeholder="请输入旧密码"/>
+			</view>
+
+			<view class="login-input-wrapper">
+				<image :src="icon_password" class="icon-login"/>
+				<input type="password" v-model="newPassword" class="login-input" placeholder="请输入新密码"/>
+			</view>
+
+			<view class="login-input-wrapper">
+				<image :src="icon_password" class="icon-login"/>
+				<input type="password" v-model="newConfirmPassword" class="login-input" placeholder="请输入新确定密码"/>
+			</view>
+		</view>
+		<view class="login-btn" @click="useSumbit">提交</view>
+	</view>
+</template>
+
+<script setup lang="ts">
+	import { ref } from 'vue';
+	import NavigatorTitleComponent from '../components/NavigatorTitleComponent.vue';
+	import { updatePasswordService } from '../service';
+	import icon_password from "../../static/icon_password.png";
+
+	const newPassword = ref<string>("")
+	const newConfirmPassword = ref<string>("");
+	const oldPassword = ref<string>("");
+
+	let loading:boolean = false;
+
+	const useSumbit = () => {
+		if(!newPassword.value){
+			uni.showToast({
+				duration:2000,
+				position:'center',
+				title:'请输入旧密码'
+			})
+		}else if(!newPassword.value.trim()){
+			uni.showToast({
+				duration:2000,
+				position:'center',
+				title:'新密码不能为空'
+			})
+		}else if(!newConfirmPassword.value.trim()){
+			uni.showToast({
+				duration:2000,
+				position:'center',
+				title:'确定密码不能为空'
+			})
+		}else{
+			if(loading)return;
+			uni.showLoading();
+			//修改密码，oldPassword表示旧密码，newPassword表示新密码
+			updatePasswordService(oldPassword.value,newPassword.value).then((res)=>{
+				if(res.data > 0 ){// 修改密码成功，弹出提示
+					uni.showToast({
+						duration:2000,
+						position:'center',
+						title:'修改密码成功'
+					});
+					uni.navigateBack();// 返回上一层
+				}else{
+					uni.showToast({
+						duration:2000,
+						position:'center',
+						title:'修改密码失败'
+					});
+				}
+			}).catch((err)=>{// 修改密码失败
+				uni.showToast({
+					duration:2000,
+					position:'center',
+					title: err.msg
+				});
+			}).finally(()=>{
+				loading = false;
+				uni.hideLoading();
+			})
+		}
+	}
+</script>
+
+<style lang="less" scoped>
+	@import '../theme/color.less';
+	@import '../theme/size.less';
+	@import '../theme/style.less';
+	.page-wrapper{
+		.module-block{
+			align-items: center;
+			margin: @middle-padding @middle-padding 0;
+			gap:@middle-padding;
+			.login-input-wrapper{
+				display: flex;
+				align-items: center;
+				width: 100%;
+				border: 1rpx solid @gray-color;
+				padding: @middle-padding;
+				box-sizing: border-box;
+				border-radius: @big-border-radius;
+				.icon-login{
+					width: @small-icon-size;
+					height: @middle-icon-size;
+				}
+				.login-input{
+					flex: 1;
+					margin-left: @middle-padding;
+				}
+			}
+
+			.register-btn{
+				text-align: center;
+				width: 100%;
+				border: 1rpx solid @gray-color;
+				padding: @middle-padding;
+				box-sizing: border-box;
+				border-radius: @big-border-radius;
+				margin-top:  @middle-padding;
+				display: inline-block;
+				background-color: transparent;
+			}
+		}
+		.login-btn{
+			text-align: center;
+			margin: @middle-padding;
+			padding: @middle-padding;
+			box-sizing: border-box;
+			border-radius: @big-border-radius;
+			background-color: @warn-color;
+			color: @white-color;
+			display: inline-block;
+		}
+	}
+</style>
+
+
+// ChatPage.vue
+<template>
+	<view class="page-wrapper">
+		<view class="page-header">
+			<AvaterComponent size="small"/>
+			<view class="title-wrapper">
+				<text @click="onSwitchTenant">{{ store.tenantUser?.tenantName || '租户' }}</text>
+				<text>|</text>
+				<text @click="onSwitchModel">{{chatModelList.length > 0 ? chatModelList[activeModelIndex].modelName : ""}}</text>
+			</view>
+			<view class="menu-wrapper">
+				<image class="icon-small icon-record" @click="onShowMenu" :src="icon_menu"/>
+				<template v-if="showMenu">
+					<view class="menu-box" >
+						<view class="menu-arrow"></view>
+						<view class="menu-list">
+							<view class="menu-item" @click="onUploadDoc">上传文档</view>
+							<view class="menu-line"></view>
+							<view class="menu-item" @click="onShowMyDoc">我的文档</view>
+							<view class="menu-line"></view>
+							<view class="menu-item" @click="onShowHistory">会话记录</view>
+							<view class="menu-line"></view>
+							<view class="menu-item" @click="onSwitchModel">切换模型</view>
+							<view class="menu-line"></view>
+							<view class="menu-item" @click="onSettingPrompt">设置提示词</view>
+							<view class="menu-line"></view>
+							<view class="menu-item" @click="onMyPrompt">我收藏的提示词</view>
+						</view>
+					</view>
+					<view class="menu-mask" @click="onHideMenu"></view>
+				</template>
+			</view>
+		</view>
+		<view class="page-body">
+			<scroll-view class="scroll-view" scroll-y :show-scrollbar="false" :scroll-top="scrollTop" @scroll="onScroll">
+				<view class="chat-list">
+					<template v-for="item,index in chatList" :key="'chat'+index">
+						<view class="chat-wrapper">
+							<template v-if="item.position === PositionEnum.LEFT && (item.thinkContent || item.responseContent)">
+								<image :src="icon_ai" class="icon-middle"/>
+								<view class="chat-text-wrapper">
+									<view class="chat-text chat-prompt">
+										<view class="icon-angle icon-angle-left"></view>
+											<view class="think-text" v-if="item.thinkContent">
+												<text>
+													{{ item.thinkContent.replace(/^(<think>)[\s\s\n]?|(<\/think>[\s\S\n]?)$/gi,"") }}
+												</text>
+											</view>
+											<!-- 正式回答黑色区块 -->
+											 <view class="response-box">
+												<mp-html :content="marked.parse(item.responseContent)"></mp-html>
+											 </view>
+									</view>
+								</view>		
+								<image v-if="item.type === 'system'" @click="onEditPrompt" :src="icon_edit" class="icon-small"/>
+							</template>
+							<template v-else-if="item.text">
+								<view class="chat-prompt-wrapper">
+									<view class="chat-prompt">
+										<view class="icon-angle icon-angle-right"></view>
+										<text>{{ item.text }}</text>
+									</view>
+								</view>
+								<AvaterComponent/>
+							</template>
+						</view>
+					</template>
+					<view class="chat-wrapper" v-if="thinking">
+						<image :src="icon_ai" class="icon-middle"/>
+						<view class="chat-text-wrapper">
+							<view class="chat-text chat-prompt">
+								<view class="icon-angle icon-angle-left"></view>
+								<view  class="think-text">
+									<text>正在思考中</text>
+								</view>
+							</view>
+						</view>	
+					</view>
+				</view>
+			</scroll-view>
+		</view>
+		<scroll-view scroll-x class="scroll-container">
+			<view class="type-wrapper">
+				<text class="type-item" :class="{'type-item-active': showThink}" @click="onSwitchThink()">深度思考</text>
+				<view  class="type-item type-item-doc" :class="{'type-item-active': type === 'document'}">
+					<text @click="onCheckType('document')">知识库</text>
+					<image class="icon-mini" @click="onSetDocument" :src="type == 'document' ? icon_setting_active : icon_setting_disabled"/>
+				</view>
+				<view class="type-item type-item-language" @click="onSwitchLang()"><text>{{ language }}</text><image class="icon-small" :src="icon_switch"/></view>
+			</view>
+		</scroll-view>
+		
+		<view class="input-wrapper">
+			<image :src="icon_chat" class="icon-middle icon_send" @click="onCreateNewChat"/>
+			<input class="chat-input" placeholder="有问题，尽管问" v-model="inputValue">
+			<view class="icon-wrapper">
+				<image v-show="isCompleted" :src="icon_send" class="icon-middle icon_send" @click="onSend"></image>
+				<view class="icon-sending" v-show="!isCompleted"></view>
+			</view>
+		</view>
+		<view class="side-wrapper" v-show="showHistory">
+			<scroll-view class="pop-scroll-view side-scroll-view" scroll-y :show-scrollbar="false" @scrolltolower="onScrolltolower">
+				<view class="history-list">
+					<view class="chat-item" :key="items.timeAgo" v-for="items in chatHistoryData">
+						<text class="chat-time">{{ items.timeAgo }}</text>
+						<text class="chat-content" @click="onChat(item)" :key="'chat-content'+index" v-for="item,index in items.list">{{ item[0].prompt }}</text>
+					</view>
+				</view>
+			</scroll-view>
+			<view class="side-mask" @click="onClose"></view>
+		</view>
+		<DialogComponent v-if="showMyDoc" @onClose="showMyDoc = false">
+			<template #header>
+				<text class="dialog-header">我的文档</text>
+			</template>
+			<template #content>
+				<scroll-view class="pop-scroll-view" scroll-y :show-scrollbar="false">
+					<uni-swipe-action>
+						<template v-for="aItem,aIndex in myDocList" :key="'docList'+aIndex">
+							<text class="directory-name">{{ aItem.directoryName }}</text>
+							<uni-swipe-action-item v-for="item,bIndex in aItem.docList" :key="item.id">
+								<view class="doc-item">
+									<text class="doc-name">{{ item.name }}</text>
+									<text class="doc-time"> {{ formatTimeAgo(item.createTime) }}</text>
+								</view>
+								<template v-slot:right>
+									<view class="delete-button" @click="onDeleteDoc(item,aIndex,bIndex)"><text class="delete-button-text">删除</text></view>
+								</template>
+							</uni-swipe-action-item>
+							<view class="line" v-if="aIndex < myDocList.length -1"></view>
+						</template>
+					</uni-swipe-action>
+				</scroll-view>
+			</template>
+		</DialogComponent>
+		<OptionsDialog ref="modelOptionsDialog" @onCheck="onCheckModel" :options="chatModelOption"/>
+		<OptionsDialog ref="tenantOptionsDialog" @onCheck="onSelectTenant" :options="tenantOptionList"/>
+		<PopupComponent :text="dialogText" @on-sure="sureDeleteDoc" ref="popupComponent"></PopupComponent>
+		<DialogComponent v-if="showDirDialog" @onClose="showDirDialog = false">
+			<template #header>
+				<image :src="icon_menu_add" @click="onCreateDirectory" class="icon-middle icon-add-directory" />
+				<text class="dialog-header">选择文件夹</text>
+			</template>
+			<template #content>
+				<view class="directory-wrapper">
+					<scroll-view scroll-y class="directory-scroll" :show-scrollbar="false">
+						<radio-group class="directory-list module-block" @change="onSelectDirectory">
+							<label class="directory-item" v-for="item in directoryList" :key="item.id">
+								<view class="directory-name-wrapper">
+									<text class="directory-name">{{ item.directory }}</text>
+								</view>
+								<radio :checked="directoryId === item.id" :value="item.id"></radio>
+							</label>
+						</radio-group>
+					</scroll-view>
+					<view class="dialog-btn-wrapper">
+						<text class="dialog-btn dialog-btn-sure" @click="onUploadSure">确定</text>
+						<text class="dialog-btn dialog-btn-cancle" @click="showDirDialog = false">取消</text>
+					</view>
+				</view>
+				<view class="create-dialog" v-if="showCreateDialog">
+					<view class="create-mask" @click="showCreateDialog = false"></view>
+					<view class="create-wrapper">
+						<view class="create-form">
+							<text>文件夹名称</text>
+							<input class="directory-input" v-model="directoryName">
+						</view>
+						<view class="create-btn-wrapper">
+							<text class="create-btn create-sure" @click="onSureCreate">确定</text>
+							<text class="create-btn create-cancle" @click="showCreateDialog = false">取消</text>
+						</view>
+					</view>
+
+				</view>
+			</template>
+		</DialogComponent>
+
+		<DialogComponent v-if="showCheckDocument" @onClose="showCheckDocument = false">
+			<template #header>
+				<text class="dialog-header">知识库</text>
+			</template>
+			<template #content>
+				<view class="directory-wrapper">
+					<scroll-view scroll-y class="directory-scroll" :show-scrollbar="false">
+						<view class="directory-list module-block">
+							<view class="directory-item" v-for="item in myDocList" :key="item.directoryName">
+								<view class="directory-info"  @click="onExpandDir(item)">
+									<text class="directory-name" @click="">{{ item.directoryName }}</text>
+									<image class="icon-mini" :class="item.expand ? 'icon-rotate': '' " :src="icon_arrow"></image>
+								</view>
+								<view class="doc-wrapper" v-if="item.expand && item.docList?.length">
+									<view class="doc-item" v-for="value in item.docList">
+										<text class="doc-name">{{ value.name }}</text>
+										<radio :checked="value.checked" @click="checkDoc(value)" :value="value.id"></radio>
+									</view>
+								</view>
+							</view>
+
+						</view>
+					</scroll-view>
+					<view class="dialog-btn-wrapper">
+						<text class="dialog-btn dialog-btn-sure" @click="onSureCheck">确定</text>
+						<text class="dialog-btn dialog-btn-cancle" @click="showCheckDocument = false">取消</text>
+					</view>
+				</view>
+			</template>
+		</DialogComponent>
+	</view>
+</template>
+
+<script setup lang="ts">
+	import { marked } from 'marked';
+	import mpHtml from "mp-html/dist/uni-app/components/mp-html/mp-html";
+	import 'highlight.js/styles/github.css';
+	import "highlight.js/styles/paraiso-light.css";
+    import { reactive, ref, onBeforeUnmount,defineAsyncComponent } from 'vue';
+	import icon_send from '../../static/icon_send.png';
+	import icon_menu from '../../static/icon_menu.png';
+	import icon_ai from '../../static/icon_ai.png';
+	import icon_chat from '../../static/icon_chat.png';
+	import icon_switch from '../../static/icon_switch.png';
+	import icon_menu_add from '../../static/icon_menu_add.png';
+	import icon_edit from "../../static/icon_edit.png";
+	import icon_setting_active from "../../static/icon_setting_active.png";
+	import icon_setting_disabled from "../../static/icon_setting_disabled.png";
+	import icon_arrow from "../../static/icon_arrow.png";
+	import AvaterComponent from '../components/AvaterComponent.vue';
+    import type {
+      OptionType,
+      DocumentInterface,
+      ChatHistoryType,
+      ChatType,
+      ChatStructure,
+      ChatModelType,
+      GroupedByChatIdType,
+      FileType,
+      PayloadInterface,
+      UploadFile,
+      UploadResponse,
+      DirectoryInterce,
+      TenantUserType,
+	  DirectoryCheckInterface,
+	  PromptInterface,
+	  TenantType
+    } from '../types';
+    import { PositionEnum } from '../enum';
+	import { formatTimeAgo, generateSecureID } from "../utils/util";
+    import {HOST, PAGE_SIZE, DEFAULT_TENANT_USER} from '../common/constant';
+	import api from '@/api';
+    import {
+      getChatHistoryService,
+      getModelListService,
+      getMyDocumentService,
+      deleteMyDocumentService,
+      getDirectoryListService,
+      createDirectoryService,
+      getTenantUserService,
+      getPromptService,
+      getTenantListService
+    } from "../service";
+	import { useStore } from "../stores/useStore";
+	import uniSwipeAction from '@dcloudio/uni-ui/lib/uni-swipe-action/uni-swipe-action.vue';
+	import uniSwipeActionItem from '@dcloudio/uni-ui/lib/uni-swipe-action-item/uni-swipe-action-item.vue';
+	import PopupComponent from "../components/PopupComponent.vue";
+	import {LanguageEnum,LanguageMap} from '../enum/index';
+
+	const OptionsDialog = defineAsyncComponent(()=>import('../components/OptionsDialog.vue'))
+	const DialogComponent = defineAsyncComponent(()=>import('../components/DialogComponent.vue'));
+
+	// 响应式状态
+	let socketTask: UniApp.SocketTask | null = null; // WebSocket 实例
+	const isCompleted = ref<boolean>(true);
+	const chatHistoryData = reactive<Array<ChatStructure>>([]);
+	const pageNum = ref<number>(1);
+	const showHistory = ref<boolean>(false);
+	const total = ref<number>(0);
+	let chatId:string = "";
+	let deleteIndex:number = -1;
+	let deleteDirIndex:number = -1;
+	const popupComponent = ref<null | InstanceType<typeof PopupComponent>>(null);
+	const inputValue = ref<string>("");
+	const store = useStore();
+	const scrollTop = ref<number>(0);
+	const activeModelIndex = ref<number>(0);
+	const showMenu = ref<boolean>(false);
+	const showMyDoc = ref<boolean>(false);
+	const myDocList = reactive<DirectoryCheckInterface[]>([]);
+	const showThink = ref<boolean>(false);// 是否深度思考
+	const thinking = ref<boolean>(false);
+	const dialogText = ref<string>("");// 弹窗的内容
+	const checkedDocIds = reactive<string[]>([]);
+	const chatList = reactive<Array<ChatType>>([
+		{
+			responseContent:"你好，我是智能助手小吴同学，请问有什么可以帮助您？",
+			position: PositionEnum.LEFT,
+			type:"system"
+		}
+	]);
+	const chatModelList = reactive<Array<ChatModelType>>([]);
+	const chatModelOption = reactive<Array<OptionType>>([]);
+	const modelOptionsDialog = ref<null | InstanceType<typeof OptionsDialog>>(null);
+	const tenantOptionsDialog = ref<null | InstanceType<typeof OptionsDialog>>(null);
+	const tenantOptionList = reactive<OptionType[]>([]);
+	const type = ref<string>("");
+	const language = ref<LanguageEnum>(LanguageEnum.zh);
+	const directoryId = ref<string>("default");
+	const mDirectoryId = ref<string>("default");// 待确定选择的文件夹
+	const showDirDialog = ref<boolean>(false);// 实现上传文档的目录
+	const showCreateDialog = ref<boolean>(false);// 创建文件夹弹窗
+	const directoryName = ref<string>("");// 文件夹名称
+	const showCheckDocument = ref<boolean>(false);
+	const promptData = ref<PromptInterface | null>(null); // 存储提示词对象
+	const directoryList = reactive<DirectoryInterce[]>([{
+		directory:"默认文件夹",
+		id:"public",
+    	tenantId:store.tenantUser?.id??"",
+	}]);
+
+	// 支持的MIME类型映射
+    const supportedMimeTypes = {
+      'txt': 'text/plain',
+      'pdf': 'application/pdf'
+    }
+
+	// 支持的扩展名
+    const supportedExtensions = Object.keys(supportedMimeTypes) as FileType[]
+    /**
+	 * @author: wuwenqiang
+	 * @description: 获取模型列表
+	 * @date: 2025-06-02 21:45
+	 */
+	getModelListService().then((res)=>{
+		chatModelList.push(...res.data);
+		res.data.forEach((item,index)=>chatModelOption.push({value:index,text:item.modelName}));
+    	activeModelIndex.value = 0;
+	});
+
+    /**
+	 * @author: wuwenqiang
+	 * @description: 发送
+	 * @date: 2025-05-10 22:13
+	 */
+	const onSend = async() => {
+		if(inputValue.value.trim()){
+			chatList.push({
+				text:inputValue.value.trim(),
+				position:PositionEnum.RIGHT
+			});
+			if(!chatId)chatId = generateSecureID();
+			const item:ChatType = {
+				text:"",
+				position:PositionEnum.LEFT,
+				thinkContent:"",
+				responseContent:"",
+				start:false
+			}
+			chatList.push(item);
+			const payload:PayloadInterface = {
+				modelId: chatModelList[activeModelIndex.value].id,
+				chatId, // 替换为实际聊天ID
+				type:type.value,
+				systemPrompt:store.prompt,
+				docIds:type.value == 'document' ? checkedDocIds : [],
+				prompt: inputValue.value.trim(),
+				showThink:showThink.value,
+        		tenantId:store.tenantUser?.id!,
+				language: LanguageMap[language.value],
+			};
+			console.log(payload)
+			await connectWebSocket();
+			socketTask?.send({
+				data: JSON.stringify(payload),
+				success: () => {
+					console.log('消息发送成功');
+					inputValue.value = "";
+					isCompleted.value = false;
+					thinking.value = true;
+				},
+				fail: (err) => {
+					uni.showToast({
+						duration: 2000,
+						position: 'center',
+						title: '发送消息失败：' + err.toString()
+					});
+				}
+			});
+		}	
+	}
+
+	/**
+	 * @description: 返回按钮
+	 * @date: 2024-05-10 22:10
+	 * @author wuwenqiang
+	 */
+     const useBack = ()=>{
+		uni.navigateBack()
+	}
+
+	/**
+	 * @description: 加载历史记录
+	 * @date: 2024-05-10 22:10
+	 * @author wuwenqiang
+	 */
+	const useChatHistory = () => {
+		chatHistoryData.length = 0;
+		getChatHistoryService(store.tenantUser.id,pageNum.value,PAGE_SIZE).then((res) => {
+			total.value = res.total;
+			const chatIdGroud:GroupedByChatIdType = {};
+			res.data.forEach((item)=>{
+				item.timeAgo = formatTimeAgo(item.createTime);
+				if(!chatIdGroud[item.chatId]){
+					chatIdGroud[item.chatId] = [];
+				}
+				chatIdGroud[item.chatId].push(item)
+			});
+			for(let key in chatIdGroud){
+				chatIdGroud[key].reverse();
+				const timeAgo:string = chatIdGroud[key][0].timeAgo;
+				let items = chatHistoryData.find((item)=>item.timeAgo === timeAgo);
+				if(!items){
+					items = {
+						timeAgo,
+						list:[]
+					}
+					chatHistoryData.push(items)
+				}
+				items?.list.unshift(chatIdGroud[key])
+			}
+		});
+	}
+
+	/**
+	 * @description: 展示历史记录
+	 * @date: 2025-05-18 12:29
+	 * @author wuwenqiang
+	 */
+	const onShowHistory = ()=>{
+		showHistory.value = true;
+		showMenu.value = false;
+		pageNum.value = 1;
+		useChatHistory();
+	}
+
+	/**
+	 * @description: 展示菜单
+	 * @date: 2025-06-21 12:56
+	 * @author wuwenqiang
+	 */
+	const onShowMenu = () =>{
+		showMenu.value = true;
+	}
+
+	/**
+	 * @description: 展示菜单
+	 * @date: 2025-06-21 12:56
+	 * @author wuwenqiang
+	 */
+	const onHideMenu = () =>{
+		showMenu.value = false;
+	}
+
+	/**
+	 * @description: 滚动加载历史记录
+	 * @date: 2024-05-18 12:29
+	 * @author wuwenqiang
+	 */
+	const onScrolltolower = ()=>{
+		if(total.value > pageNum.value * PAGE_SIZE){
+			useChatHistory();
+		}
+	}
+
+	/**
+	 * @description: 滚动加载历史记录
+	 * @date: 2024-05-18 12:29
+	 * @author wuwenqiang
+	 */
+	const onChat = (chatHistoryList:Array<ChatHistoryType>)=>{
+		chatList.length = 0;
+		showHistory.value = false;
+		chatId = chatHistoryList[0].chatId;
+		chatHistoryList.forEach((item)=>{
+			chatList.push({
+				text:item.prompt,
+				position:PositionEnum.RIGHT,
+			});
+			chatList.push({
+				text:"",
+				start:true,
+				position:PositionEnum.LEFT,
+				thinkContent: item.thinkContent,
+				responseContent: item.responseContent
+			});
+		})
+	}	
+
+	const connectWebSocket = () => {
+		return new Promise((resolve,reject)=>{
+			socketTask = uni.connectSocket({
+				url: `${HOST.replace(/http[s]?/,'ws')}${api.chatWs}?token=${store.token}`,
+				success: (res) => {
+					console.log('WebSocket 连接成功:', res);
+					
+				},
+				fail: (err) => {
+				console.error('WebSocket 连接失败:', err);
+				}
+			});
+
+			socketTask.onOpen(() => {
+				resolve(null)
+				console.log('WebSocket 连接已建立');
+			});
+
+			socketTask.onMessage(({data}) => {
+				thinking.value = false;
+				if(data == "[completed]"){
+					return isCompleted.value = true;
+					closeSocket()
+				}
+				chatList[chatList.length - 1].start = true;
+				// 匹配所有形式的 `<think>` 标签（包括属性和自闭合）
+				const regex = /<think>([\s\S]*?)<\/think>/gi
+				if(!showThink.value || regex.test(chatList[chatList.length - 1].thinkContent || "")){
+					chatList[chatList.length - 1].responseContent += data;
+				}else{
+					chatList[chatList.length - 1].thinkContent += data;
+				}
+				scrollTop.value+=10
+			});
+
+			socketTask.onError((err) => {
+				console.error('WebSocket 错误:', err);
+				thinking.value = false;
+			});
+
+			socketTask.onClose(() => {
+				thinking.value = false;
+				console.log('WebSocket 连接已关闭');
+			});
+			
+		})
+      
+    };
+
+	/**	
+	 * @description: 创建新会话
+	 * @date: 2025-06-21 12:19
+	 * @author wuwenqiang
+	 */	
+	const onCreateNewChat = () => {
+		chatList.length = 0;
+		chatId = "";
+		chatList.push({
+			responseContent:"你好，我是智能音乐助手小吴同学，请问有什么可以帮助您？",
+			position: PositionEnum.LEFT
+		});
+	}
+
+	/**	
+	 * @description: 上传文档
+	 * @date: 2025-06-21 12:58
+	 * @author wuwenqiang
+	 */	
+    const onUploadDoc = () => {
+      showDirDialog.value = true;
+      showMenu.value = false;
+      directoryList.splice(1,directoryList.length);
+      getDirectoryListService(store.tenantUser.tenantId??"").then((res)=>{
+        directoryList.push(...res.data);
+      });
+	  };
+
+	/**	
+	 * @description: 展示我的文档
+	 * @date: 2025-06-21 12:58
+	 * @author wuwenqiang
+	 */
+	const onShowMyDoc = () => {
+		uni.showLoading();
+		getMyDocumentList().then((res)=>{
+			showMyDoc.value = true;
+			showMenu.value = false;
+			myDocList.length = 0;
+			myDocList.push(...res);
+		}).finally(()=>{
+			uni.hideLoading();
+		});
+	}
+
+	const getMyDocumentList = ():Promise<DirectoryCheckInterface[]> => {
+		return getMyDocumentService(store.tenantUser?.tenantId??"personal").then((res)=>{
+			const myDocList:DirectoryCheckInterface[] = []
+			res.data.forEach((aItem)=>{
+				let bItems = myDocList.find((item)=>{
+					return item.directoryName === aItem.directoryName;
+				});
+				if(!bItems){
+					bItems = {
+						directoryName:aItem.directoryName,
+						docList:[] as DocumentInterface[]
+					};
+					myDocList.push(bItems);
+				}
+				aItem.checked = checkedDocIds.includes(aItem.id);
+				bItems.docList.push(aItem);
+			});
+			return myDocList;
+		})
+	}
+
+	const onClose = ()=>{
+		showMyDoc.value = showHistory.value = false;
+	}
+
+	const onScroll = (event : Event)=>{
+		scrollTop.value = event.detail.scrollTop
+	}
+
+	// 在组件卸载前断开 WebSocket 连接
+    onBeforeUnmount(() => {
+      	socketTask?.close({
+          success: () => {
+            console.log('WebSocket 连接已关闭');
+          }
+        });
+    });
+	
+	const closeSocket = ()=>{
+		socketTask?.close({
+          success: () => {
+            console.log('WebSocket 连接已关闭');
+          }
+        });
+	}
+	/**	
+	 * @description: 选择文档
+	 * @date: 2025-06-21 18:47
+	 * @author wuwenqiang
+	 */
+	const onCheckType = (checkType:string)=>{
+		type.value = type.value === checkType ? "" : checkType;
+	}
+
+	/**	
+	 * @description: 是否开启深度思考
+	 * @date: 2025-06-21 18:47
+	 * @author wuwenqiang
+	 */
+	const onSwitchThink = () => {
+		showThink.value = !showThink.value;
+	}
+
+	/**	
+	 * @description: 切换模型
+	 * @date: 2025-07-05 18:47
+	 * @author wuwenqiang
+	 */
+	const onSwitchModel = ()=>{
+		modelOptionsDialog.value?.$refs.popup.open('top');
+		showMenu.value = false;
+	}
+
+	/**	
+	 * @description: 选择模型
+	 * @date: 2025-07-05 18:47
+	 * @author wuwenqiang
+	 */
+	const onCheckModel = (index:number) => {
+    activeModelIndex.value = index
+	}
+
+	/**	
+	 * @description: 删除文档
+	 * @date: 2025-07-12 13:03
+	 * @author wuwenqiang
+	 */
+	const onDeleteDoc = (item:DocumentInterface,dirIndex:number,index:number) =>{
+		deleteIndex = index;
+		deleteDirIndex = dirIndex;
+		dialogText.value = `是否删除文档：${item.name}`;
+		popupComponent.value?.popup.value?.open('top');
+	}
+
+	/**	
+	 * @description: 确认删除文档
+	 * @date: 2025-07-12 13:03
+	 * @author wuwenqiang
+	 */
+	const sureDeleteDoc = ()=>{
+		deleteMyDocumentService(myDocList[deleteDirIndex][deleteIndex].id,directoryId.value).then((res)=>{
+			uni.showToast({
+				duration:2000,
+				position:'center',
+				title: "删除文档成功"
+			});
+			myDocList.splice(deleteIndex,1);
+			popupComponent.value?.popup?.close();
+		}).catch(()=>{
+			uni.showToast({
+				duration:2000,
+				position:'center',
+				title: "删除文档失败"
+			});
+		});
+	}
+
+	const onSwitchLang = ()=>{
+		language.value = language.value === LanguageEnum.zh ? LanguageEnum.en : LanguageEnum.zh
+	}
+
+	const onCreateDirectory = ()=>{
+		showCreateDialog.value = true;
+	}
+
+	const onCreateSure = ()=>{
+		if(!directoryName.value)
+		return uni.showToast({
+			duration:2000,
+			position:'center',
+			title: "请输入文件夹名称"
+		});
+		if(directoryList.find((item)=>item.directory === directoryName.value)){
+			return uni.showToast({
+				duration:2000,
+				position:'center',
+				title: "文件夹名称已存在"
+			});
+		}
+		createDirectoryService({directory:directoryName.value,tenantId:store.tenantUser?.tenantId??""}).then((res)=>{
+			 uni.showToast({
+				duration:2000,
+				position:'center',
+				title: "创建文件夹成功"
+			});
+			directoryList.splice(1,0,res.data);
+			showCreateDialog.value = false;
+		}).catch((res)=>{
+			uni.showToast({
+				duration:2000,
+				position:'center',
+				title: res.msg
+			});
+		})
+	}
+
+	const onSelectDirectory = (event:Event)=>{
+    directoryId.value = event.detail.value;
+  }
+
+  const onSelectDoc = (event:Event)=>{
+    mDirectoryId.value = event.detail.value;
+  }
+
+	const onUploadSure = ()=>{
+		uni.chooseFile({
+			count: 9,
+			type: 'file',
+			extension: supportedExtensions,
+			success: async (res: { tempFiles: UploadFile[] }) => {
+			// 过滤出符合类型的文件
+			const validFiles = res.tempFiles.filter(file => {
+				const ext = file.name.split('.').pop()?.toLowerCase() as FileType | undefined;
+				return ext && supportedExtensions.includes(ext);
+			});
+
+			if (validFiles.length === 0) {
+				uni.showToast({
+				icon: 'none',
+				title: '未选择有效的txt或pdf文件',
+				duration: 2000
+				});
+				return;
+			}
+
+			// 显示加载中
+			uni.showLoading({
+				title: '上传中...',
+				mask: true
+			});
+
+			try {
+				uni.addInterceptor('uploadFile', {
+					invoke(options) {
+						options.header = {
+							...options.header,
+							'Authorization': `Bearer ${store.token}`
+						};
+					}
+				});
+				// 使用Promise.all并行上传所有文件
+				const uploadPromises = validFiles.map(file => {
+					return new Promise<void>((resolve, reject) => {
+						uni.uploadFile({
+						url: `${HOST}${api.uploadDoc}/${store.tenantUser.tenantId}/${directoryId.value}`, // 替换为你的上传接口URL
+						filePath: file.path,
+						name: 'file',
+						formData: {
+							filename: file.name
+						},
+						success: (uploadRes) => {
+							try {
+							const data: UploadResponse = JSON.parse(uploadRes.data);
+							if (data.status !== "SUCCESS") {
+								reject(new Error(data.message || '上传失败'));
+							} else {
+								uni.showToast({
+									duration: 2000,
+									position: 'center',
+									title: '文件上传成功'
+								});
+								resolve();
+							}
+							} catch (e) {
+								reject(new Error('解析响应数据失败'));
+							}
+						},
+						fail: (err) => {
+							reject(new Error(err.errMsg || '上传请求失败'));
+						}
+						});
+					});
+				});
+
+				// 等待所有文件上传完成
+				await Promise.all(uploadPromises);
+				
+				// 上传成功提示
+				uni.showToast({
+					title: `成功上传${validFiles.length}个文件`,
+					icon: 'success',
+					duration: 2000
+				});
+				showDirDialog.value = false;
+			} catch (error) {
+				uni.showToast({
+					title: error instanceof Error ? error.message : '上传过程中出错',
+					icon: 'none',
+					duration: 2000
+				});
+			} finally {
+				showMenu.value = false;
+				uni.hideLoading();
+			}
+			},
+			fail: (err) => {
+				uni.showToast({
+					duration: 2000,
+					position: 'center',
+					title: "上传文档失败",
+					icon: 'none'
+				});
+			}
+		});
+	}
+
+	/**	
+	 * @description: 选择要查询的文件夹
+	 * @date: 2025-07-12 13:03
+	 * @author wuwenqiang
+	 */
+	const onSetDocument = ()=>{
+		if(type.value !== 'document'){
+			type.value = 'document';
+		}else{
+			showCheckDocument.value = true;
+			getMyDocumentList().then((res)=>{
+				myDocList.length = 0;
+				myDocList.push(...res);
+			})
+		}
+	
+	}
+
+	/**	
+	 * @description: 确定选择
+	 * @date: 2025-08-2 12:20
+	 * @author wuwenqiang
+	 */
+	const onSureCheck = ()=>{
+		showCheckDocument.value = false;
+		getCheckedDocIds();
+	}
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 获取提示词
+	 * @date: 2026-04-14
+	 * @author wuwenqiang
+	 */
+	const getPrompt = (tenantId: string) => {
+		if (!tenantId) return;
+		getPromptService(tenantId).then((res) => {
+			if (res.data) {
+				promptData.value = res.data;
+				// 如果后端返回了提示词，更新到 store 中
+				if (res.data.prompt) {
+					store.setPrompt(res.data.prompt);
+				}
+			}
+		}).catch((err) => {
+			console.error('获取提示词失败:', err);
+		});
+	}
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 获取租户列表（用于切换租户弹窗）
+	 * @date: 2026-04-14
+	 * @author wuwenqiang
+	 */
+	const getTenantListForSwitch = () => {
+		getTenantListService().then((res) => {
+			tenantOptionList.length = 0;
+			tenantOptionList.push({ value: store.userData.id!, text: "私人空间" });
+			res.data.forEach((item: TenantType) => {
+				tenantOptionList.push({ value: item.id, text: item.name });
+			});
+		});
+	}
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 显示租户切换弹窗
+	 * @date: 2026-04-14
+	 * @author wuwenqiang
+	 */
+	const onSwitchTenant = () => {
+		getTenantListForSwitch();
+		tenantOptionsDialog.value?.$refs.popup.open('top');
+	}
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 选择租户后切换
+	 * @date: 2026-04-14
+	 * @author wuwenqiang
+	 */
+	const onSelectTenant = (tenantId: string) => {
+		getTenantUserService(tenantId).then(res => {
+			const data: TenantUserType = res.data ? res.data as TenantUserType : {
+				id: "",
+				tenantId: store.userData.id!,
+				tenantName: "私人空间",
+				userId: store.userData.id!,
+				roleType: 0,
+				joinDate: "",
+				createBy: "",
+				username: store.userData.username,
+				avater: store.userData.avater,
+				disabled: 0,
+				email: store.userData.email
+			} as TenantUserType;
+			store.setTenantUser(data);
+			uni.setStorage({ key: `${store.userData.id}:tenantId`, data: data.tenantId ?? "" });
+			// 切换租户后重新获取提示词
+			getPrompt(data.tenantId ?? "");
+		});
+	}
+
+	/**
+	 * @author: wuwenqiang
+	 * @description: 获取租户i
+	 * @date: 2025-8-10 18:06
+	 */
+	const getStorageTenant = ()=>{
+		uni.getStorage({key:`${store.userData.id}:tenantId`}).then((res)=>{
+			const tenantId = res.data ?? "";
+			getTenantUserService(tenantId).then((respone)=>{
+				if(respone.data){
+					store.setTenantUser(respone.data as TenantUserType);
+					// 获取租户对应的提示词
+					getPrompt(tenantId);
+				}else{
+					store.setTenantUser(getDefaultTenantUser());
+					getPrompt(store.userData.id!);
+				}
+			}).catch(()=>{
+				store.setTenantUser(getDefaultTenantUser());
+				getPrompt(store.userData.id!);
+			});
+		}).catch(()=>{
+			store.setTenantUser(getDefaultTenantUser());
+			getPrompt(store.userData.id!);
+		});
+		uni.getStorage({key:`${store.userData.id}:prompt`}).then((res)=>{
+			if(res.data){
+				store.setPrompt(res.data)
+			}
+		})
+	}
+
+	const getDefaultTenantUser = ():TenantUserType=>{
+		const defaultTenantUser:TenantUserType = {...DEFAULT_TENANT_USER};
+		defaultTenantUser.tenantId = store.userData.id!;
+		defaultTenantUser.userId = store.userData.id!;
+		return defaultTenantUser;
+	}
+    /**
+     * @author: wuwenqiang
+     * @description: 获取租户i
+     * @date: 2025-8-10 18:06
+     */
+	const onSureCreate = ()=>{
+		createDirectoryService({directory:directoryName.value,tenantId:store.tenantUser.tenantId}).then(res=>{
+			if(res.data){
+			directoryList.splice(1,0,res.data);
+			}
+			showCreateDialog.value = false;
+			uni.showToast({
+			duration:2000,
+			position:'center',
+			title: `创建文件夹${res.data ? '成功' :'失败'}`
+			})
+		})
+	}
+
+	const onSettingPrompt = ()=>{
+		uni.navigateTo({url: `../pages/PromptPage`})
+		showMenu.value = false;
+	}
+
+	const onEditPrompt = ()=>{
+		uni.navigateTo({url: `../pages/SettingPromptPage`})
+		showMenu.value = false;
+	}
+
+	const onMyPrompt = ()=>{
+		uni.navigateTo({url: `../pages/MyPromptPage`})
+		showMenu.value = false;
+	}
+
+	 /**
+     * @author: wuwenqiang
+     * @description: 选中或取消选中文档
+     * @date: 2025-11-02 14:37
+     */
+	const checkDoc = (docItem:DocumentInterface) => {
+		docItem.checked = !docItem.checked;
+	}
+
+	const getCheckedDocIds = ()=>{
+		checkedDocIds.length = 0;
+		myDocList.forEach((aItem)=>{
+			aItem.docList?.forEach((bItem)=>{
+				if(bItem.checked)checkedDocIds.push(bItem.id);
+			})
+		});		
+	}
+
+	const onExpandDir = (item:DirectoryCheckInterface)=>{
+		item.expand = !item.expand;
+	}
+	
+	getStorageTenant()
+</script>
+
+<style lang="less" scoped>
+	@import '../theme/color.less';
+	@import '../theme/size.less';
+	@import '../theme/style.less';
+	.page-wrapper{
+		position: relative;
+		.page-header {
+			padding: @middle-padding;
+			display: flex;
+			justify-content: space-between;
+			background: @white-color;
+			align-items: center;
+			.title-wrapper {
+				flex: 1;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				gap:@middle-padding;
+				.tenant-name,.model-name {
+					font-size: @normal-font-size;
+				}
+			}
+			.icon-back{
+				width: @small-icon-size;
+				height: @small-icon-size;
+				opacity: 0.2;
+			}
+			.icon-record{
+				opacity: 0.5;
+			}
+			.menu-wrapper{
+				width: @small-icon-size;
+				height: @small-icon-size;
+				position: relative;
+				.menu-box{
+					position: absolute;
+					z-index: 2;
+					width: @popup-menu-width;
+					background-color: @pop-background-color;
+					right: -@arrow-size;
+					top: calc(@small-icon-size + @arrow-size);
+					border-radius: @module-border-radius;
+					.menu-arrow{
+						position: absolute;
+						width: 0;
+						height: 0;
+						top: @arrow-size;
+						border-top: @arrow-size solid transparent;   
+						border-bottom: @arrow-size solid @pop-background-color; 
+						border-right:@arrow-size solid transparent;;
+						border-left:@arrow-size solid transparent;
+						z-index: 1;
+						right: calc(@arrow-size * 2);
+						top: calc(@arrow-size * -2);
+					}
+					.menu-list{
+						padding: @middle-padding;
+						display: flex;
+						flex-direction: column;
+						color:@white-color;
+						gap:@middle-padding;
+						.menu-line{
+							height: 1rpx;
+							background-color: @pop-line-color;
+						}
+						.menu-item{
+
+						}
+					}
+				}
+				.menu-mask{
+					width: 100vw;
+					height: 100vh;
+					z-index: 1;
+					left: 0;
+					top:0;
+					position: fixed;
+					background-color: transparent;
+				}
+			}
+		}
+		.page-body{
+			flex: 1;
+			height: 0;
+			.scroll-view{
+				height: 100%;
+				.chat-list{
+					display: flex;
+					flex-direction: column;
+					gap: @middle-padding;
+					padding: @middle-padding;
+					.chat-wrapper{
+						display: flex;
+						gap:@middle-padding;	
+						.chat-prompt-wrapper{
+							flex: 1;
+							display: flex;
+							justify-content: flex-end;
+							.chat-prompt{
+								max-width: 100%;
+								background-color: @white-color;
+								padding: @middle-padding;
+								border-radius: @btn-border-radius;
+								position: relative;
+							}
+						}
+						.chat-text-wrapper{
+							flex: 1;
+							display: flex;
+							.chat-text{
+								max-width: 100%;
+								background-color: @white-color;
+								padding: @middle-padding;
+								border-radius: calc(@btn-border-radius / 2);
+								position: relative;
+								
+								.think-text{
+									color:@sub-title-color;
+								}
+							}
+						}
+						
+						.icon-angle{
+							position: absolute;
+							width: 0;
+							height: 0;
+							top: 15rpx;
+							border-top: 15rpx solid transparent;   
+							border-bottom: 15rpx solid transparent; 
+							&.icon-angle-left{
+								left: -15rpx;
+								border-right: 15rpx solid @white-color;
+							}
+							&.icon-angle-right{
+								right: -15rpx;
+								border-left: 15rpx solid @white-color;
+							}
+						}
+					}
+				}
+			}
+		}
+		.scroll-container {
+			width: 100%;
+			white-space: nowrap;
+			.type-wrapper{
+				display: flex;
+				justify-content: flex-start;
+				background-color: @page-background-color;
+				padding: @middle-padding 0;
+				gap: @middle-padding;
+				flex-wrap: nowrap;
+				width: auto;
+				float: left;
+				.type-item{
+					padding: @small-padding @middle-padding;
+					color: @sub-title-color;
+					border: 1rpx solid @gray-color;
+					border-radius: @big-border-radius;
+					background-color: @white-color;
+					display: flex;
+					justify-content: center;
+					align-items: center;
+					white-space: nowrap;
+					flex-shrink: 0;
+					gap:@small-padding;
+					&.type-item-doc{
+						display: flex;
+					}
+					&.type-item-language{
+						color: #000;
+					}
+					&.type-item-active{
+						border-color: @primary-color;
+						color:  @primary-color;
+					}
+					&:first-child{
+						margin-left: @middle-padding;
+					}
+					&:last-child{
+						margin-right: calc(@middle-padding * 3);
+					}
+				}
+			}
+		}
+		
+		.input-wrapper{
+			display: flex;
+			gap:@middle-padding;
+			padding: @middle-padding;
+			background-color: @white-color;
+			align-items: center;
+			.chat-input{
+				background-color: @page-background-color;
+				flex: 1;
+				height: @middle-avater;
+				border-radius: @middle-avater;
+				padding-left: @middle-padding;
+				box-sizing: border-box;
+			}
+			.icon-wrapper{
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				border-radius: 50%;
+				background-color: @page-background-color;
+				width:  @middle-avater;
+				height:  @middle-avater;
+				.icon-sending{
+					width: 35%;
+					height: 35%;
+					border-radius: @btn-border-radius;
+					background-color: @sub-title-color;
+				}
+			}
+		}
+		.directory-wrapper{
+			height: 100%;
+			display: flex;
+			flex-direction: column;
+			gap:@middle-padding;
+      		background: @page-background-color;
+			.create-directory{
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				padding: @middle-padding;
+			}
+			.directory-scroll{
+				flex: 1;
+				height: 0;
+        		margin-bottom: @middle-padding;
+				.directory-list{
+          			margin: @middle-padding;
+					.directory-item{
+						display: flex;
+						flex-direction: column;
+						align-items: center;
+						padding: @middle-padding;
+            			border-bottom: 1rpx solid @gray-color;
+						&:first-child{
+							padding-top: 0;
+						}
+						&:last-child{
+							border-bottom: none;
+							padding-bottom: 0;
+						}
+						.directory-info{
+							display: flex;
+							width: 100%;
+							align-items: center;
+							gap:@small-padding
+						}
+						.directory-name{
+							text-overflow: ellipsis;
+							white-space: nowrap;
+							overflow: hidden;
+						}
+						.icon-mini{
+							opacity: 0.5;
+							&.icon-rotate{
+								transform: rotate(90deg);
+							}
+						}
+						.check-part{
+							opacity: 0.5;
+						}
+						.doc-wrapper{
+							display: flex;
+							flex-direction: column;
+							width: 100%;
+							gap: @middle-padding;
+							margin-top: @middle-padding;
+							.doc-item{
+								display: flex;
+								.doc-name{
+									flex: 1;
+								}
+							}
+						}
+					}
+				}	
+			}	
+			.dialog-btn-wrapper{
+				display: flex;
+				gap:@middle-padding;
+				padding: @middle-padding;
+        		background: @white-color;
+				.dialog-btn{
+					flex: 1;
+					height: @input-height;
+					display: flex;
+					justify-content: center;
+					align-items: center;
+					border-radius: @input-height;
+					&.dialog-btn-sure{
+						color: @white-color;
+						background-color: @gray-color ;
+						border: 1rpx solid @gray-color;
+					}
+					&.dialog-btn-cancle{
+						border:1rpx solid @gray-color;
+					}
+				}
+			}		
+		}
+		.icon-add-directory{
+			position: absolute;
+			left: @middle-padding;
+			top: 50%;
+			transform: translateY(-50%);
+			opacity: 0.5;
+		}
+		.create-dialog{
+			width: 100vw;
+			height: 100vh;
+			position: fixed;
+			left: 0;
+			top:0;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			z-index: 1;
+			.create-mask{
+				width: 100%;
+				height: 100%;
+				position: absolute;
+				left: 0;
+				top:0;
+				background-color: @black-color;
+				opacity: 0.5;
+			}
+			.create-wrapper{
+				background: @white-color;
+				position: relative;
+				z-index: 1;
+				border-radius: @module-border-radius;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				width: 80%;
+				.create-tip{
+					width: 100%;
+					border-bottom: 1rpx solid @gray-color;
+					padding:  @middle-padding;
+					box-sizing: border-box;
+					margin-bottom: @middle-padding;
+					text-align: center;
+				}
+				.create-form{
+					padding: calc(@middle-padding * 3) @middle-padding;
+					display: flex;
+					gap:@middle-padding;
+					width: 100%;
+					align-items: center;
+					box-sizing: border-box;
+					.directory-input{
+						flex: 1;
+						height: @input-height;
+						outline: none;
+						padding: 0 @middle-padding;
+						border-radius: @module-border-radius;
+						border: 1rpx solid @gray-color;
+					}
+				}
+				
+				.create-btn-wrapper{
+					display: flex;
+					width: 100%;
+					border-top: 1rpx solid @gray-color;
+					.create-btn{
+						flex: 1;
+						display: flex;
+						justify-content: center;
+						align-items: center;
+						border-right: 1rpx solid @gray-color;
+						box-sizing: border-box;
+						height: @btn-height;
+						&.create-sure{
+							border-right: 1rpx solid @gray-color;
+							color:@gray-color;
+						}
+					}
+					
+				}
+			}
+		}
+		.side-wrapper{
+			position:fixed;
+			top: 0;
+			left:0;
+			width: 100vw;
+			height: 100vh;
+			
+			display: flex;
+			.side-mask{
+				flex:1;
+				background-color: @black-color;
+				opacity: 0.5;
+			}
+		}
+		.pop-scroll-view{
+			background-color: @white-color;
+			&.side-scroll-view{
+				width: 80%;
+			}
+			height: 100vh;
+			padding: @middle-padding;
+			box-sizing: border-box;
+			.line{
+				height: 1rpx;
+				background-color: @gray-color;
+				margin-bottom: @middle-padding;
+			}
+			.history-list{
+				padding: @middle-padding;
+				display: flex;
+				flex-direction: column;
+				gap: calc(@middle-padding * 2);
+				.chat-item{
+					display: flex;
+					flex-direction: column;
+					gap:  @middle-padding;
+					.chat-time{
+						color: @sub-title-color;
+					}
+					.chat-content{
+						display: block;
+						width: 100%;
+						overflow: hidden;
+						text-overflow: ellipsis;
+						white-space: nowrap;
+					}
+				}
+				
+			}
+			.delete-button{
+				display: flex;
+				height: 100%;
+				flex: 1;
+				flex-direction: row;
+				justify-content: center;
+				align-items: center;
+				background-color: @warn-color;
+				margin-left: @middle-padding;
+				.delete-button-text{
+					color: @white-color;
+					padding: 0 calc(@middle-padding * 2);
+				}
+			}
+			.directory-name{
+				padding-bottom: @middle-padding;
+				display: block;
+			}
+			.doc-item{
+				padding-bottom: @middle-padding;
+				border-bottom: 1rpx solid @gray-color;
+				padding-top: @middle-padding;
+				&:last-child{
+					border-bottom: none;
+				}
+				&:first-child{
+					padding-top:0;
+				}
+				.doc-name{
+					flex: 1;
+				}
+				.doc-time{
+					color: @sub-title-color;
+					padding-left: @middle-padding;
+				}
+				
+			}
+		}
+	}
+</style>
+
+// TenantManagePage.vue
+<template>
+    <view class="page-wrapper">
+		<NavigatorTitleComponent title="租户管理">
+			<template #default>
+				<image class="icon-small" @click="onShowAddDialog" :src="icon_menu_add"/>
+			</template>
+		</NavigatorTitleComponent>
+		<scroll-view class="page-body" scroll-y show-scrollbar="false" @scrolltolower="onScrolltolower">
+      <view>
+        <view class="module-block module-block-column">
+          <uniSwipeAction>
+            <template v-for="item,index in tenantUserList" :key="'user-info'+index">
+              <uniSwipeActionItem>
+                <view class="user-info"  :class="index === tenantUserList.length -1 ? 'user-info-last-child' : (index === 0 ? 'user-info-first-child' : '')">
+                  <image class="user-avater user-avater-small"  :src = "item.avater ? HOST + item.avater: defaulAvater"/>
+                  <text>{{item.username}}</text>
+                </view>
+                <template v-slot:right>
+                  <view class="button-wrapper">
+                    <view class="op-button set-admin-button">
+                      <text @click="onAdmin(item)" class="button-text">{{item.roleType === 1 ? '取消管理员' :'设为管理员'}}</text>
+                    </view>
+                    <view class="op-button delete-button">
+                      <text @click="onDeleteTenantUser(index)" class="button-text">删除</text>
+                    </view>
+                  </view>
+                </template>
+              </uniSwipeActionItem>
+              <view class="line" v-if="index < tenantUserList.length - 1"></view>
+            </template>
+          </uniSwipeAction>
+        </view>
+        <text class="load-data" v-if="total === tenantUserList.length">数据加载完毕</text>
+        <text class="load-data" v-else>增加加载更多</text>
+      </view>
+		</scroll-view>
+    <DialogComponent  v-if="showAddDialog" @onClose="showAddDialog = false">
+      <template #header>
+				<text class="dialog-header">添加用户</text>
+			</template>
+      <template #content>
+        <view class="dialog-content">
+          <view class="module-block">
+            <view class="search-wrapper">
+              <input class="search-input" v-model="inputValue" type="search" @keyup.enter="onSearchUser" placeholder="请输入用户姓名/账号/电话/邮箱"/>
+              <image :src="icon_search" @click="onSearchUser" class="icon-small"/>
+            </view>
+          </view>
+
+          <scroll-view class="user-scroll-view" scroll-y show-scrollbar="false" @scrolltolower="onLoadMoreUser">
+            <view class="module-block module-block-column user-list" v-if="searchUserList.length > 0">
+              <template v-for="item,index in searchUserList" :key="'search-user'+index">
+                <view class="user-info">
+                  <image class="user-avater user-avater-small"  :src = "item.avater ? HOST + item.avater: defaulAvater"/>
+                  <text class="user-name">{{item.username}}</text>
+                  <text class="user-account">{{item.userAccount}}</text>
+                  <image @click="addTenant(item)" class="icon-small" :src="item.checked ? icon_add_tenant_active :icon_add_tenant"></image>
+                </view>
+                <view class="line" v-if="index !== searchUserList.length - 1"></view>
+              </template>
+            </view>
+            <text class="load-data">暂无数据</text>
+          </scroll-view>
+        </view>
+      </template>
+    </DialogComponent>
+    <PopupComponent :text="'是否删除用户 ' + tenantUserList[deleteIndex]?.username" @on-sure="sureDeleteTenantUser" ref="popupComponent"></PopupComponent>
+	</view>
+</template>
+
+<script lang="ts" setup>
+import icon_menu_add from "../../static/icon_menu_add.png"
+import NavigatorTitleComponent from '../components/NavigatorTitleComponent.vue';
+import type{TenantUserType, UserWithChecked} from "../types";
+import {reactive, ref} from "vue";
+import {
+  getTenantUserListService, searchUserListService, addTenantUserService, addAdminService, deleteAdminService,
+  deleteTenantUserService
+} from "../service";
+import { useStore } from '../stores/useStore';
+import {HOST, PAGE_SIZE} from "../common/constant";
+import defaulAvater from "../../static/default_avater.png";
+import DialogComponent from "../components/DialogComponent.vue";
+import icon_search from "../../static/icon_search.png";
+import icon_add_tenant from "../../static/icon_add_tenant.png";
+import icon_add_tenant_active from "../../static/icon_add_tenant_active.png";
+import uniSwipeAction from '@dcloudio/uni-ui/lib/uni-swipe-action/uni-swipe-action.vue';
+import uniSwipeActionItem from '@dcloudio/uni-ui/lib/uni-swipe-action-item/uni-swipe-action-item.vue';
+import PopupComponent from "../components/PopupComponent.vue";
+
+const popupComponent = ref<null | InstanceType<typeof PopupComponent>>(null);
+const deleteIndex = ref<number>(-1);
+const showAddDialog = ref<boolean>(false);
+const total = ref<number>(0);// 总数
+const pageNum = ref<number>(1);
+const searchPageNum = ref<number>(1);
+const searchUserList = reactive<UserWithChecked[]>([]);// 搜索的用户列表
+const searchUserTotal = ref<number>(0);// 搜索总数
+const tenantUserList = reactive<TenantUserType[]>([]);
+const inputValue = ref<string>("");
+const store = useStore();
+
+/**
+ * @author: wuwenqiang
+ * @description: 获取租户列表
+ * @date: 2025-08-30 21:48
+ */
+const getTenantList = ()=>{
+  getTenantUserListService(store.tenantUser?.tenantId??"",pageNum.value,PAGE_SIZE).then((res)=>{
+    tenantUserList.push(...res.data);
+    total.value = res.total;
+  });
+}
+
+/**
+ * @author: wuwenqiang
+ * @description: 获取更多用户列表
+ * @date: 2025-08-30 21:48
+ */
+const onScrolltolower = ()=>{
+  if(pageNum.value * PAGE_SIZE < total.value){
+    pageNum.value++;
+    getTenantList();
+  }
+}
+
+/**
+ * @author: wuwenqiang
+ * @description: 搜索用户
+ * @date: 2025-08-30 21:48
+ */
+const onSearchUser = () => {
+  searchUserList.length = 0;
+  pageNum.value = 1;
+  getSearchUserList();
+}
+
+/**
+ * @author: wuwenqiang
+ * @description: 搜索用户
+ * @date: 2025-08-30 21:48
+ */
+const getSearchUserList = ()=>{
+  searchUserListService(inputValue.value,store.tenantUser.tenantId,searchPageNum.value,PAGE_SIZE).then((res)=>{
+    searchUserTotal.value = res.total;
+    searchUserList.push(...res.data);
+  })
+} 
+
+/**
+ * @author: wuwenqiang
+ * @description: 加载更多用户列表
+ * @date: 2025-08-30 21:48
+ */
+const onLoadMoreUser = ()=>{
+  if(searchUserTotal.value > searchPageNum.value * PAGE_SIZE){
+    searchPageNum.value++;
+    getSearchUserList();
+  }
+}
+
+/**
+ * @author: wuwenqiang
+ * @description: 添加租户
+ * @date: 2025-09-01 21:53
+ */
+const addTenant = (item:UserWithChecked)=>{
+  if(item.checked){
+    uni.showToast({
+      duration:2000,
+      position:'center',
+      title: "该用户已添加"
+    });
+  }else{
+    addTenantUserService(store.tenantUser.tenantId,item.id!).then((res)=>{
+      uni.showToast({
+        duration:2000,
+        position:'center',
+        title: "添加用户成功"
+      });
+      item.checked = 1;
+      tenantUserList.push(res.data)
+    })
+  }
+}
+
+/**
+ * @author: wuwenqiang
+ * @description: 显示添加用户的弹窗
+ * @date: 2025-09-01 21:53
+ */
+const onShowAddDialog = ()=>{
+  showAddDialog.value = true;
+  searchUserList.length = 0;
+}
+
+/**
+ * @author: wuwenqiang
+ * @description: 删除租户
+ * @date: 2025-09-02 07:39
+ */
+const onDeleteTenantUser = (index:number)=>{
+  deleteIndex.value = index;
+  popupComponent.value?.popup.value?.open('top');
+}
+
+const onAdmin = (item:TenantUserType)=>{
+  if(item.roleType === 1){
+    deleteAdminService(store.tenantUser.tenantId!,item.userId).then((res)=>{
+      item.roleType = 0;
+      uni.showToast({
+        duration:2000,
+        position:'center',
+        title: "取消管理员成功"
+      })
+    })
+  }else{
+    addAdminService(store.tenantUser.tenantId,item.userId).then((res)=>{
+      item.roleType = 1;
+      uni.showToast({
+        duration:2000,
+        position:'center',
+        title: "添加管理员成功"
+      })
+    })
+  }
+
+}
+/**
+ * @author: wuwenqiang
+ * @description: 确认删除
+ * @date: 2025-09-02 07:39
+ */
+const sureDeleteTenantUser = ()=>{
+  deleteTenantUserService(store.tenantUser.tenantId,tenantUserList[deleteIndex.value].userId).then((res)=>{
+    if(res.data){
+      uni.showToast({
+        duration:2000,
+        position:'center',
+        title: "删除用户成功"
+      })
+      tenantUserList.splice(deleteIndex.value,1);
+      popupComponent.value?.popup.value?.close();
+    }else{
+      uni.showToast({
+        duration:2000,
+        position:'center',
+        title: "删除用户失败"
+      })
+    }
+  }).catch((err)=>{
+    uni.showToast({
+      duration:2000,
+      position:'center',
+      title: err.msg || "删除用户失败"
+    })
+  });
+}
+getTenantList();
+</script>
+
+<style lang="less" scoped>
+	@import '../theme/color.less';
+	@import '../theme/size.less';
+	@import '../theme/style.less';
+  .module-block{
+    margin: @middle-padding;
+    gap:@middle-padding;
+    .user-info{
+      display: flex;
+      align-items: center;
+      gap: @middle-padding;
+      padding:@middle-padding;
+      &.user-info-first-child{
+        padding-top: 0;
+      }
+      &.user-info-last-child{
+        padding-bottom: 0;
+        margin-bottom: 0;
+        border-bottom:none;
+      }
+      .user-account{
+        color: @gray-color;
+        flex: 1;
+      }
+    }
+    .line{
+      height: 1rpx;
+      background: @gray-color;
+    }
+    .user-avater{
+      border-radius: 50%;
+      &.user-avater-small{
+        width: @small-avater;
+        height: @small-avater;
+      }
+    }
+    .button-wrapper{
+      display: flex;
+      .op-button{
+        display: flex;
+        height: 100%;
+        flex-direction: row;
+        justify-content: center;
+        align-items: center;
+
+        margin-left: @middle-padding;
+        &.delete-button{
+          background-color: @warn-color;
+          color: @white-color;
+        }
+        &.set-admin-button{
+          background-color: @gray-color;
+          color: @white-color;
+        }
+        .button-text{
+          padding: 0 calc(@middle-padding * 2);
+        }
+      }
+    }
+
+  }
+  .load-data{
+    text-align: center;
+    color: @gray-color;
+    display: inline-block;
+    width: 100%;
+  }
+	.icon-small{
+		opacity: 0.5;
+	}
+  .dialog-content{
+    background-color: @page-background-color;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    .search-wrapper{
+      display: flex;
+      gap: @middle-padding;
+      height:@small-avater;
+      align-items: center;
+      background-color: @page-background-color;
+      border-radius: @middle-avater;
+      padding: 0 @small-padding;
+      .search-input{
+        height: 100%;
+        flex: 1;
+        padding-left: @small-padding;
+      }
+      .icon-small{
+        filter: grayscale(100%);
+      }
+    }
+    .user-scroll-view{
+      flex: 1;
+      height: 0;
+      .user-list{
+        gap:@middle-padding;
+        margin-top: 0;
+      }
+    }
+  }
+  
+</style>
+

@@ -1,0 +1,5204 @@
+// EntryAbility.ts
+import UIAbility from '@ohos.app.ability.UIAbility';
+import hilog from '@ohos.hilog';
+import window from '@ohos.window';
+
+export default class EntryAbility extends UIAbility {
+  onCreate(want, launchParam) {
+    hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onCreate');
+  }
+
+  onDestroy() {
+    hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onDestroy');
+  }
+
+  onWindowStageCreate(windowStage: window.WindowStage) {
+    // Main window is created, set main page for this ability
+    hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onWindowStageCreate');
+
+    windowStage.loadContent('pages/LaunchPage', (err, data) => {
+      if (err.code) {
+        hilog.error(0x0000, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err) ?? '');
+        return;
+      }
+      hilog.info(0x0000, 'testTag', 'Succeeded in loading the content. Data: %{public}s', JSON.stringify(data) ?? '');
+    });
+  }
+
+  onWindowStageDestroy() {
+    // Main window is destroyed, release UI related resources
+    hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onWindowStageDestroy');
+  }
+
+  onForeground() {
+    // Ability has brought to foreground
+    hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onForeground');
+  }
+
+  onBackground() {
+    // Ability has back to background
+    hilog.info(0x0000, 'testTag', '%{public}s', 'Ability onBackground');
+  }
+}
+
+
+// index.ts
+export enum PositionEnum {
+  LEFT="LEFT",
+  RIGHT="RIGHT"
+}
+
+export enum LanguageEnum {
+  zh="中文",
+  en="英文"
+}
+
+export const LanguageMap =  {
+  "中文":"zh",
+  "英文":"en"
+}
+
+// PreferenceModel.ets
+import dataPreferences from "@ohos.data.preferences";
+
+let context = getContext(this);
+let preference: dataPreferences.Preferences | null = null; // 初始化为 null
+
+class PreferenceModel {
+  // 确保首选项已初始化
+  private async ensurePreferenceInitialized() {
+    if (preference === null) {
+      await this.getPreferencesFromStorage();
+    }
+  }
+
+  // 初始化 Preferences 首选项
+  async getPreferencesFromStorage() {
+    try {
+      preference = await dataPreferences.getPreferences(context, 'mystore');
+    } catch (err) {
+      console.error("Failed to get preferences:", err);
+      preference = null; // 确保在出错时重置为 null
+    }
+  }
+
+  // 删除 preferences 实例对应的首选项
+  async deletePreferences() {
+    try {
+      await dataPreferences.deletePreferences(context, 'mystore');
+    } catch (err) {
+      console.error("Failed to delete preferences:", err);
+    }
+    preference = null; // 删除后重置为 null
+  }
+
+  // 设置 key-value
+  async putPreference(key: string, value: string) {
+    await this.ensurePreferenceInitialized();
+
+    if (preference) {
+      try {
+        await preference.put(key, value);
+        await preference.flush();
+      } catch (err) {
+        console.error(`Failed to put preference [${key}]:`, err);
+      }
+    } else {
+      console.error("Preferences not initialized, cannot put value");
+    }
+  }
+
+  // 获取 key 对应的 value
+  async getPreference(key: string): Promise<string | null> {
+    await this.ensurePreferenceInitialized();
+
+    if (!preference) {
+      console.error("Preferences not initialized, cannot get value");
+      return null;
+    }
+
+    try {
+      const value = await preference.get(key, null);
+      return value !== null ? String(value) : null;
+    } catch (err) {
+      console.error(`Failed to get preference [${key}]:`, err);
+      return null;
+    }
+  }
+
+  // 删除 key 对应的 value
+  async deletePreference(key: string) {
+    await this.ensurePreferenceInitialized();
+
+    if (preference) {
+      try {
+        await preference.delete(key);
+        await preference.flush();
+      } catch (err) {
+        console.error(`Failed to delete preference [${key}]:`, err);
+      }
+    } else {
+      console.error("Preferences not initialized, cannot delete value");
+    }
+  }
+
+  // 获取 token
+  async getToken() {
+    return this.getPreference('token');
+  }
+
+  // 写入 token
+  async setToken(token: string) {
+    if(!/^Bearer\s/.test(token))token = `Bearer ${token}`
+    await this.putPreference('token', token);
+  }
+
+  // 获取密码
+  async getPassword(userAccount: string): Promise<string | null> {
+    return this.getPreference(userAccount);
+  }
+
+  // 写入密码
+  async setPassword(userAccount: string, password: string) {
+    await this.putPreference(userAccount, password);
+  }
+
+  // 写入密码
+  async getTenantId(userId:string) {
+    return this.getPreference(`${userId}:tenantId`);
+  }
+
+  // 写入密码
+  async setTenantId(userId:string,tenantId:string,) {
+    await this.putPreference(`${userId}:tenantId`,tenantId);
+  }
+}
+
+export default new PreferenceModel();
+
+// Lyric.ts
+const timeExp:RegExp = /\[(\d{2,}):(\d{2})(?:\.(\d{2,3}))?]/g
+
+enum STATUS {
+  STATE_PAUSE = 0,
+  STATE_PLAYING = 1
+}
+
+interface TagRegType {
+  title?:string,
+  artist?:string,
+  album?:string,
+  offset?:string,
+  by?:string,
+}
+
+export interface LineType {
+  time?:number,
+  txt:string,
+  lineNum?:number
+}
+
+const tagRegMap:TagRegType = {
+  title: 'ti',
+  artist: 'ar',
+  album: 'al',
+  offset: 'offset',
+  by: 'by'
+}
+
+export default class Lyric {
+  private lrc:string = '';
+  private tags:TagRegType = {};
+  public lines:Array<LineType> = []
+  private state:STATUS = STATUS.STATE_PAUSE;
+  private curLine:number = 0;
+  private curNum:number = 0;
+  private startStamp:number = 0;
+  private timer:number = 0;
+  private pauseStamp:number;
+  private handler:(data:LineType) => void
+
+  constructor(lrc:string, handlder:(data:LineType) => void) {
+    this.lrc = lrc;
+    this.handler = handlder;
+    this._init();
+  }
+
+  _init() {
+    this._initTag()
+
+    this._initLines()
+  }
+
+  _initTag() {
+    for (let tag in tagRegMap) {
+      const matches = this.lrc.match(new RegExp(`\\[${tagRegMap[tag]}:([^\\]]*)]`, 'i'))
+      this.tags[tag] = matches && matches[1] || ''
+    }
+  }
+
+  _initLines() {
+    const lines:Array<string> = this.lrc.split('\n')
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      let result:Array<string>|null = timeExp.exec(line)
+      if (result) {
+        const txt = line.replace(timeExp, '').trim()
+        if (txt) {
+          this.lines.push({
+            time: parseInt(result[1]) * 60 * 1000 + parseInt(result[2]) * 1000 + (parseInt(result[3]) || 0) * 10,
+            txt
+          })
+        }
+      }
+    }
+
+    this.lines.sort((a, b) => {
+      return a.time - b.time
+    })
+  }
+
+  _findCurNum(time) {
+    for (let i = 0; i < this.lines.length; i++) {
+      if (time <= this.lines[i].time) {
+        return i
+      }
+    }
+    return this.lines.length - 1
+  }
+
+  _callHandler(i) {
+    if (i < 0) {
+      return
+    }
+    this.handler({
+      txt: this.lines[i].txt,
+      lineNum: i
+    })
+  }
+
+  _playRest() {
+    let line = this.lines[this.curNum]
+    let delay = line.time - (+new Date() - this.startStamp)
+
+    this.timer = setTimeout(() => {
+      this._callHandler(this.curNum++)
+      if (this.curNum < this.lines.length && this.state === STATUS.STATE_PLAYING) {
+        this._playRest()
+      }
+    }, delay)
+  }
+
+  play(startTime:number = 0, skipLast:boolean = false) {
+    if (!this.lines.length) {
+      return
+    }
+    this.state = STATUS.STATE_PLAYING
+
+    this.curNum = this._findCurNum(startTime)
+    this.startStamp = +new Date() - startTime
+
+    if (!skipLast) {
+      this._callHandler(this.curNum - 1)
+    }
+
+    if (this.curNum < this.lines.length) {
+      clearTimeout(this.timer)
+      this._playRest()
+    }
+  }
+
+  togglePlay() {
+    const now:number = +new Date()
+    if (this.state === STATUS.STATE_PLAYING) {
+      this.stop()
+      this.pauseStamp = now
+    } else {
+      this.state = STATUS.STATE_PLAYING
+      this.play((this.pauseStamp || now) - (this.startStamp || now), true)
+      this.pauseStamp = 0
+    }
+  }
+
+  stop() {
+    this.state =STATUS.STATE_PAUSE
+    clearTimeout(this.timer)
+  }
+
+  seek(offset) {
+    this.play(offset)
+  }
+}
+
+
+// common.ets
+import { HOST } from '../common/constant';
+export const zerofull = (value: number): string | number => {
+  return value < 10 ? "0" + value : value + ''
+}
+
+export const formatTime = (value: string | number): string => {
+  const date = new Date(typeof value === 'string' ? value.replace(/T/, ' ') : value);
+  const nowDate = new Date()
+  let diff = Math.ceil((nowDate.getTime() - date.getTime()) / 1000);
+  if (diff < 60) {
+    return "刚刚";
+  } else if (diff < 60 * 60) {
+    return Math.ceil(diff / 60) + "分前";
+  } else if (diff < 60 * 60 * 24) {
+    return Math.ceil(diff / (60 * 60)) + "小时前";
+  } else if (diff < 60 * 60 * 24 * 30) {
+    return Math.ceil(diff / (60 * 60 * 24)) + "天前";
+  } else if (diff < 60 * 60 * 24 * 30 * 12) {
+    return Math.ceil(diff / (60 * 60 * 24 * 30)) + "个月前";
+  }
+  const year = zerofull(date.getFullYear());
+  const month = zerofull(date.getMonth() + 1);
+  const dates = zerofull(date.getDate());
+  const hour = zerofull(date.getHours());
+  const minutes = zerofull(date.getMinutes());
+  const seconds = zerofull(date.getSeconds());
+  return `${year}-${month}-${dates} ${hour}:${minutes}:${seconds}`
+};
+
+export const formatSecond = (value: number, showHour: boolean = false): string => {
+  if (showHour) {
+    return `${zerofull(Math.floor(value / (60 * 60)))}:${zerofull(Math.floor(value % (60 * 60) /
+      60))}:${zerofull(Math.floor(value % (60 * 60) % 60))}`
+  } else {
+    return `${zerofull(Math.floor(value / 60))}:${zerofull(Math.floor(value % 60))}`
+  }
+};
+
+export const getMusicCover =
+  (cover: string = "") => /http[s]?:\/\//.test(cover) ? cover.replace('{size}', '480') : HOST + cover
+
+export const strictEmailRegex = /^[a-zA-Z0-9]+([._%+-][a-zA-Z0-9]+)*@([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,6}$/;
+
+
+// 生成32位随机十六进制字符串
+export const  generateSecureID = () :string => {
+  // 创建 32 位 Uint8Array
+  const buffer = new Uint8Array(16);
+
+  // 使用时间戳+随机数增强随机性
+  const seed = Date.now() ^ (Math.random() * 0xFFFFFFFF);
+  let state = Math.floor(seed);
+
+  // 改进的伪随机生成器
+  for (let i = 0; i < buffer.length; i++) {
+    // Xorshift 算法增强随机性
+    state ^= (state << 13);
+    state ^= (state >>> 17);
+    state ^= (state << 5);
+    buffer[i] = state & 0xFF;
+  }
+
+  // 转换为十六进制
+  let hexId = '';
+  for (let i = 0; i < buffer.length; i++) {
+    hexId += buffer[i].toString(16).padStart(2, '0');
+  }
+
+  return hexId;
+}
+
+export const formatTimeAgo = (createTime:string)=> {
+  // 获取当前时间和目标时间
+  const now = new Date()
+  const targetDate = new Date(createTime)
+
+  // 计算时间差（毫秒）
+  const diff = now.getTime() - targetDate.getTime();
+
+  // 处理未来时间
+  if (diff < 0) return '刚刚'
+
+  // 计算各时间单位
+  const seconds = Math.floor(diff / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+
+  // 计算精确的月份和年份差
+  const targetYear = targetDate.getFullYear()
+  const targetMonth = targetDate.getMonth()
+  const targetDay = targetDate.getDate()
+  const nowYear = now.getFullYear()
+  const nowMonth = now.getMonth()
+  const nowDay = now.getDate()
+
+  let monthsDiff = (nowYear - targetYear) * 12 + (nowMonth - targetMonth)
+  if (nowDay < targetDay) monthsDiff--
+
+  let yearsDiff = nowYear - targetYear
+  if (nowMonth < targetMonth || (nowMonth === targetMonth && nowDay < targetDay)) {
+    yearsDiff--
+  }
+
+  // 判断并返回结果
+  if (seconds < 60) {
+    return '刚刚'
+  } else if (minutes < 60) {
+    return `${minutes}分钟前`
+  } else if (hours < 24) {
+    return `${hours}小时前`
+  } else if (days <= 31) {
+    return `${days}天前`
+  } else if (monthsDiff < 12) {
+    return `${monthsDiff}个月前`
+  } else {
+    return `${yearsDiff}年前`
+  }
+}
+
+
+// HttpUtil.ets
+import http from '@ohos.net.http';
+import { HOST } from '../common/constant';
+import { MyAwesomeData } from '../type/Index'
+import promptAction from '@ohos.promptAction';
+import display from '@ohos.display';
+
+/**
+ * @description: 声明业务数据类型
+ */
+
+enum STATUS {
+  SUCCESS = 'SUCCESS',
+  FAIL = 'FAIL',
+}
+
+class HttpRequest {
+  private static instance: HttpRequest;
+  private token: string = "";
+
+  private constructor() {
+  }
+
+  /** 请求函数(单例模式)
+   *
+   * **注意：**
+   * `method`需使用`HttpMethod`枚举类，切勿自行定义
+   *
+   * **示例代码**
+   * ```js
+   HttpRequest.getInstance().request({
+   url: "/Api",
+   method: HttpMethod.GET
+   })
+   * ```
+   */
+  public setToken(token: string) {
+    if(!/^Bearer\s/.test(token))token = `Bearer ${token}`
+    this.token = token;
+  }
+
+  public static getInstance(): HttpRequest {
+    if (!HttpRequest.instance) {
+      HttpRequest.instance = new HttpRequest()
+    }
+    return HttpRequest.instance;
+  }
+
+  // 服务器接口请求
+  public request<T>(url: string, options: http.HttpRequestOptions): Promise<MyAwesomeData<T>> {
+    const defaultOptions: http.HttpRequestOptions = {
+      extraData: undefined,
+      method: http.RequestMethod.GET,
+      connectTimeout: 10000,
+      readTimeout: 10000,
+      header: {
+        "content-type": "application/json",
+        "Authorization": !/^Bearer\s/.test(this.token) ? `Bearer ${this.token}` : this.token
+      }
+    }
+    // 手动合并对象
+    const mergedOptions: http.HttpRequestOptions = {
+      extraData: options.extraData ?? defaultOptions.extraData,
+      method: options.method ?? defaultOptions.method,
+      connectTimeout: options.connectTimeout ?? defaultOptions.connectTimeout,
+      readTimeout: options.readTimeout ?? defaultOptions.readTimeout,
+      header: options.header ?? defaultOptions.header,
+    };
+    let httpRequest = http.createHttp();
+    return new Promise((resolve, reject) => {
+      httpRequest.request(HOST + url, mergedOptions).then((response: http.HttpResponse) => {
+        const result: MyAwesomeData<T> = JSON.parse(response.result.toString()) as MyAwesomeData<T>
+        if (result.status == STATUS.SUCCESS) {
+          resolve(result)
+        } else {
+          promptAction.showToast({
+            message: result.msg,
+            duration: 2000,
+            bottom: px2fp(display.getDefaultDisplaySync().height) / 2
+          });
+          reject(result)
+        }
+      }).catch((err: Error) => {
+        reject(err);
+        if(!url.includes("getUserData")){
+          promptAction.showToast({
+            message: `请求错误，地址：${HOST + url}${options.extraData ?
+              '，请求参数：' + JSON.stringify(options.extraData) : '' },错误信息： ${JSON.stringify(err)}`,
+            duration: 2000,
+            bottom: px2fp(display.getDefaultDisplaySync().height) / 2
+          });
+        }
+      }).finally(() => {
+        // 当该请求使用完毕时，调用destroy方法主动销毁。
+        httpRequest.destroy();
+      });
+    })
+  }
+
+  /**
+   * @description: get请求函数
+   * @param {string} url 请求地址
+   * @param {Object} data 请求参数
+   * @param {RequestConfig} OtherConfig request其他配置
+   * @return {*}
+   */
+  public get<T>(url: string, data?: Object): Promise<MyAwesomeData<T>> {
+    return this.request<T>(url, { method: http.RequestMethod.GET, extraData: data })
+  }
+
+  /**
+   * @description: post请求函数
+   * @param {string} url 请求地址
+   * @param {Object} data 请求参数
+   * @param {RequestConfig} OtherConfig request其他配置
+   * @return {*}
+   */
+  public post<T>(url: string, data?: Object): Promise<MyAwesomeData<T>> {
+    return this.request<T>(url, { method: http.RequestMethod.POST, extraData: data })
+  }
+
+  /**
+   * @description: delete请求函数
+   * @param {string} url 请求地址
+   * @param {Object} data 请求参数
+   * @param {RequestConfig} OtherConfig request其他配置
+   * @return {*}
+   */
+  public delete<T>(url: string, data?: Object): Promise<MyAwesomeData<T>> {
+    return this.request<T>(url, { method: http.RequestMethod.DELETE, extraData: data })
+  }
+
+  /**
+   * @description: put请求函数
+   * @param {string} url 请求地址
+   * @param {Object} data 请求参数
+   * @param {RequestConfig} OtherConfig request其他配置
+   * @return {*}
+   */
+  public put<T>(url: string, data?: Object): Promise<MyAwesomeData<T>> {
+    return this.request<T>(url, { method: http.RequestMethod.PUT, extraData: data })
+  }
+}
+
+export default HttpRequest.getInstance()
+
+// LoadingController.ets
+import GlobalLoading from '../components/GlobalLoading';
+
+export default class LoadingController {
+  private mComponent: GlobalLoading | null = null;
+
+  attach(component: GlobalLoading) {
+    this.mComponent = component;
+  }
+
+  public showLoading(): void {
+    if (this.mComponent) {
+      return this.mComponent?.showLoading();
+    }
+  }
+
+  public hideLoading(): void {
+    if (this.mComponent) {
+      return this.mComponent.hideLoading();
+    }
+  }
+}
+
+// MarkdownRenderer.ets
+// MarkdownTypes.ets - 类型定义
+// 定义标题类型
+type HeaderType = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
+
+// 定义所有元素类型
+type ElementType = HeaderType | 'paragraph' | 'list' | 'quote' | 'code' | 'divider'
+
+interface MarkdownElement {
+  type: ElementType
+  content: string
+  level?: number
+  items?: string[]
+}
+
+interface InlineSpan {
+  text: string
+  isBold: boolean
+  isItalic: boolean
+  isCode: boolean
+  isLink: boolean
+  linkUrl?: string
+}
+
+// MarkdownParser.ets - Markdown解析器
+class MarkdownParser {
+  static parse(markdown: string): MarkdownElement[] {
+    const elements: MarkdownElement[] = []
+    const lines = markdown.split('\n')
+    let currentList: string[] = []
+    let inCodeBlock = false
+    let codeContent = ''
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim()
+
+      // 处理代码块
+      if (line.startsWith('```')) {
+        if (inCodeBlock) {
+          // 结束代码块
+          elements.push({ type: 'code', content: codeContent })
+          codeContent = ''
+          inCodeBlock = false
+        } else {
+          // 开始代码块
+          inCodeBlock = true
+        }
+        continue
+      }
+
+      if (inCodeBlock) {
+        codeContent += line + '\n'
+        continue
+      }
+
+      // 处理空行
+      if (line === '') {
+        if (currentList.length > 0) {
+          elements.push({ type: 'list', content: '', items: [...currentList] })
+          currentList = []
+        }
+        continue
+      }
+
+      // 处理分割线
+      if (/^[-*_]{3,}$/.test(line)) {
+        elements.push({ type: 'divider', content: '' })
+        continue
+      }
+
+      // 处理标题
+      const headerMatch = line.match(/^(#{1,6})\s+(.+)$/)
+      if (headerMatch) {
+        if (currentList.length > 0) {
+          elements.push({ type: 'list', content: '', items: [...currentList] })
+          currentList = []
+        }
+        const level = headerMatch[1].length
+        const content = headerMatch[2]
+        // 修改点：使用类型断言将字符串转换为 HeaderType
+        const headerType = `h${level}` as HeaderType
+        elements.push({
+          type: headerType,
+          content,
+          level
+        })
+        continue
+      }
+
+      // 处理列表
+      const listMatch = line.match(/^[-*+]\s+(.+)$/)
+      if (listMatch) {
+        currentList.push(listMatch[1])
+        continue
+      }
+
+      // 处理引用
+      const quoteMatch = line.match(/^>\s+(.+)$/)
+      if (quoteMatch) {
+        if (currentList.length > 0) {
+          elements.push({ type: 'list', content: '', items: [...currentList] })
+          currentList = []
+        }
+        elements.push({ type: 'quote', content: quoteMatch[1] })
+        continue
+      }
+
+      // 处理普通段落
+      if (currentList.length > 0) {
+        elements.push({ type: 'list', content: '', items: [...currentList] })
+        currentList = []
+      }
+      elements.push({ type: 'paragraph', content: line })
+    }
+
+    // 处理最后的列表
+    if (currentList.length > 0) {
+      elements.push({ type: 'list', content: '', items: [...currentList] })
+    }
+
+    // 处理最后的代码块
+    if (inCodeBlock) {
+      elements.push({ type: 'code', content: codeContent })
+    }
+
+    return elements
+  }
+
+  static parseInline(text: string): InlineSpan[] {
+    const spans: InlineSpan[] = []
+    let currentText = ''
+    let isBold = false
+    let isItalic = false
+    let isCode = false
+    let isLink = false
+    let linkText = ''
+    let linkUrl = ''
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i]
+      const nextChar = text[i + 1]
+
+      // 处理代码 `code`
+      if (char === '`') {
+        if (currentText) {
+          spans.push({ text: currentText, isBold, isItalic, isCode, isLink, linkUrl })
+          currentText = ''
+        }
+        isCode = !isCode
+        continue
+      }
+
+      // 处理粗体 **bold**
+      if (char === '*' && nextChar === '*' && !isCode) {
+        if (currentText) {
+          spans.push({ text: currentText, isBold, isItalic, isCode, isLink, linkUrl })
+          currentText = ''
+        }
+        isBold = !isBold
+        i++ // 跳过下一个*
+        continue
+      }
+
+      // 处理斜体 *italic*
+      if (char === '*' && !isCode) {
+        if (currentText) {
+          spans.push({ text: currentText, isBold, isItalic, isCode, isLink, linkUrl })
+          currentText = ''
+        }
+        isItalic = !isItalic
+        continue
+      }
+
+      // 处理链接 [text](url)
+      if (char === '[' && !isCode) {
+        if (currentText) {
+          spans.push({ text: currentText, isBold, isItalic, isCode, isLink, linkUrl })
+          currentText = ''
+        }
+        isLink = true
+        // 查找链接结束
+        const linkEnd = text.indexOf(']', i)
+        if (linkEnd !== -1) {
+          linkText = text.substring(i + 1, linkEnd)
+          const urlStart = text.indexOf('(', linkEnd)
+          const urlEnd = text.indexOf(')', urlStart)
+          if (urlStart !== -1 && urlEnd !== -1) {
+            linkUrl = text.substring(urlStart + 1, urlEnd)
+            spans.push({ text: linkText, isBold, isItalic, isCode, isLink: true, linkUrl })
+            i = urlEnd // 跳到URL结束
+            isLink = false
+            linkText = ''
+            linkUrl = ''
+            continue
+          }
+        }
+      }
+
+      currentText += char
+    }
+
+    // 添加最后一段文本
+    if (currentText) {
+      spans.push({ text: currentText, isBold, isItalic, isCode, isLink, linkUrl })
+    }
+
+    return spans
+  }
+}
+
+// MarkdownRenderer.ets - 主组件
+@Component
+export default struct MarkdownRenderer {
+  private markdownText: string = ''
+  private textColor: ResourceColor = Color.Black
+
+  build() {
+    Column() {
+      this.buildMarkdownElements()
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  buildMarkdownElements() {
+    ForEach(MarkdownParser.parse(this.markdownText), (element: MarkdownElement) => {
+      this.renderElement(element)
+    })
+  }
+
+  @Builder
+  renderElement(element: MarkdownElement) {
+    if (element.type === 'h1') {
+      this.renderHeader(element.content, 24, FontWeight.Bold, { bottom: 16, top: 8 })
+    } else if (element.type === 'h2') {
+      this.renderHeader(element.content, 20, FontWeight.Bold, { bottom: 12, top: 6 })
+    } else if (element.type === 'h3') {
+      this.renderHeader(element.content, 18, FontWeight.Bold, { bottom: 10, top: 4 })
+    } else if (element.type === 'h4') {
+      this.renderHeader(element.content, 16, FontWeight.Medium, { bottom: 8, top: 4 })
+    } else if (element.type === 'h5') {
+      this.renderHeader(element.content, 15, FontWeight.Medium, { bottom: 6, top: 4 })
+    } else if (element.type === 'h6') {
+      this.renderHeader(element.content, 14, FontWeight.Medium, { bottom: 6, top: 4 })
+    } else if (element.type === 'list') {
+      this.renderList(element.items || [])
+    } else if (element.type === 'quote') {
+      this.renderQuote(element.content)
+    } else if (element.type === 'code') {
+      this.renderCode(element.content)
+    } else if (element.type === 'divider') {
+      this.renderDivider()
+    } else {
+      this.renderParagraph(element.content)
+    }
+  }
+
+  @Builder
+  renderHeader(content: string, size: number, weight: FontWeight, margin: Margin) {
+    Text(content)
+      .fontSize(size)
+      .fontWeight(weight)
+      .fontColor(this.textColor)
+      .margin(margin)
+      .width('100%')
+  }
+
+  @Builder
+  renderParagraph(content: string) {
+    Column() {
+      ForEach(MarkdownParser.parseInline(content), (span: InlineSpan) => {
+        if (span.isLink) {
+          Text(span.text)
+            .fontColor('#007DFF')
+            .decoration({ type: TextDecorationType.Underline })
+            .fontWeight(span.isBold ? FontWeight.Bold : FontWeight.Normal)
+            .fontStyle(span.isItalic ? FontStyle.Italic : FontStyle.Normal)
+            .onClick(() => {
+              this.handleLinkClick(span.linkUrl || '')
+            })
+        } else {
+          Text(span.text)
+            .fontColor(this.textColor)
+            .fontWeight(span.isBold ? FontWeight.Bold : FontWeight.Normal)
+            .fontStyle(span.isItalic ? FontStyle.Italic : FontStyle.Normal)
+            .backgroundColor(span.isCode ? '#F5F5F5' : Color.Transparent)
+            .fontFamily(span.isCode ? 'monospace' : 'sans-serif')
+            .padding(span.isCode ? { left: 4, right: 4, top: 2, bottom: 2 } : 0)
+            .borderRadius(span.isCode ? 4 : 0)
+        }
+      })
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+    .margin({ bottom: 8 })
+  }
+
+  @Builder
+  renderList(items: string[]) {
+    Column() {
+      ForEach(items, (item: string) => {
+        Row() {
+          Text('•')
+            .fontColor(this.textColor)
+            .margin({ right: 8 })
+          this.renderParagraph(item)
+        }
+        .width('100%')
+        .margin({ bottom: 4 })
+      })
+    }
+    .margin({ bottom: 12, left: 8 })
+    .width('100%')
+  }
+
+  @Builder
+  renderQuote(content: string) {
+    Column() {
+      this.renderParagraph(content)
+    }
+    .padding(12)
+    .backgroundColor('#F8F9FA')
+    .border({ width: { left: 4 }, color: '#DEE2E6' })
+    .borderRadius(4)
+    .margin({ bottom: 12 })
+    .width('100%')
+  }
+
+  @Builder
+  renderCode(content: string) {
+    Text(content)
+      .fontColor('#24292E')
+      .fontFamily('monospace')
+      .backgroundColor('#F6F8FA')
+      .padding(12)
+      .border({ width: 1, color: '#D0D7DE' })
+      .borderRadius(6)
+      .margin({ bottom: 12 })
+      .width('100%')
+  }
+
+  @Builder
+  renderDivider() {
+    Divider()
+      .color('#E1E3E6')
+      .margin({ top: 16, bottom: 16 })
+      .width('100%')
+  }
+
+  private handleLinkClick(url: string) {
+    console.log('打开链接:', url)
+    // 这里可以添加打开链接的逻辑
+  }
+}
+
+// GlobalLoading.ets
+// 自定义Loading组件
+import * as colors from '../theme/color';
+import LoadingController from '../controller/LoadingController';
+
+@Component
+export default struct GlobalLoading {
+  @State private message: string = '加载中...'
+  @State private isShow: boolean = false
+  public controller: LoadingController | null = null;
+
+  aboutToAppear() {
+    if (this.controller) {
+      this.controller.attach(this); //绑定控制器
+    }
+  }
+
+  // 显示/隐藏方法
+  public showLoading(message?: string) {
+    this.isShow = true
+    if (message) {
+      this.message = message
+    }
+  }
+
+  public hideLoading() {
+    this.isShow = false
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.Center }) {
+      if (this.isShow) {
+        // 半透明遮罩层
+        Column() {
+          LoadingProgress()
+            .width(80)
+            .height(80)
+            .color(colors.gray) // 修改动画颜色[5]()
+          Text(this.message)
+            .margin({ top: 20 })
+        }
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
+        .backgroundColor(0x00FFFFFF)
+        .width('100%')
+        .height('100%')
+        .zIndex(999)
+      }
+    }
+  }
+}
+
+// TitleComponent.ets
+import * as colors from '../theme/color';
+import * as size from '../theme/size';
+
+
+@Component
+export default struct TitleComponent{
+  @Prop title:string;
+  @Prop showMarginBottom:boolean;
+
+  build(){
+    Row(){
+      Divider()
+        .height(size.lineHeight)
+        .width(size.lineWidth)
+        .margin({right:size.smallGap})
+      Text(this.title).fontSize(size.middleFont)
+    }.alignSelf(ItemAlign.Start)
+    .margin({bottom:this.showMarginBottom ? size.middleGap : 0})
+  }
+}
+
+// BottomDialogComponent.ets
+import * as colors from '../theme/color';
+import * as size from '../theme/size';
+
+@CustomDialog
+export default struct BottomDialogComponent {
+  @Prop dialogHeight: string;
+  @BuilderParam builder : () => void;
+  // 使用父组件@Builder装饰的方法初始化子组件@BuilderParam
+  controller: CustomDialogController
+
+  // 弹窗中的内容描述
+  build() {
+    Column(){
+      this.builder()
+    }
+    .borderRadius({topLeft:size.middleBorderRaduis,topRight:size.middleBorderRaduis})
+    .height(this.dialogHeight)
+    .width('100%')
+    .backgroundColor(colors.white)
+  }
+}
+
+// DialogComponent.ets
+import * as colors from '../theme/color';
+import * as size from '../theme/size';
+
+/**
+ * @description: 退出登录弹窗
+ * @date: 2024-01-14 21:47
+ * @author wuwenqiang
+ */
+@CustomDialog
+export default struct DialogComponent {
+  controller: CustomDialogController
+  cancel: () => void = () => {
+  }
+  confirm: () => void = () => {
+  };
+  title: string = ""
+
+  build() {
+    Column() {
+      Text(this.title)
+        .padding(size.middleGap * 2)
+      Row() {
+        Text('取消')
+          .onClick(() => {
+            this.controller.close()
+            this.cancel()
+          })
+          .flexGrow(1)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(colors.white)
+          .fontColor(Color.Black)
+          .onClick(() => {
+            this.cancel()
+          })
+        Divider().height('100%').width(1).backgroundColor(colors.pageBackground)
+        Text('确定')
+          .onClick(() => {
+            this.confirm()
+          })
+          .flexGrow(1)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(colors.white)
+          .fontColor(Color.Red)
+          .onClick(() => {
+            this.confirm()
+          })
+      }.border({
+        width: {
+          top: 1,
+        },
+        color: {
+          top: colors.pageBackground
+        },
+        style: {
+          top: BorderStyle.Solid
+        }
+      }).alignItems(VerticalAlign.Center).width('100%').height(size.dialogBtnHeight)
+    }
+    .width('100%')
+    .backgroundColor(colors.white)
+    .borderRadius(size.middleBorderRaduis)
+    .margin({ left: size.middleGap, right: size.middleGap })
+  }
+}
+
+// OptionDialogComponent.ets
+import * as colors from '../theme/color';
+import * as size from '../theme/size';
+
+/**
+ * @description: 修改新别弹窗
+ * @date: 2024-01-14 21:47
+ * @author wuwenqiang
+ */
+@CustomDialog
+export default struct OptionDialogComponent {
+  controller: CustomDialogController
+  cancel: () => void = () => {
+  };
+  confirm: (value: string,index:number) => void = () => {
+  };
+  options: Array<string> = []
+
+  build() {
+    Column() {
+      Column() {
+        ForEach(this.options, (item: string, index: number) => {
+          Text(item)
+            .textAlign(TextAlign.Center)
+            .width('100%')
+            .padding(size.middleGap)
+            .backgroundColor(colors.white)
+            .borderRadius(size.middleBorderRaduis)
+            .onClick(() => {
+              this.confirm(item,index)
+            })
+          if (index !== this.options.length - 1) {
+            Divider()
+              .height(1)
+              .backgroundColor(colors.pageBackground)
+          }
+        })
+      }.backgroundColor(colors.white)
+      .borderRadius(size.middleBorderRaduis)
+      .padding({ left: size.middleGap, right: size.middleGap })
+
+      Divider()
+        .height(size.middleGap)
+        .backgroundColor(Color.Transparent)
+      Text('取消')
+        .textAlign(TextAlign.Center)
+        .width('100%')
+        .padding(size.middleGap)
+        .backgroundColor(colors.white)
+        .borderRadius(size.middleBorderRaduis)
+        .onClick(() => {
+          this.cancel()
+        })
+      Divider()
+        .height(size.middleGap)
+        .backgroundColor(Color.Transparent)
+    }.width('100%').backgroundColor(Color.Transparent).padding({ left: size.middleGap, right: size.middleGap })
+  }
+}
+
+// AvaterComponent.ets
+import { HOST, USER_DATA } from '../common/constant';
+
+@Component
+export default struct AvaterComponent {
+  @Prop avater: string|undefined;
+  @Prop dimensions: number;
+
+  build() {
+    Image(this.avater !== undefined ? HOST + this.avater : $r('app.media.default_avater'))
+      .height(this.dimensions)
+      .width(this.dimensions)
+      .borderRadius(this.dimensions)
+  }
+}
+
+// NavigatorTitleComponent.ets
+import * as colors from '../theme/color';
+import * as size from '../theme/size';
+import router from '@ohos.router';
+@Component
+export default struct NavigatorTitleComponent {
+  @Prop title: string;
+
+  // 新增：右侧自定义内容构建器，可选参数
+  @BuilderParam rightContent?: () => void;
+
+  build() {
+    Row() {
+      // 左侧返回图标
+      Image($r('app.media.icon_back'))
+        .width(size.smallIcon)
+        .height(size.smallIcon)
+        .opacity(size.opacity)
+        .onClick(() => {
+          router.back()
+        })
+
+      // 标题
+      Text(this.title)
+        .layoutWeight(1)
+        .textAlign(TextAlign.Center)
+        .fontSize(18)
+        .fontWeight(FontWeight.Medium)
+
+      // 右侧内容 - 动态内容
+      // 如果有传入自定义内容，则显示，否则显示隐藏的占位图标
+      if (this.rightContent) {
+        this.rightContent()
+      } else {
+        Image($r('app.media.icon_back'))
+          .width(size.smallIcon)
+          .height(size.smallIcon)
+          .visibility(Visibility.Hidden)
+      }
+    }
+    .width('100%')
+    .padding(size.middleGap)
+    .backgroundColor(colors.white)
+  }
+}
+
+// enum.ts
+export const enum SocialEnum { // 社交类型
+  MUSIC = "MUSIC",
+  MUSIC_CIRCLE = "MUSIC_CIRCLE",
+  MOVIE = "MOVIE",
+  MOVIE_CIRCLE = "MOVIE_CIRCLE"
+}
+
+export enum PositionEnum {
+  LEFT="LEFT",
+  RIGHT="RIGHT"
+}
+
+// constant.ts
+import { TenantUserType } from "../type/Index";
+
+export const HOST: string = 'http://192.168.134.154:3000'; // 内网地址
+export const USER_DATA: string = 'USER_DATA';//用户信息
+export const TENANT_USER_DATA: string = 'TENANT_USER_DATA';//租户信息
+export const DEVICE_INFO: string = 'DEVICE_INFO';// 设备信息
+export const FAVORITE_MUSIC: string = 'FAVORITE_MUSIC';// 收藏音乐
+export const PAGE_SIZE:number = 20;// 每页数据
+export const MAX_PAGE_SIZE:number = 500;// 每页最大数量
+
+export const DEFAULT_TENANT_USER:TenantUserType = {
+  id: "", // 主键
+  tenantId: '', // 租户id
+  tenantName: "私人空间",
+  userId: "", // 用户id
+  roleType: 0, // 用户角色 (0-普通用户，1-租户管理员，2-超级管理员)
+  joinDate: '', // 加入日期
+  createBy: "", // 创建时间
+  username: '', // 用户名
+  avater: '', // 头像
+  disabled: 0,// 是否禁用
+  email: ''// 邮箱
+}
+
+// config.ts
+export const LIKE_INNER_EVENT = {// 点赞和取消点赞事件派发和监听
+  eventId: 1
+}
+
+export const PermissionMap = {// 权限映射
+  0: '私密',
+  1: '公开'
+}
+
+export const PermissionValueMap = {// 权限映射
+  '私密': 0,
+  '公开': 1
+}
+
+export const SexValueMap = {// 男女映射
+  '私密': 0,
+  '公开': 1
+}
+
+// Index.ts
+import type { PositionEnum } from '../enum/index';
+
+export interface MyAwesomeData<T> {
+  data: T;
+  token: string;
+  status:string;
+  msg:string;
+  total:number
+}
+
+export interface DeviceType{
+  musicId:number|null
+  version:string,
+  platform:string,
+  device:string
+}
+
+export interface UpdatePasswordParamsType {
+  oldPassword: string;
+  newPassword: string;
+}
+
+export interface ResetPasswordParamsType {
+  email: string;
+  password: string;
+  code: string;
+}
+
+export interface EmailParamsType {
+  email: string;
+}
+
+export interface EmailCodeParamsType {
+  email: string;
+  code: string;
+}
+
+// 添加以下接口
+export interface LoginParamsType {
+  userAccount: string;
+  password: string;
+}
+
+export interface VerifyUserParamsType {
+  userAccount?: string;
+  email?: string;
+}
+
+export type UserDataType = {
+  id?: string;
+  userAccount:     string;
+  createDate?: string;
+  updateDate?: string;
+  username:   string;
+  telephone:  string;
+  email:      string;
+  avater?:     string;
+  birthday:   string;
+  sex:        string;
+  role?:       string;
+  password:   string;
+  sign:       string;
+  region:     string;
+  disabled?:   number;
+  permission?: number;
+}
+
+// 主体数据结构，键是时间前缀，值是该时间前缀下的消息组
+export type ChatStructure = {
+  timeAgo:string,
+  list:Array<Array<ChatHistoryType>>
+}
+
+export type ChatModelType = {
+  id:number,
+  modelName:string,
+  updateTime:string,
+  createTime:string
+}
+export interface ChatParamsType {
+  modelName:string,
+  chatId:string, // 替换为实际聊天ID
+  prompt: string,// 提示词
+  type:string,//查询的类型
+  showThink:boolean,// 是否显示思考内容
+  language:string//语言
+  docIds:string[]
+}
+
+// 聊天气泡
+export type ChatType = {
+  text?:string,
+  position:PositionEnum,
+  thinkContent?:string,
+  responseContent?:string,
+  start?:boolean
+}
+// 聊天气泡
+export type ChatHistoryType = {
+  id: number;          // 主键
+  modelName:string,      // 模型id
+  userId: string;      // 用户id
+  files?: string;       // 文件（
+  chatId: string;      // 会话id
+  prompt: string;      // 提示词
+  content: string;     // 内容
+  createTime: string;  // 创建时间
+  thinkContent?:string,// 思考内容
+  responseContent?:string,// 正文内容
+  timeAgo:string;// xx分钟、小时、天、月前
+}
+
+export type GroupedByChatIdType = {
+  [chatId: string]: ChatHistoryType[];
+}
+
+export type GroupedByTimeAgoType = {
+  [timeAgo: string]:  ChatHistoryType[][];
+}
+
+export type FileType = 'txt' | 'pdf';
+
+export interface UploadFile {
+  path: string;
+  name: string;
+  size: number;
+  type: string;
+}
+
+export interface UploadResponse {
+  code: number;
+  message: string;
+  data?: any;
+  status:string;
+}
+
+export interface PayloadType {
+  modelName: string;
+  token: string; // 替换为实际用户ID
+  chatId:string; // 替换为实际聊天ID
+  tenantId:string;
+  type: string;
+  prompt: string;
+  showThink:boolean;
+  directoryId?:string;
+  language:string;
+};
+
+export interface DocumentType {
+  id: string;// 文档id
+  name: string; // 文档名称
+  ext:string; // 文档格式
+  userId: string;// 用户id
+  createTime: string;//创建时间
+  updateTime: string// 更新时间
+  directoryId:string// 目录id
+  directoryName:string;// 目录名称
+  checked?:boolean;// 是否选中
+};
+
+export interface OptionType {
+  text:string,
+  value:string | number
+}
+
+export interface AdminParamsType {
+  tenantId:string,
+  userId:string
+}
+
+// 文档的目录
+export interface DirectoryType {
+  id?:string;// 目录id
+  userId?:string;// 用户id
+  directory:string;// 目录名称
+  tenantId: string;// 租户id
+  createTime?:string;// 创建时间
+  updateTime?:string;// 更新时间
+}
+
+// 租户
+export interface TenantUserType {
+  id: string; // 主键
+  tenantId: string; // 租户id
+  tenantName: string;
+  userId: string; // 用户id
+  roleType: number; // 用户角色 (0-普通用户，1-租户管理员，2-超级管理员)
+  joinDate: string; // 加入日期
+  createBy: string; // 创建时间
+  username: string; // 用户名
+  avater?: string; // 头像
+  disabled: number;// 是否禁用
+  email: string;// 邮箱
+}
+
+/** 租户状态枚举 */
+export enum TenantStatus {
+  DISABLED = 0,// 禁用
+  ENABLED = 1// 启用
+}
+
+export interface TenantType {
+  id: string;// 租户ID（主键）
+  name: string;// 租户名称
+  code: string;// 租户编码（唯一）
+  description?: string | null;// 租户描述（可选）
+  status: TenantStatus;// 租户状态
+  create_date?: Date;// 创建时间
+  update_date?: Date | null;// 更新时间（可选）
+  created_by: string;// 创建人ID
+  updated_by?: string | null;// 更新人ID（可选）
+}
+
+export interface AppStoreStateType {
+  userData: UserDataType;
+  token: string;
+  platform: string;
+  device: string;
+  version: string;
+  tenantUser: TenantUserType;
+}
+
+// 或者使用接口继承的方式
+export interface UserWithChecked extends UserDataType {
+  checked: number;
+}
+
+export interface DocumentCheckType{
+  checked:boolean
+  directoryName:string;
+  directoryId:string;
+  docList:DocumentType[]
+}
+
+// 提示词接口
+export interface PromptInterface {
+  id: string;
+  tenantId: string;
+  userId: string;
+  prompt: string;
+  createTime?: string;
+  updateTime?: string;
+}
+
+// size.ts
+export const middleGap:number = 15;
+export const miniGap:number = 5;
+export const smallGap:number = 10;
+
+export const smallIcon:number = 20;
+export const middleIcon:number = 30;
+export const bigIcon:number = 40;
+
+export const middleFont:number = 15;
+export const bigFont:number = 25;
+
+export const smallBorderRaduis:number = 10;
+export const middleBorderRaduis:number = 15;
+
+export const smallAvater:number = 30;
+export const middleAvater:number = 40;
+export const bigAvater:number = 80;
+
+export const btnHeight:number = 40;
+export const lineHeight:number = 20;
+export const lineWidth:number = 5;
+export const dialogBtnHeight:number = 60;
+export const btnWidth:number = 100;
+export const inputHeight:number = 40;
+export const popupMenuWidth:number = 200;
+export const textareaHeight:number = 300;
+export const opacity:number = 0.5;
+
+
+// color.ts
+export const pageBackground:string = '#efefef'
+export const borderColor:string = '#e9e9e9'
+export const primary:string = '#ffae00'
+export const black:string = '#000000'
+export const white:string = '#fff'
+export const gray:string = '#999999'
+export const warn:string = '#f7453b';
+
+
+// index.ts
+export default {
+  login: '/service/user/login', //登录
+  getUserData: '/service/user-getway/getUserData', // 获取用户信息
+  updateUser: '/service/user-getway/updateUser',//更新用户信息
+  register: '/service/user/register',//注册
+  vertifyUser: '/service/user/vertifyUser',// 校验账号是否存在
+  sendEmailVertifyCode: '/service/user/sendEmailVertifyCode',// 找回密码
+  resetPassword: '/service/user/resetPassword',// 重置密码
+  updateAvater:'/service/user-getway/updateAvater',//更新头像
+  updatePassword: '/service/user-getway/updatePassword',//更新密码
+  loginByEmail: '/service/user/loginByEmail',//邮箱登录
+  searchUsers: "/service/user-getway/searchUsers",// 搜索用户
+  chat:"/service/chat/chat",// ai聊天
+  getChatHistory: "/service/chat/getChatHistory",// ai聊天
+  // chatWs: "/service/music/ws/chat",// ai聊天
+  chatWs: "/service/chat/ws/chat",// ai聊天
+  getModelList: "/service/chat/getModelList",// ai聊天
+  uploadDoc: "/service/chat/uploadDoc",// 生成向量
+  getDocList: "/service/chat/getDocList",// 查询我的文档
+  deleteDoc: "/service/chat/deleteDoc/",// 删除我的文档
+  getDirectoryList: "/service/chat/getDirectoryList",// 查询目录列表
+  createDir: "/service/chat/createDir",// 创建目录
+  renameDir: "/service/chat/renameDir",// 重命名目录
+  deleteDir: "/service/chat/deleteDir/",// 删除目录
+  getUserTenantList: "/service/tenant/getUserTenantList",// 获取用户当前的所有租户列表
+  getTenantUserList: "/service/tenant/getTenantUserList",// 获取当前租户下的用户列表
+  getTenantUser: "/service/tenant/getTenantUser",// 获取当前租户下当前用户角色信息
+  addTenantUser:"/service/tenant/addTenantUser/",// 添加用户
+  addAdmin:"/service/tenant/addAdmin",// 设置为管理员
+  deleteAdmin:"/service/tenant/deleteAdmin",// 取消管理员
+  deleteTenantUser: "/service/tenant/deleteTenantUser",// 删除用户
+  getPrompt: '/service/prompt/getPrompt', // 获取提示词
+  updatePrompt: '/service/prompt/updatePrompt', // 更新提示词
+
+};
+
+
+// Index.ets
+import api from '../api/index';
+import httpRequest from '../utils/HttpUtil';
+import * as types from '../type/Index'
+import CryptoJS from '@ohos/crypto-js';
+/**
+ * @description: 根据token获取用户信息
+ * @date: 2023-12-1 23:39
+ * @author wuwenqiang
+ */
+export const getUserDataService = (token:string):Promise<types.MyAwesomeData<types.UserDataType>>=> {
+  httpRequest.setToken(token);
+  return httpRequest.get<types.UserDataType>(api.getUserData);
+}
+
+/**
+ * @description: 注册
+ * @date: 2024-01-21 14:48
+ * @author wuwenqiang
+ */
+export const verifyUserService = (userAccount:string|undefined,email:string|undefined):Promise<types.MyAwesomeData<number>>=>{
+  const params: types.VerifyUserParamsType = { userAccount, email };
+  return httpRequest.post<number>(api.vertifyUser,params)
+};
+
+/**
+ * @author: wuwenqiang
+ * @description: 更新用户信息
+ * @date: 2023-12-28 23:18
+ */
+export const updateUserDataService = (userData:types.UserDataType):Promise<types.MyAwesomeData<number>> => {
+  return httpRequest.put<number>(api.updateUser,userData)
+};
+
+/**
+ * @description: 登录
+ * @date: 2024-01-15 21:32
+ * @author wuwenqiang
+ */
+export const loginService = (userAccount:string,password:string):Promise<types.MyAwesomeData<types.UserDataType>>=> {
+  password = CryptoJS.MD5(password).toString(); // 使用md5加密
+  const params: types.LoginParamsType = { userAccount, password };
+  return httpRequest.post<types.UserDataType>(api.login, params)
+}
+
+
+/**
+ * @description: 注册
+ * @date: 2024-01-19 23:51
+ * @author wuwenqiang
+ */
+export const registerService = (userData:types.UserDataType):Promise<types.MyAwesomeData<types.UserDataType>> => {
+  userData.password = CryptoJS.MD5(userData.password).toString(); // 使用md5加密
+  return httpRequest.post<types.UserDataType>(api.register,userData)
+};
+
+/**
+ * @description: 校验账号和密码是否存在
+ * @date: 2024-01-19 23:51
+ * @author wuwenqiang
+ */
+export const vertifyUserService = (userData:types.UserDataType):Promise<types.MyAwesomeData<number>> => {
+  return httpRequest.post<number>(api.vertifyUser,userData)
+};
+
+/**
+ * @description: 找回密码
+ * @date: 2025-01-19 22:59
+ * @author wuwenqiang
+ */
+export const sendEmailVertifyCodeService = (email:string):Promise<types.MyAwesomeData<number>> => {
+  const params:types.EmailParamsType = {email}
+  return httpRequest.post<number>(api.sendEmailVertifyCode,params)
+};
+
+export const resetPasswordService = (email:string,password:string,code:string):Promise<types.MyAwesomeData<types.UserDataType>>=>{
+  password = CryptoJS.MD5(password).toString();// 使用md5加密
+  const params: types.ResetPasswordParamsType = {email,password,code};
+  return httpRequest.post<types.UserDataType>(api.resetPassword,params)
+};
+
+/**
+ * @description: 更新密码
+ * @date: 2025-01-28 14:22
+ * @author wuwenqiang
+ */
+export const updatePasswordService = (oldPassword:string,newPassword:string):Promise<types.MyAwesomeData<number>> => {
+  oldPassword = CryptoJS.MD5(oldPassword).toString();// 使用md5加密
+  newPassword = CryptoJS.MD5(newPassword).toString();// 使用md5加密
+  const params: types.UpdatePasswordParamsType = {oldPassword,newPassword};
+  return httpRequest.put<number>(api.updatePassword,params)
+};
+
+/**
+ * @description: 邮箱验证码登录
+ * @date: 2025-01-28 14:22
+ * @author wuwenqiang
+ */
+export const loginByEmailService = (email:string,code:string):Promise<types.MyAwesomeData<types.UserDataType>> => {
+  const params:types.EmailCodeParamsType = {email,code};
+  return httpRequest.post<types.UserDataType>(api.loginByEmail,params)
+};
+
+/**
+ * @description: 获取聊天对话历史记录
+ * @date: 2025-05-16 00:19
+ * @author wuwenqiang
+ */
+export const getChatHistoryService = (tenantId:string,pageNum:number,pageSize:number):Promise<types.MyAwesomeData<Array<types.ChatHistoryType>>> => {
+  console.log(`获取历史记录,地址：${api.getChatHistory}?tenantId=${tenantId}&pageNum=${pageNum}&pageSize=${pageSize}`)
+  return httpRequest.get<Array<types.ChatHistoryType>>(`${api.getChatHistory}?tenantId=${tenantId}pageNum=${pageNum}&pageSize=${pageSize}`);
+}
+
+/**
+ * @description: 获取模型列表
+ * @date: 2025-05-16 00:19
+ * @author wuwenqiang
+ */
+export const getModelListService = ():Promise<types.MyAwesomeData<Array<types.ChatModelType>>> => {
+  return httpRequest.get<Array<types.ChatModelType>>(api.getModelList)
+}
+
+/**
+ * @description: 上传文档
+ * @date: 2025-06-21 13:48
+ * @author wuwenqiang
+ */
+export const getMyDocumentService = (tenantId:string):Promise<types.MyAwesomeData<Array<types.DocumentType>>> => {
+  return httpRequest.get<Array<types.DocumentType>>(`${api.getDocList}?tenantId=${tenantId}`);
+}
+
+/**
+ * @description: 删除文档
+ * @date: 2025-07-12 11:31
+ * @author wuwenqiang
+ */
+export const deleteMyDocumentService = (docId:string):Promise<types.MyAwesomeData<number>> => {
+  return httpRequest.delete<number>(`${api.deleteDoc}${docId}`);
+}
+
+/**
+ * @description: 获取目录列表
+ * @date: 2025-07-26 20:21
+ * @author wuwenqiang
+ */
+export const getDirectoryListService = (tenantId:string):Promise<types.MyAwesomeData<types.DirectoryType[]>> => {
+  return httpRequest.get<types.DirectoryType[]>(`${api.getDirectoryList}?tenantId=${tenantId}`);
+}
+
+/**
+ * @description: 创建目录
+ * @date: 2025-07-27 12:42
+ * @author wuwenqiang
+ */
+export const createDirectoryService = (directory:types.DirectoryType):Promise<types.MyAwesomeData<types.DirectoryType>> => {
+  return httpRequest.post<types.DirectoryType>(api.createDir,directory);
+}
+
+/**
+ * @description: 获取租户列表
+ * @date: 2025-08-10 18:25
+ * @author wuwenqiang
+ */
+export const getTenantListService = ():Promise<types.MyAwesomeData<types.TenantType[]>> => {
+  return httpRequest.get<types.TenantType[]>(api.getUserTenantList);
+}
+
+/**
+ * @description: 获取租户下的所有
+ * @date: 2025-08-16 20:14
+ * @author wuwenqiang
+ */
+export const getTenantUserListService = (tenantId:string,pageNum:number,pageSize:number):Promise<types.MyAwesomeData<types.TenantUserType[]>> => {
+  return httpRequest.get<types.TenantUserType[]>(`${api.getTenantUserList}?tenantId=${tenantId}&pageNum=${pageNum}&pageSize=${pageSize}`);
+}
+
+/**
+ * @description: 获取当前租户下当前用户的角色信息
+ * @date: 2025-09-7 18:56
+ * @author wuwenqiang
+ */
+export const getTenantUserService = (tenantId:string):Promise<types.MyAwesomeData<types.TenantUserType|null>> => {
+  return httpRequest.get<types.TenantUserType|null>(`${api.getTenantUser}?tenantId=${tenantId}`);
+}
+
+/**
+ * @description: 模糊搜索用户
+ * @date: 2025-08-16 20:14
+ * @author wuwenqiang
+ */
+export const searchUserListService = (keyword:string,tenantId:string,pageNum:number,pageSize:number):Promise<types.MyAwesomeData<types.UserWithChecked[]>> => {
+  return httpRequest.get<types.UserWithChecked[]>(`${api.searchUsers}?keyword=${keyword}&tenantId=${tenantId}&pageNum=${pageNum}&pageSize=${pageSize}`);
+}
+
+/**
+ * @description: 添加租户
+ * @date: 2025-09-01 22:04
+ * @author wuwenqiang
+ */
+export const addTenantUserService = (tenantId:string,userId:string):Promise<types.MyAwesomeData<types.TenantUserType>> => {
+  return httpRequest.post<types.TenantUserType>(`${api.addTenantUser}${tenantId}/${userId}`);
+}
+
+/**
+ * @description: 设置为管理员
+ * @date: 2025-09-01 22:04
+ * @author wuwenqiang
+ */
+export const addAdminService = (tenantId:string,userId:string):Promise<types.MyAwesomeData<types.TenantUserType>> => {
+  const params:types.AdminParamsType = {tenantId,userId}
+  return httpRequest.post<types.TenantUserType>(api.addAdmin,params);
+}
+
+/**
+ * @description: 设置为管理员
+ * @date: 2025-09-07 09:05
+ * @author wuwenqiang
+ */
+export const deleteAdminService = (tenantId:string,userId:string):Promise<types.MyAwesomeData<types.TenantUserType>> => {
+  const params:types.AdminParamsType = {tenantId,userId}
+  return httpRequest.delete<types.TenantUserType>(api.deleteAdmin,params);
+}
+
+/**
+ * @description: 删除租户
+ * @date: 2025-09-20 14:33
+ * @author wuwenqiang
+ */
+export const deleteTenantUserService = (tenantId:string,userId:string):Promise<types.MyAwesomeData<boolean>> => {
+  return httpRequest.delete<boolean>(`${api.deleteTenantUser}/${tenantId}/${userId}`);
+}
+
+/**
+ * @description: 获取提示词
+ * @date: 2026-04-27
+ * @author: wuwenqiang
+ */
+export const getPromptService = (tenantId: string): Promise<types.MyAwesomeData<types.PromptInterface>> => {
+  return httpRequest.get<types.PromptInterface>(`${api.getPrompt}?tenantId=${tenantId}`);
+}
+
+/**
+ * @description: 更新提示词
+ * @date: 2026-04-27
+ * @author: wuwenqiang
+ */
+export const updatePromptService = (promptData: types.PromptInterface): Promise<types.MyAwesomeData<types.PromptInterface>> => {
+  return httpRequest.put<types.PromptInterface>(api.updatePrompt, promptData);
+}
+
+// LaunchPage.ets
+import httpRequest from '../utils/HttpUtil';
+import deviceInfo from '@ohos.deviceInfo'; //设备信息
+import { DeviceType, UserDataType } from '../type/Index'
+import preference from '../utils/PreferenceModel';
+import { DEVICE_INFO, USER_DATA } from '../common/constant';
+import { getUserDataService } from '../service/Index';
+import router from '@ohos.router';
+
+@Preview
+@Entry
+@Component
+struct LaunchPage {
+  @State activeIndex: number = 0;
+  @State isInitPage: Array<boolean> = [true, false, false, false];
+  @State isInitIndex: boolean = false;
+
+  build() {
+    Column() {
+      Text('欢迎使用')
+    }
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .width('100%')
+    .height('100%')
+  }
+
+  async aboutToAppear() {
+    AppStorage.SetOrCreate<DeviceType>(DEVICE_INFO, {
+      device: deviceInfo.productModel,
+      platform: deviceInfo.marketName,
+      version: deviceInfo.sdkApiVersion.toString(),
+      musicId: null
+    })
+    const token: string = await preference.getToken() as string;
+    setTimeout(() => { // 加载用户信息
+      if (token) {
+        getUserDataService(token).then((res) => {
+          preference.setToken(res.token);
+          httpRequest.setToken(res.token);
+          AppStorage.SetOrCreate<UserDataType>(USER_DATA, res.data)
+          router.replaceUrl({
+            url: 'pages/ChatPage'
+          });
+        }).catch(() => {
+          router.replaceUrl({
+            url: 'pages/LoginPage'
+          });
+        })
+      } else {
+        router.replaceUrl({
+          url: 'pages/LoginPage'
+        });
+      }
+
+    }, 1000)
+
+  }
+}
+
+// UpdatePasswordPage.ets
+import * as colors from '../theme/color';
+import * as size from '../theme/size';
+import { updatePasswordService } from '../service/Index';
+import promptAction from '@ohos.promptAction'
+import display from '@ohos.display';
+import NavigatorTitleComponent from '../components/NavigatorTitleComponent';
+import router from '@ohos.router';
+
+@Entry
+@Component
+struct UpdatePasswordPage {
+  oldPassword: string = '';
+  newPassword:string = "";
+  newComfirmPassword:string = ""
+  loading:boolean = false;
+
+  @Styles blockStyle(){
+    .backgroundColor(colors.white)
+    .borderRadius(size.middleBorderRaduis)
+    .padding(size.middleGap)
+    .width('100%')
+    .margin({ top: size.middleGap })
+  }
+
+  @Styles rowStyle(){
+    .border({
+      width: {
+        bottom: 1,
+      },
+      color: {
+        bottom: colors.pageBackground
+      },
+      style: {
+        bottom: BorderStyle.Solid
+      }
+    })
+    .width('100%')
+    .padding({ top: size.middleGap, bottom: size.middleGap })
+  }
+
+  verify(value: string, title: string) {
+    if (value.length > 18 || value.length < 6) {
+      promptAction.showToast({
+        message: `请输入6-18的${title}`,
+        duration: 2000,
+        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+      });
+      return false;
+    } else if (!value.trim()) {
+      promptAction.showToast({
+        message: `${title}不能为空`,
+        duration: 2000,
+        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+      });
+      return false;
+    }
+    return true;
+  }
+
+  useSumbit=()=>{
+    if(this.newPassword && this.newComfirmPassword && this.newPassword !== this.newComfirmPassword){
+      promptAction.showToast({
+        message: "密码和确认密码不一致",
+        duration: 2000,
+        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+      });
+    } else if (
+      this.verify(this.oldPassword,'旧密码') &&
+      this.verify(this.newPassword,'新密码') &&
+      this.verify(this.newPassword,'确认新密码')
+    ) {
+      if(this.loading)return;
+      this.loading = true;
+      updatePasswordService(this.oldPassword,this.newPassword).then((res)=>{
+        promptAction.showToast({
+          message: `修改密码成功`,
+          duration: 2000,
+          bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+        });
+        router.back();
+      }).finally(()=>{
+        this.loading = false;
+      })
+    }
+  }
+
+  build() {
+    Column() {
+      NavigatorTitleComponent({ title: "修改密码" })
+      Column() {
+        Column(){
+          Row() {
+            Text("*").fontColor(colors.warn)
+            TextInput({ placeholder: "请输入旧密码" })
+              .layoutWeight(1)
+              .type(InputType.Password)
+              .backgroundColor(Color.Transparent)
+              .onChange((value) => {
+                this.oldPassword = value;
+              })
+          }
+          Divider().height(size.middleGap).color(colors.borderColor)
+          Row() {
+            Text("*").fontColor(colors.warn)
+            TextInput({ placeholder: "请输入新密码" })
+              .layoutWeight(1)
+              .type(InputType.Password)
+              .backgroundColor(Color.Transparent)
+              .onChange((value) => {
+                this.newPassword = value;
+              })
+          }.margin({top:size.middleGap})
+          Divider().height(size.middleGap).color(colors.borderColor)
+          Row() {
+            Text("*").fontColor(colors.warn)
+            TextInput({ placeholder: "请输入新确认密码" })
+              .layoutWeight(1)
+              .type(InputType.Password)
+              .backgroundColor(Color.Transparent)
+              .onChange((value) => {
+                this.newComfirmPassword = value;
+              })
+          }.margin({top:size.middleGap})
+        }
+        .blockStyle()
+
+        Text('确定')
+          .width('100%')
+          .padding(size.middleGap)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(colors.warn)
+          .margin({ top: size.middleGap })
+          .fontColor(Color.White)
+          .borderRadius(size.middleBorderRaduis * 2)
+          .onClick(this.useSumbit)
+
+      }
+      .width('100%')
+      .height('100%')
+      .padding({left:size.middleGap,right:size.middleGap})
+      .backgroundColor(colors.pageBackground)
+    }
+  }
+}
+
+
+// ChatPage.ets
+import * as colors from '../theme/color';
+import * as size from '../theme/size';
+import router from '@ohos.router';
+import {
+  ChatModelType,
+  ChatType,
+  GroupedByChatIdType,
+  GroupedByTimeAgoType,
+  ChatHistoryType,
+  ChatParamsType,
+  DocumentType,
+  UserDataType,
+  TenantUserType,
+  DirectoryType,
+  DocumentCheckType,
+  PromptInterface
+} from '../type/Index';
+import {
+  getModelListService,
+  getChatHistoryService,
+  getMyDocumentService,
+  deleteMyDocumentService,
+  getTenantUserService,
+  getDirectoryListService,
+  getPromptService,
+  updatePromptService
+} from '../service/Index';
+import { PositionEnum } from '../common/enum';
+import AvaterComponent from "../components/AvaterComponent";
+import { HOST, PAGE_SIZE, USER_DATA, DEFAULT_TENANT_USER,TENANT_USER_DATA} from '../common/constant';
+import { formatTimeAgo, generateSecureID, formatTime} from "../utils/common";
+import { display, promptAction } from '@kit.ArkUI';
+import webSocket from '@ohos.net.webSocket';
+import { BusinessError } from '@kit.BasicServicesKit';
+import api from '../api';
+import preference from '../utils/PreferenceModel';
+import OptionDialogComponent from '../components/OptionDialogComponent';
+import DialogComponent from "../components/DialogComponent";
+import BottomDialogComponent from "../components/BottomDialogComponent";
+import MarkdownRenderer from "../components/MarkdownRenderer";
+
+@Entry
+@Component
+export default struct ChatPage {
+  @State modelList: Array<ChatModelType> = []
+  @State activeModelName: string = "";
+  @State chatId: string = "";
+  @State loading: boolean = false;
+  @State showMenu: boolean = false;
+  @State pageNum: number = 1;
+  @State total: number = 0;
+  @State historyList: GroupedByTimeAgoType = {}; // 历史记录数据
+  @State token: string = "";
+  @State showHistory:boolean = false;
+  private scroller: Scroller = new Scroller()
+  private myDocList:DocumentType[] = [];
+  @State groupDocList:DocumentCheckType[] = [];
+  @State chatList: Array<ChatType> = [
+    {
+      responseContent: "你好，我是智能音乐助手小吴同学，请问有什么可以帮助您？",
+      position: PositionEnum.LEFT,
+    }
+  ];
+  @State thinkContent: string = "";
+  @State responseContent: string = "";
+  @State showThink:boolean = false;
+  @State type:string = "";
+  @State language:string = "zh";
+  @StorageLink(USER_DATA) userData: UserDataType = {} as UserDataType;
+  @State directoryList:Array<DirectoryType> = [];
+  @State checkedDocIds:string[]=[];
+  private message: string = "";
+  private dialogController: CustomDialogController | null = null
+  private ws: webSocket.WebSocket | null = null;
+  @State promptData: PromptInterface | null = null; // 提示词数据
+  @State userInputValue: string = ""
+  @Watch('onTenantUserChange')
+  @StorageLink(TENANT_USER_DATA) tenantUser: TenantUserType = {} as TenantUserType;
+
+  @State promptInputValue: string = ''; // 提示词输入框的值
+  private promptDialogController: CustomDialogController | null = null; // 提示词对话框控制器
+  private myDocDialogController: CustomDialogController | null = null; // 我的文档对话框控制器
+  private historyDialogController: CustomDialogController | null = null; // 历史记录对话框控制器
+
+  @Styles
+  blockStyle(){
+    .backgroundColor(colors.white)
+    .borderRadius(size.middleBorderRaduis)
+    .padding(size.middleGap)
+    .width('100%')
+    .margin({ top: size.middleGap })
+  }
+
+  /**
+   * @author: system
+   * @description: 监听租户变化，重新加载提示词
+   * @date: 2026-04-27
+   */
+  async onTenantUserChange() {
+    if (this.tenantUser && (this.tenantUser.tenantId || this.tenantUser.id)) {
+      await this.getPrompt();
+    }
+  }
+
+  async aboutToAppear() {
+    await this.getStorageTenant();
+    getModelListService().then((res) => {
+      this.modelList = res.data;
+      this.activeModelName = res.data[0].modelName;
+    })
+    // 在租户信息加载完成后获取提示词
+    await this.getPrompt();
+  }
+
+  aboutToDisappear() {
+    this.ws?.close();
+  }
+
+  onSend = async () => {
+    if (this.userInputValue.trim() === "") {
+      promptAction.showToast({
+        message: "请输入要问的问题",
+        duration: 2000,
+        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+      })
+    } else {
+      if (!this.ws) {
+        await this.connectWebSocket();
+      }
+      this.chatId = this.chatId || generateSecureID();
+      const payload: ChatParamsType = {
+        modelName: this.activeModelName,
+        chatId: this.chatId, // 替换为实际聊天ID
+        prompt: this.userInputValue.trim(),
+        type:this.type,
+        docIds:this.type === "document" ? this.checkedDocIds : [],
+        showThink:this.showThink,
+        language: this.language // 如果需要上传文件，请根据实际情况调整
+      };
+      this.chatList.push({
+        text: this.userInputValue.trim(),
+        position: PositionEnum.RIGHT,
+      });
+
+      this.userInputValue = "";
+      this.ws?.send(JSON.stringify(payload), () => {
+        this.loading = true;
+        console.log("发送消息成功")
+      })
+    }
+  }
+
+  connectWebSocket(): Promise<string> {
+    return new Promise(async (resolve, reject) => {
+      if (!this.token) {
+        this.token = await preference.getToken() as string;
+      }
+      const url = `ws://${HOST.replace(/http[s]?:\/\//, "")}${api.chatWs}?token=${this.token}`; // 替换为实际API地址
+      this.ws = webSocket.createWebSocket();
+      // 设置事件监听
+      this.ws.on('open', () => {
+        resolve('')
+      });
+      this.ws.on('message', (error: BusinessError, data: string | ArrayBuffer) => {
+        if (data !== "[completed]") {
+          this.message += data;
+          // 使用正则提取内容
+          if (/^<think>/.test(this.message) && /<\/think>/.test(this.message) && !/<\/think>/.test(data.toString())) {
+            this.responseContent += data;
+          } else {
+            this.thinkContent += data;
+          }
+        } else { //对话已完成
+          this.message = "";
+          this.loading = false;
+          this.chatList.push({
+            responseContent: this.responseContent,
+            thinkContent: this.thinkContent,
+            position: PositionEnum.LEFT,
+          });
+          this.thinkContent = this.responseContent = "";
+        }
+        this.scroller.scrollEdge(Edge.Bottom)
+      });
+      this.ws.on('close', () => {
+        this.ws = null
+        console.log('连接关闭')
+      });
+      this.ws.on('error', (err: Error) => {
+        this.ws = null
+        console.error('错误:', JSON.stringify(err))
+      });
+      // 发起连接
+      this.ws.connect(url);
+    });
+  }
+
+  /**
+   * @author: wuwenqiang
+   * @description: 获取租户信息
+   * @date: 2025-8-10 18:06
+   */
+  getStorageTenant = (): Promise<void> => {
+    return preference.getTenantId(this.userData.id!).then(async (res) => {
+      if (res !== undefined && res !== null && res !== "") {
+        await getTenantUserService(res).then((respone) => {
+          if (respone.data) {
+            AppStorage.SetOrCreate<TenantUserType>(TENANT_USER_DATA, respone.data as TenantUserType);
+          } else {
+            AppStorage.SetOrCreate<TenantUserType>(TENANT_USER_DATA, this.getDefaultTenantUser());
+          }
+        })
+      } else {
+        AppStorage.SetOrCreate<TenantUserType>(TENANT_USER_DATA, this.getDefaultTenantUser());
+      }
+      // 租户切换后重新加载提示词
+      await this.getPrompt();
+    }).catch(() => {
+      AppStorage.SetOrCreate<TenantUserType>(TENANT_USER_DATA, this.getDefaultTenantUser());
+      // 租户切换后重新加载提示词
+      this.getPrompt();
+    });
+  }
+
+  getDefaultTenantUser():TenantUserType{
+    const defaultTenantUser:TenantUserType = JSON.parse(JSON.stringify(DEFAULT_TENANT_USER));
+    defaultTenantUser.userId = defaultTenantUser.tenantId = this.userData.id!;
+    defaultTenantUser.username = this.userData.username;
+    return defaultTenantUser
+  }
+
+  /**
+   * @author: wuwenqiang
+   * @description: 打开文件目录对话框
+   * @date: 2025-9-17 10:19
+   */
+  onShowDirectoryDialog = () => {
+    getDirectoryListService(this.tenantUser.tenantId || this.tenantUser.id).then((res)=>{
+      this.directoryList.splice(1,this.directoryList.length);
+      this.directoryList.push(...res.data);
+      this.dialogController = new CustomDialogController({
+        customStyle: true,
+        builder: BottomDialogComponent({
+          dialogHeight: '80%',
+          builder: this.directoryListBuilder.bind(this)
+        }),
+        alignment: DialogAlignment.Bottom,
+      })
+      this.dialogController.open()
+    })
+
+  }
+
+  /**
+   * @author: system
+   * @description: 我的文档对话框内容构建器
+   * @date: 2026-04-28
+   */
+  @Builder
+  myDocumentBuilder() {
+    Column() {
+      // 标题栏
+      Row() {
+        Blank().width(size.smallIcon).height(size.smallIcon)
+        Text('我的文档')
+          .fontSize(size.middleFont)
+          .fontWeight(FontWeight.Medium)
+          .padding(size.middleGap)
+          .textAlign(TextAlign.Center)
+          .layoutWeight(1)
+        Image($r("app.media.icon_close"))
+          .width(size.middleFont)
+          .height(size.middleFont)
+          .opacity(0.5)
+          .onClick(() => {
+            this.myDocDialogController?.close()
+          })
+          .margin({ right: size.middleGap })
+      }
+      .width("100%")
+      .justifyContent(FlexAlign.Center)
+      .border({
+        width: { bottom: 1 },
+        color: { bottom: colors.borderColor },
+        style: { bottom: BorderStyle.Solid }
+      })
+
+      // 文档列表内容区
+      if (this.myDocList.length === 0) {
+        Column() {
+          Text("暂无文档")
+            .fontColor(colors.gray)
+            .padding(size.middleGap)
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
+      } else {
+        Scroll() {
+          List() {
+            ForEach(this.myDocList, (item: DocumentType, index: number) => {
+              ListItem() {
+                Column({ space: size.miniGap }) {
+                  Text(formatTime(item.createTime))
+                    .fontColor(colors.gray)
+                    .fontSize(12)
+                    .width('100%')
+                  Text(item.name)
+                    .maxLines(2)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
+                    .width('100%')
+                    .fontSize(size.middleFont)
+                }
+                .alignItems(HorizontalAlign.Start)
+                .justifyContent(FlexAlign.Start)
+                .width('100%')
+                .padding({
+                  top: size.middleGap,
+                  bottom: size.middleGap,
+                  left: size.middleGap,
+                  right: size.middleGap
+                })
+              }
+              .swipeAction({
+                end: () => {
+                  return this.DeleteButton(item)
+                }
+              })
+            })
+          }
+          .width('100%')
+        }
+        .layoutWeight(1)
+        .backgroundColor(colors.white)
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(colors.white)
+    .borderRadius({ topLeft: size.middleBorderRaduis, topRight: size.middleBorderRaduis })
+  }
+
+  /**
+   * @author: wuwenqiang
+   * @description: 收藏夹
+   * @date: 2024-07-01 21:45
+   */
+  @Builder
+  directoryListBuilder() {
+    Column() {
+      Row() {
+        Image($r("app.media.icon_add"))
+          .width(size.middleFont)
+          .height(size.middleFont)
+          .opacity(0.5)
+          .onClick(() => {
+
+          })
+          .margin({ left: size.middleGap })
+        Text('选择文件夹')
+          .padding(size.middleGap)
+          .textAlign(TextAlign.Center)
+          .layoutWeight(1)
+        Image($r("app.media.icon_close"))
+          .width(size.middleFont)
+          .height(size.middleFont)
+          .opacity(0.5)
+          .onClick(() => {
+            this.dialogController?.close()
+          })
+          .margin({ right: size.middleGap })
+      }
+      .justifyContent(FlexAlign.Center)
+      .border({
+        width: { bottom: 1 },
+        color: { bottom: colors.borderColor },
+        style: { bottom: BorderStyle.Solid }
+      })
+    }
+    Column(){
+
+    }.backgroundColor(colors.pageBackground).padding({
+      left: size.middleGap,
+      right: size.middleGap,
+      top: size.middleGap
+    }).flexGrow(1)
+  }
+
+  // page/ChatPage.ets - 在组件内部添加以下方法
+
+  /**
+   * @author: system
+   * @description: 显示修改提示词对话框
+   * @date: 2026-04-27
+   */
+  showPromptDialog = () => {
+    // 获取当前提示词内容
+    const tenantId = this.tenantUser.tenantId || this.tenantUser.id;
+    if (!tenantId) {
+      promptAction.showToast({
+        message: "获取租户信息失败",
+        duration: 2000,
+        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+      });
+      return;
+    }
+
+    // 先获取最新的提示词
+    getPromptService(tenantId).then((res) => {
+      this.promptInputValue = res.data.prompt;
+
+      // 打开对话框
+      this.promptDialogController = new CustomDialogController({
+        customStyle: true,
+        builder: BottomDialogComponent({
+          dialogHeight: 'auto',
+          builder: this.promptDialogBuilder.bind(this)
+        }),
+        alignment: DialogAlignment.Bottom,
+      })
+      this.promptDialogController.open()
+    }).catch(() => {
+      this.promptDialogController = new CustomDialogController({
+        customStyle: true,
+        builder: BottomDialogComponent({
+          dialogHeight: 'auto',
+          builder: this.promptDialogBuilder.bind(this)
+        }),
+        alignment: DialogAlignment.Bottom,
+      })
+      this.promptDialogController.open()
+    });
+  }
+
+  /**
+   * @author: system
+   * @description: 保存提示词
+   * @date: 2026-04-27
+   */
+  savePrompt = () => {
+    const tenantId = this.tenantUser.tenantId;
+    if (!tenantId) {
+      promptAction.showToast({
+        message: "获取租户信息失败",
+        duration: 2000,
+        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+      });
+      return;
+    }
+    const promptData: PromptInterface = {
+      id: this.promptData?.id || '',
+      tenantId: tenantId,
+      userId: "",
+      prompt: this.promptInputValue.trim(),
+      createTime: "",
+      updateTime: ""
+    };
+    updatePromptService(promptData).then((res) => {
+      if (res.data !== null) {
+        promptAction.showToast({
+          message: "保存成功",
+          duration: 2000,
+          bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+        });
+        // 更新本地提示词数据
+        this.promptData = res.data;
+        // 关闭对话框
+        this.promptDialogController?.close();
+      } else {
+        promptAction.showToast({
+          message: res.msg || "保存失败",
+          duration: 2000,
+          bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+        });
+      }
+    }).catch((error:Error) => {
+      console.error('保存提示词失败:', JSON.stringify(error));
+      promptAction.showToast({
+        message: "保存失败，请重试",
+        duration: 2000,
+        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+      });
+    });
+  }
+
+  /**
+   * @author: system
+   * @description: 提示词对话框内容构建器
+   * @date: 2026-04-27
+   */
+  @Builder
+  promptDialogBuilder() {
+    Column() {
+      // 标题
+      Text('修改提示词')
+        .fontSize(size.middleFont)
+        .fontWeight(FontWeight.Medium)
+        .padding(size.middleGap)
+        .width('100%')
+        .textAlign(TextAlign.Center)
+        .border({
+          width: { bottom: 1 },
+          color: { bottom: colors.borderColor },
+          style: { bottom: BorderStyle.Solid }
+        })
+
+      // 灰色背景内容区
+      Column() {
+        // 白色卡片
+        Column() {
+          // 多行文本框
+          TextArea({
+            text: this.promptInputValue,
+            placeholder: "请输入提示词"
+          })
+            .height(size.textareaHeight)
+            .backgroundColor(colors.white)
+            .borderRadius(size.middleBorderRaduis)
+            .padding(size.middleGap)
+            .onChange((value: string) => {
+              this.promptInputValue = value;
+            })
+        }
+        .width('100%')
+        .backgroundColor(colors.white)
+        .borderRadius(size.middleBorderRaduis)
+        .padding(size.middleGap)
+
+        // 保存按钮
+        Text('保存')
+          .width('100%')
+          .height(size.btnHeight)
+          .textAlign(TextAlign.Center)
+          .borderRadius(size.btnHeight / 2)
+          .margin({ top: size.middleGap, bottom: size.middleGap })
+          .fontColor(Color.White)
+          .backgroundColor(this.promptInputValue.trim() ? colors.primary : colors.gray)
+          .enabled(this.promptInputValue.trim() ? true : false)
+          .onClick(() => {
+            if (this.promptInputValue.trim()) {
+              this.savePrompt();
+            }
+          })
+      }
+      .layoutWeight(1)
+      .width('100%')
+      .backgroundColor(colors.pageBackground)
+      .padding(size.middleGap)
+    }
+    .height("80%")
+    .width('100%')
+    .backgroundColor(colors.white)
+    .borderRadius({ topLeft: size.middleBorderRaduis, topRight: size.middleBorderRaduis })
+  }
+
+  /**
+   * @author: system
+   * @description: 显示我的文档对话框
+   * @date: 2026-04-28
+   */
+  showMyDocumentDialog = () => {
+    // 加载我的文档列表
+    getMyDocumentService(this.tenantUser.tenantId).then((res) => {
+      this.myDocList = res.data;
+      // 打开对话框
+      this.myDocDialogController = new CustomDialogController({
+        customStyle: true,
+        builder: BottomDialogComponent({
+          dialogHeight: '80%',
+          builder: this.myDocumentBuilder.bind(this)
+        }),
+        alignment: DialogAlignment.Bottom,
+      })
+      this.myDocDialogController.open()
+    }).catch((error:Error) => {
+      console.error('获取文档列表失败:', JSON.stringify(error));
+      promptAction.showToast({
+        message: "获取文档列表失败",
+        duration: 2000,
+        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+      });
+    });
+  }
+
+  // popup构造器定义弹框内容
+  @Builder
+  popupBuilder() {
+    Column() {
+      Text("修改提示词").height(size.btnHeight).onClick(() => {
+        this.showMenu = false;
+        this.showPromptDialog();
+      })
+      Divider().height(1).color(colors.borderColor)
+      Text("上传文档").height(size.btnHeight).onClick(this.onShowDirectoryDialog)
+      Divider().height(1).color(colors.borderColor)
+      Text("我的文档").height(size.btnHeight).onClick(()=>{
+        this.showMenu = false;
+        this.showMyDocumentDialog();
+      })
+      Divider().height(1).color(colors.borderColor)
+      Text("历史记录").height(size.btnHeight).onClick(()=>{
+        this.showMenu = false;
+        this.showHistoryDialog(); // 修改：改为打开对话框
+      })
+      Divider().height(1).color(colors.borderColor)
+      Text("切换模型").height(size.btnHeight).onClick(this.onTabModel)
+    }
+    .width(size.popupMenuWidth)
+  }
+
+  /**
+   * @author: system
+   * @description: 显示历史记录对话框
+   * @date: 2026-04-28
+   */
+  showHistoryDialog = () => {
+    // 清空并重新加载历史记录数据
+    this.historyList = {};
+    this.pageNum = 1;
+    this.loadHistoryData();
+
+    // 打开对话框
+    this.historyDialogController = new CustomDialogController({
+      customStyle: true,
+      builder: BottomDialogComponent({
+        dialogHeight: '80%',
+        builder: this.historyDialogBuilder.bind(this)
+      }),
+      alignment: DialogAlignment.Bottom,
+    })
+    this.historyDialogController.open()
+  }
+
+  /**
+   * @author: system
+   * @description: 加载历史记录数据
+   * @date: 2026-04-28
+   */
+  loadHistoryData = () => {
+    getChatHistoryService(this.tenantUser.tenantId,this.pageNum, PAGE_SIZE).then((res) => {
+      this.total = res.total
+      const result: GroupedByChatIdType = {}
+      res.data.forEach((aItem) => {
+        aItem.timeAgo = formatTimeAgo(aItem.createTime);
+        if (!result[aItem.chatId]) {
+          result[aItem.chatId] = [];
+        }
+        result[aItem.chatId].push(aItem);
+      });
+
+      const keys: string[] = Object.keys(result);
+      keys.forEach((key) => {
+        const timeAgo = result[key][0].timeAgo;
+        if (!this.historyList[timeAgo]) {
+          this.historyList[timeAgo] = [];
+        }
+        this.historyList[timeAgo].push(result[key])
+      });
+    })
+  }
+
+  /**
+   * @author: system
+   * @description: 加载更多历史记录
+   * @date: 2026-04-28
+   */
+  loadMoreHistory = () => {
+    if (this.total > this.pageNum * PAGE_SIZE) {
+      this.pageNum++;
+      getChatHistoryService(this.tenantUser.tenantId,this.pageNum, PAGE_SIZE).then((res) => {
+        const result: GroupedByChatIdType = {}
+        res.data.forEach((aItem) => {
+          aItem.timeAgo = formatTimeAgo(aItem.createTime);
+          if (!result[aItem.chatId]) {
+            result[aItem.chatId] = [];
+          }
+          result[aItem.chatId].push(aItem);
+        });
+
+        const keys: string[] = Object.keys(result);
+        keys.forEach((key) => {
+          const timeAgo = result[key][0].timeAgo;
+          if (!this.historyList[timeAgo]) {
+            this.historyList[timeAgo] = [];
+          }
+          this.historyList[timeAgo].push(result[key])
+        });
+      })
+    }
+  }
+
+  /**
+   * @author: system
+   * @description: 历史记录对话框内容构建器
+   * @date: 2026-04-28
+   */
+  @Builder
+  historyDialogBuilder() {
+    Column() {
+      // 标题栏
+      Row() {
+        Blank().width(size.smallIcon).height(size.smallIcon)
+        Text('历史记录')
+          .fontSize(size.middleFont)
+          .fontWeight(FontWeight.Medium)
+          .padding(size.middleGap)
+          .textAlign(TextAlign.Center)
+          .layoutWeight(1)
+        Image($r("app.media.icon_close"))
+          .width(size.middleFont)
+          .height(size.middleFont)
+          .opacity(0.5)
+          .onClick(() => {
+            this.historyDialogController?.close()
+          })
+          .margin({ right: size.middleGap })
+      }
+      .width("100%")
+      .justifyContent(FlexAlign.Center)
+      .border({
+        width: { bottom: 1 },
+        color: { bottom: colors.borderColor },
+        style: { bottom: BorderStyle.Solid }
+      })
+
+      // 历史记录内容区
+      Scroll() {
+        Column({ space: size.middleGap }) {
+          ForEach(Object.keys(this.historyList), (key: string) => {
+            Column({ space: size.miniGap }) {
+              Text(key).fontColor(colors.gray)
+              ForEach(this.historyList[key], (items: ChatHistoryType[]) => {
+                Column() {
+                  Text(items[0].prompt)
+                    .maxLines(1)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
+                    .width('100%')
+                    .padding({
+                      top: size.smallGap,
+                      bottom: size.smallGap,
+                      left: size.smallGap,
+                      right: size.smallGap
+                    })
+                    .onClick(() => {
+                      // 关闭对话框
+                      this.historyDialogController?.close();
+                      // 清空当前聊天列表
+                      this.chatList.length = 0;
+                      // 设置当前聊天ID
+                      this.chatId = items[0].chatId;
+                      // 加载历史聊天记录
+                      items.forEach((item) => {
+                        this.chatList.push({
+                          text: item.prompt,
+                          position: PositionEnum.RIGHT
+                        }, {
+                          thinkContent: item.thinkContent,
+                          responseContent: item.responseContent,
+                          position: PositionEnum.LEFT
+                        })
+                      })
+                    })
+                }
+                .width('100%')
+                .backgroundColor(colors.white)
+                .borderRadius(size.smallBorderRaduis)
+                .margin({ bottom: size.smallGap })
+              })
+            }
+            .alignItems(HorizontalAlign.Start)
+            .width('100%')
+          })
+        }
+        .alignItems(HorizontalAlign.Start)
+        .justifyContent(FlexAlign.Start)
+        .padding(size.middleGap)
+        .width('100%')
+      }
+      .layoutWeight(1)
+      .scrollable(ScrollDirection.Vertical)
+      .onScrollEdge((side: Edge) => {
+        if (side === Edge.Bottom) {
+          this.loadMoreHistory();
+        }
+      })
+      .backgroundColor(colors.pageBackground)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(colors.white)
+    .borderRadius({ topLeft: size.middleBorderRaduis, topRight: size.middleBorderRaduis })
+  }
+
+  onTabModel=()=>{
+    this.dialogController = new CustomDialogController({
+      customStyle: true,
+      builder: OptionDialogComponent({
+        cancel: (): void => this.onCancel(),
+        confirm: (value): void => this.onConfirm(value),
+        options: this.modelList.map((item)=>item.modelName),
+      }),
+      alignment: DialogAlignment.Bottom,
+    })
+  }
+
+  /**
+   * @description: 修改用户信息
+   * @date: 2024-01-10 23:01
+   * @author wuwenqiang
+   */
+  onConfirm(value: string) {
+    this.activeModelName = value;
+  }
+
+  onCancel(){
+    this.dialogController?.close()
+  }
+
+  /**
+   * @author: system
+   * @description: 获取提示词
+   * @date: 2026-04-27
+   */
+  getPrompt = async (): Promise<void> => {
+    const tenantId = this.tenantUser.tenantId || this.tenantUser.id;
+    if (!tenantId) {
+      console.warn('获取提示词失败：租户ID为空');
+      return;
+    }
+
+    try {
+      const res = await getPromptService(tenantId);
+      if (res.data && res.data.prompt) {
+        this.promptData = res.data;
+      }
+    } catch (error) {
+      console.error('获取提示词失败:', JSON.stringify(error));
+    }
+  }
+
+  // page/ChatPage.ets - 修改 DeleteButton 方法
+
+  /**
+   * @author: wuwenqiang
+   * @description: 删除弹窗
+   * @date: 2025-04-13 12:07
+   */
+  @Builder
+  DeleteButton(docItem:DocumentType) {
+    Column() {
+      Text('删除')
+        .fontColor(Color.White)
+        .fontSize(16)
+    }
+    .justifyContent(FlexAlign.Center)
+    .width(80)
+    .height('100%')
+    .backgroundColor(colors.warn)
+    .onClick(() => {
+      this.dialogController = new CustomDialogController({
+        customStyle: false,
+        builder: DialogComponent({
+          title: `是否删除文档：${docItem.name}`,
+          cancel: () => {
+            this.dialogController?.close();
+          },
+          confirm: () => {
+            deleteMyDocumentService(docItem.id).then((res)=>{
+              promptAction.showToast({
+                message: "删除文档成功",
+                duration: 2000,
+                bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+              })
+              // 刷新文档列表
+              getMyDocumentService(this.tenantUser.tenantId).then((res) => {
+                this.myDocList = res.data;
+              });
+              this.dialogController?.close()
+            }).catch(()=>{
+              promptAction.showToast({
+                message: "删除文档失败",
+                duration: 2000,
+                bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+              })
+            })
+          },
+        }),
+        alignment: DialogAlignment.Center,
+      })
+      this.dialogController.open()
+    })
+  }
+
+  onClickDoc(){
+    getMyDocumentService(this.tenantUser.tenantId).then((res)=>{
+      this.groupDocList.length = 0;
+      res.data.forEach((aItem)=>{
+        let docGroupItem:DocumentCheckType|undefined = this.groupDocList.find((bItem)=> bItem.directoryId == aItem.directoryId)
+        if(!docGroupItem){
+          docGroupItem = {
+            checked:false,
+            directoryName:aItem.directoryName,
+            directoryId:aItem.directoryId,
+            docList:[]
+          }
+          this.groupDocList.push(docGroupItem);
+        }
+        aItem.checked = this.checkedDocIds.includes(aItem.id);
+        docGroupItem.docList.push(aItem);
+      })
+      this.dialogController = new CustomDialogController({
+      customStyle: true,
+      builder: BottomDialogComponent({
+        dialogHeight: '80%',
+        builder: this.documentCheckBuilder.bind(this)
+      }),
+      alignment: DialogAlignment.Bottom,
+    })
+      this.dialogController.open()
+    })
+  }
+
+  // popup构造器定义弹框内容
+  @Builder
+  documentCheckBuilder() {
+    Column() {
+      Row() {
+        Blank().width(size.smallIcon).height(size.smallIcon)
+        Text('知识库')
+          .padding(size.middleGap)
+          .textAlign(TextAlign.Center)
+          .layoutWeight(1)
+        Image($r("app.media.icon_close"))
+          .width(size.middleFont)
+          .height(size.middleFont)
+          .opacity(0.5)
+          .onClick(() => {
+            this.dialogController?.close()
+          })
+          .margin({ right: size.middleGap })
+      }
+      .width("100%")
+      .justifyContent(FlexAlign.Center)
+      .border({
+        width: { bottom: 1 },
+        color: { bottom: colors.borderColor },
+        style: { bottom: BorderStyle.Solid }
+      })
+      Scroll(){
+        Column({space:size.middleGap}){
+          ForEach(this.groupDocList,(aItem:DocumentCheckType,aIndex:number)=>{
+            Column({space:size.middleGap}){
+              Row({space:size.smallGap}){
+                Text(aItem.directoryName)
+                Image($r("app.media.icon_arrow"))
+                  .height(size.smallGap)
+              }.justifyContent(FlexAlign.Start)
+              ForEach(aItem.docList,(bItem:DocumentType,bIndex)=>{
+                Row(){
+                  Text(bItem.name).layoutWeight(1)
+                  Stack({ alignContent: Alignment.Center }) {
+                    // 圆形背景
+                    Circle({ width: size.middleIcon, height: size.middleIcon })
+                      .fill(bItem.checked ? '#007DFF' : '#F2F2F2')
+                      .stroke(bItem.checked ? '#007DFF' : '#999999')
+
+                    // 使用文字对勾
+                    if (bItem.checked) {
+                      Text('✓')
+                        .fontSize(size.middleIcon/2)
+                        .fontColor(Color.White)
+                        .fontWeight(FontWeight.Bold)
+                    }
+                  }
+                  .onClick(() => {
+                    // 添加动画效果
+                    animateTo({ duration: 200 }, () => {
+                      bItem.checked = !bItem.checked;
+                      this.groupDocList.splice(aIndex,1,JSON.parse(JSON.stringify(aItem)));
+                      this.checkedDocIds.length = 0;
+                      this.groupDocList.forEach((cItem)=>{
+                        cItem.docList.forEach((dItem)=>{
+                          if(dItem.checked){
+                            this.checkedDocIds.push(dItem.id);
+                          }
+                        })
+                      })
+                    })
+                  })
+                }
+              })
+            }
+            .padding({bottom:aIndex !== this.groupDocList.length - 1 ? size.middleGap : 0})
+            .border({
+              style: {
+                bottom: BorderStyle.Solid
+              },
+              width:{
+                bottom: aIndex !== this.groupDocList.length - 1 ? 1 : 0,
+              },
+              color:{
+                bottom:colors.gray
+              }
+            }).justifyContent(FlexAlign.Start).alignItems(HorizontalAlign.Start)
+          })
+        }.blockStyle().width("auto").margin(size.middleGap).justifyContent(FlexAlign.Start).alignItems(HorizontalAlign.Start)
+      }
+      .align(Alignment.Top).layoutWeight(1).backgroundColor(colors.pageBackground)
+    }
+    .justifyContent(FlexAlign.Start)
+    .width("100%").height("100%")
+  }
+
+  build() {
+    Stack() {
+      Column() {
+        Row() {
+          AvaterComponent({dimensions:size.middleAvater,avater:this.userData.avater}).onClick(()=>{
+            router.pushUrl({
+              url: 'pages/UserPage'
+            });
+          })
+          Text("当前接入模型：" + this.activeModelName).layoutWeight(1).textAlign(TextAlign.Center)
+          Image($r('app.media.icon_menu'))
+            .width(size.smallIcon)
+            .height(size.smallIcon)
+            .opacity(size.opacity)
+            .onClick(() => {
+              this.showMenu = true;
+            })
+            .bindPopup(this.showMenu, {
+              builder: this.popupBuilder, // 气泡的内容
+              placement: Placement.Bottom, // 气泡的弹出位置
+              popupColor: colors.gray // 气泡的背景色
+            })
+        }
+        .alignItems(VerticalAlign.Center)
+        .padding(size.middleGap)
+        .backgroundColor(colors.white)
+
+        Scroll(this.scroller) {
+          Column({ space: size.middleGap }) {
+            ForEach(this.chatList, (item: ChatType, index: number) => {
+              if (item.position == PositionEnum.LEFT) {
+                if (item.thinkContent || item.responseContent) {
+                  Row() {
+                    Image($r("app.media.icon_ai"))
+                      .width(size.middleIcon)
+                      .height(size.middleIcon)
+                      .margin({ right: size.smallIcon })
+                    Row() {
+                      Image($r("app.media.icon_triangle"))
+                        .width(size.smallIcon)
+                        .height(size.smallIcon)
+                        .alignSelf(ItemAlign.Start)
+                        .position({ x: -size.smallIcon / 1.5, y: size.smallIcon / 2 })
+                      Row() {
+                        Row(){
+                          Column(){
+                            if (item.thinkContent) {
+                              Text(item.thinkContent?.replace(/^(<think>)|(<\/think>)$/g, ""))
+                                .fontColor(colors.gray)
+                            }
+                            if (item.responseContent) {
+                              // Text(item.responseContent)
+                              MarkdownRenderer({markdownText:item.responseContent})
+                            }
+                          }.alignItems(HorizontalAlign.Start)
+                        }
+                        .justifyContent(FlexAlign.Start)
+                        .backgroundColor(colors.white)
+                        .justifyContent(FlexAlign.Start)
+                        .borderRadius(size.middleBorderRaduis)
+                        .padding(size.middleGap)
+                      }.layoutWeight(1)
+                    }.layoutWeight(1)
+                  }
+                  .width("100%")
+                  .alignItems(VerticalAlign.Top)
+                  .justifyContent(FlexAlign.Start)
+                }
+              } else {
+                Row() {
+                  Row() {
+                    Text(item.text)
+                      .backgroundColor(colors.white)
+                      .borderRadius(size.middleBorderRaduis)
+                      .padding(size.middleGap)
+                    Image($r("app.media.icon_triangle"))
+                      .width(size.smallIcon)
+                      .height(size.smallIcon)
+                      .alignSelf(ItemAlign.Start)
+                      .rotate({ angle: 180 })
+                      .position({ right: -size.smallIcon / 1.5, top: size.smallIcon / 2 })
+                  }.layoutWeight(1).justifyContent(FlexAlign.End)
+
+                  AvaterComponent({ dimensions: size.middleIcon,avater:this.userData.avater }).margin({ left: size.smallIcon })
+                }
+                .width("100%")
+              }
+            })
+            if (this.loading) {
+              Row() {
+                Image($r("app.media.icon_ai"))
+                  .width(size.middleIcon)
+                  .height(size.middleIcon)
+                  .margin({ right: size.smallIcon })
+                Row() {
+                  Image($r("app.media.icon_triangle"))
+                    .width(size.smallIcon)
+                    .height(size.smallIcon)
+                    .alignSelf(ItemAlign.Start)
+                    .position({ x: -size.smallIcon / 1.5, y: size.smallIcon / 2 })
+                  Column() {
+                    if (!this.thinkContent && !this.responseContent) {
+                      Text("正在思考中").fontColor(colors.gray)
+                    } else {
+                      if (this.thinkContent) {
+                        Text(this.thinkContent.replace(/^(<think>)[\s\s\n]?|(<\/think>[\s\S\n]?)$/gi, ""))
+                          .fontColor(colors.gray)
+                      }
+                      if (this.responseContent) {
+                        MarkdownRenderer({markdownText:this.responseContent})
+                        // Text(this.responseContent)
+                      }
+                    }
+                  }
+                }.backgroundColor(colors.white)
+                .borderRadius(size.middleBorderRaduis)
+                .padding(size.middleGap)
+                .layoutWeight(1)
+              }
+              .width("100%")
+              .alignItems(VerticalAlign.Top)
+            }
+          }
+          .width("100%")
+          .justifyContent(FlexAlign.Start)
+          .alignItems(HorizontalAlign.Start)
+        }
+        .padding(size.middleGap)
+        .align(Alignment.Top)
+        .scrollable(ScrollDirection.Vertical)
+        .layoutWeight(1)
+        Scroll(){
+          Row({space:size.middleGap}){
+            Text("深度思考")
+              .fontColor(this.showThink ? colors.primary :colors.gray)
+              .borderRadius(size.inputHeight)
+              .border({
+                width:1,
+                color:this.showThink ? colors.primary :colors.gray,
+                style:BorderStyle.Solid
+              })
+              .padding({
+                top:size.smallGap,
+                bottom:size.smallGap,
+                left:size.middleGap,
+                right:size.middleGap
+              })
+              .backgroundColor(colors.white)
+              .onClick(()=>{
+                this.showThink = !this.showThink
+              })
+            Row({space:size.smallGap}){
+              Text("知识库")
+                .fontColor(this.type == "document" ? colors.primary :colors.gray)
+                .onClick(()=>{
+                  this.type = this.type === "document" ? "" : "document";
+                })
+              Image(this.type === "document" ? $r("app.media.icon_setting_active") : $r("app.media.icon_setting_disabled"))
+                .width(size.smallIcon)
+                .height(size.smallIcon)
+                .onClick(()=>{
+                  if(this.type !== "document"){
+                    this.type = "document";
+                  }else{
+                    this.onClickDoc()
+                  }
+                })
+            }
+            .backgroundColor(colors.white)
+            .borderRadius(size.inputHeight)
+              .border({
+                width:1,
+                color:this.type == "document" ? colors.primary :colors.gray,
+                style:BorderStyle.Solid
+              })
+              .padding({
+                top:size.smallGap,
+                bottom:size.smallGap,
+                left:size.middleGap,
+                right:size.middleGap
+              })
+
+            Text("查询数据库")
+              .fontColor(this.type == "db" ? colors.primary :colors.gray)
+              .borderRadius(size.inputHeight)
+              .border({
+                width:1,
+                color:this.type == "db" ? colors.primary :colors.gray,
+                style:BorderStyle.Solid
+              })
+              .padding(size.smallGap)
+              .backgroundColor(colors.white)
+              .onClick(()=>{
+                this.type = this.type === "db" ? "" : "db"
+              })
+            Row({space:size.smallGap}){
+              Text(this.language == "zh" ? "中文" : "英文")
+              Image($r('app.media.icon_switch')).width(size.smallIcon).height(size.smallGap)
+            }
+            .padding(size.smallGap)
+            .onClick(()=>{
+              this.language = this.language == "zh" ? "en" : "zh";
+            })
+            .borderRadius(size.inputHeight)
+            .border({
+              width:1,
+              color: colors.black,
+              style:BorderStyle.Solid
+            })
+          }
+        }
+        .backgroundColor(colors.pageBackground)
+        .padding(size.middleGap)
+        .scrollable(ScrollDirection.Horizontal)
+        Row({ space: size.middleGap }) {
+          Image($r("app.media.icon_chat"))
+            .opacity(size.opacity)
+            .width(size.middleIcon)
+            .height(size.middleIcon)
+            .onClick(() => {
+              this.chatId = "";
+            })
+          Row() {
+            TextInput({
+              text: this.userInputValue,
+              placeholder: "有问题，尽管问"
+            })
+              .height(size.middleAvater)
+              .layoutWeight(1)
+              .backgroundColor(Color.Transparent)
+              .onChange((value) => {
+                this.userInputValue = value.trim();
+              })
+
+            if (this.userInputValue) {
+              Image($r('app.media.icon_clear'))
+                .width(size.smallIcon)
+                .height(size.smallIcon)
+                .onClick(() => {
+                  this.userInputValue = '';
+                })
+                .margin({ right: size.middleGap })
+            }
+          }
+          .borderRadius(size.middleAvater)
+          .backgroundColor(colors.pageBackground)
+          .layoutWeight(1)
+
+          Row() {
+            if (this.loading) {
+              Row()
+                .height(size.smallIcon)
+                .width(size.smallIcon)
+                .backgroundColor(colors.gray)
+                .borderRadius(size.smallBorderRaduis / 2)
+            } else {
+              Image($r("app.media.icon_send"))
+                .opacity(size.opacity)
+                .width(size.middleIcon)
+                .height(size.middleIcon)
+                .onClick(this.onSend)
+            }
+
+          }
+          .width(size.middleAvater)
+          .height(size.middleAvater)
+          .borderRadius(size.middleAvater)
+          .backgroundColor(colors.pageBackground)
+          .alignItems(VerticalAlign.Center)
+          .justifyContent(FlexAlign.Center)
+        }
+        .backgroundColor(colors.white)
+        .padding(size.middleGap)
+        .alignItems(VerticalAlign.Center)
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(colors.pageBackground)
+
+    }.width("100%").height("100%")
+  }
+}
+
+// LoginPage.ets
+import router from '@ohos.router';
+import * as colors from '../theme/color';
+import * as size from '../theme/size';
+import { loginByEmailService, loginService, sendEmailVertifyCodeService } from '../service/Index';
+import { UserDataType } from '../type/Index';
+import { USER_DATA } from '../common/constant';
+import promptAction from '@ohos.promptAction'
+import display from '@ohos.display';
+import preference from '../utils/PreferenceModel';
+import httpRequest from '../utils/HttpUtil';
+import { strictEmailRegex } from '../utils/common';
+import GlobalLoading from "../components/GlobalLoading";
+import LoadingController from '../controller/LoadingController';
+
+@Entry
+@Component
+struct LoginPage {
+  @StorageLink(USER_DATA) userData: UserDataType | null = null;
+  userAccount: string = '';
+  password: string = '';
+  loading: boolean = false;
+  email: string = "405873717@qq.com"; // 邮箱
+  code: string = ""; // 验证码
+  @State activeIndex: number = 0
+  private loadingController: LoadingController = new LoadingController()
+
+  async aboutToAppear() {
+    this.userAccount = this.userData?.userAccount || "吴时吴刻";
+    this.password = await preference.getPassword(this.userData?.userAccount!) as string || "123456";
+  }
+
+  @Styles
+  blockStyle(){
+    .backgroundColor(colors.white)
+    .borderRadius(size.middleBorderRaduis)
+    .padding(size.middleGap)
+    .width('100%')
+    .margin({ top: size.middleGap })
+  }
+
+  @Styles
+  rowStyle(){
+    .border({
+      width: {
+        bottom: 1,
+      },
+      color: {
+        bottom: colors.pageBackground
+      },
+      style: {
+        bottom: BorderStyle.Solid
+      }
+    })
+    .width('100%')
+    .padding({ top: size.middleGap, bottom: size.middleGap })
+  }
+
+  useLogin = () => {
+    if (this.activeIndex === 0) {
+      if (!this.userAccount) {
+        return promptAction.showToast({
+          message: "账号不能为空",
+          duration: 2000,
+          bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+        })
+      } else if (!this.password) {
+        return promptAction.showToast({
+          message: "密码不能为空",
+          duration: 2000,
+          bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+        })
+      }
+      this.loadingController.showLoading();
+      this.loading = true;
+      loginService(this.userAccount, this.password).then(async res => {
+        promptAction.showToast({
+          message: "登录成功",
+          duration: 2000,
+          bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+        })
+        await preference.setToken(res.token);
+        httpRequest.setToken(res.token);
+        AppStorage.SetOrCreate<UserDataType>(USER_DATA, res.data)
+        router.replaceUrl({
+          url: 'pages/ChatPage', // 目标url
+        });
+      }).catch((e: Error) => {
+        console.log("错误",e)
+        promptAction.showToast({
+          message: "账号或密码错误，请重登录",
+          duration: 2000,
+          bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+        })
+      }).finally(() => {
+        this.loadingController.hideLoading();
+      })
+    } else {
+      if (!strictEmailRegex.test(this.email)) {
+        return promptAction.showToast({
+          message: "请输入正确的邮箱格式",
+          duration: 2000,
+          bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+        })
+      } else if (this.code.length !== 4) {
+        return promptAction.showToast({
+          message: "请输入4位数的验证码",
+          duration: 2000,
+          bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+        })
+      }
+      loginByEmailService(this.email, this.code).then(async (res) => {
+        promptAction.showToast({
+          message: "登录成功",
+          duration: 2000,
+          bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+        })
+        await preference.setToken(res.token);
+        httpRequest.setToken(res.token);
+        AppStorage.SetOrCreate<UserDataType>(USER_DATA, res.data)
+        router.replaceUrl({
+          url: 'pages/ChatPage', // 目标url
+        });
+      }).catch(() => {
+        promptAction.showToast({
+          message: "邮箱或者验证码错误",
+          duration: 2000,
+          bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+        })
+      }).finally(() => {
+        this.loadingController.hideLoading();
+      })
+    }
+
+  }
+
+  build() {
+    Column() {
+      GlobalLoading({ controller: this.loadingController })
+      Column() {
+        Image($r("app.media.icon_logo"))
+          .width(size.bigIcon * 2)
+          .height(size.bigIcon * 2)
+          .margin({ top: size.middleGap * 2, bottom: size.middleGap * 2 })
+        Row() {
+          Row() {
+            Text("账号密码登录")
+              .fontColor(this.activeIndex === 0 ? colors.primary : colors.black)
+              .border({
+              width: {
+                bottom: 2,
+              },
+              color: {
+                bottom: this.activeIndex === 0 ? colors.primary : colors.pageBackground
+              },
+              style: {
+                bottom: BorderStyle.Solid
+              }
+            })
+          }
+          .layoutWeight(1)
+          .justifyContent(FlexAlign.Center)
+          .onClick(() => {
+            this.activeIndex = 0
+          })
+
+          Row() {
+            Text("邮箱验证码登录").border({
+              width: {
+                bottom: 2,
+              },
+              color: {
+                bottom: this.activeIndex === 1 ? colors.primary : colors.white
+              },
+              style: {
+                bottom: BorderStyle.Solid
+              }
+            })
+          }.layoutWeight(1)
+          .justifyContent(FlexAlign.Center)
+          .onClick(() => {
+            this.activeIndex = 1
+          })
+        }.margin({ bottom: size.middleGap })
+
+        if (this.activeIndex === 0) {
+          Column() {
+            Row() {
+              Image($r('app.media.icon_user_active'))
+                .width(size.smallIcon)
+                .height(size.smallIcon)
+                .margin({ left: size.smallGap, right: size.smallGap })
+              TextInput({ placeholder: "请输入账号或邮箱", text: this.userAccount })
+                .layoutWeight(1)
+                .backgroundColor(Color.Transparent)
+                .onChange((value) => {
+                  this.userAccount = value;
+                })
+            }
+            .alignItems(VerticalAlign.Center)
+            .width('100%')
+            .padding(size.smallGap)
+            .border({
+              width: 1,
+              color: colors.pageBackground,
+              style: BorderStyle.Solid
+            })
+            .borderRadius(size.middleBorderRaduis * 2)
+
+            Row() {
+              Image($r('app.media.icon_password'))
+                .width(size.smallIcon)
+                .height(size.smallIcon)
+                .margin({ left: size.smallGap, right: size.smallGap })
+              TextInput({ placeholder: "请输入密码", text: this.password })
+                .type(InputType.Password)
+                .layoutWeight(1)
+                .backgroundColor(Color.Transparent)
+                .onChange((value) => {
+                  this.password = value;
+                })
+            }
+            .alignItems(VerticalAlign.Center)
+            .width('100%')
+            .margin({ top: size.middleGap })
+            .padding(size.smallGap)
+            .border({
+              width: 1,
+              color: colors.pageBackground,
+              style: BorderStyle.Solid
+            })
+            .borderRadius(size.middleBorderRaduis * 2)
+          }
+        } else {
+          Column() {
+            Row() {
+              Image($r('app.media.icon_user_active'))
+                .width(size.smallIcon)
+                .height(size.smallIcon)
+                .margin({ left: size.smallGap, right: size.smallGap })
+              TextInput({ placeholder: "请输入邮箱地址", text: this.email })
+                .layoutWeight(1)
+                .backgroundColor(Color.Transparent)
+                .onChange((value) => {
+                  this.email = value;
+                })
+              Image($r('app.media.icon_send'))
+                .width(size.smallIcon)
+                .height(size.smallIcon)
+                .margin({ left: size.smallGap, right: size.smallGap })
+                .onClick(() => {
+                  if (strictEmailRegex.test(this.email)) {
+                    sendEmailVertifyCodeService(this.email).then((res) => {
+                      promptAction.showToast({
+                        message: res.msg,
+                        duration: 2000,
+                        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+                      })
+                    })
+                  } else {
+                    promptAction.showToast({
+                      message: "请输入正确的邮箱格式",
+                      duration: 2000,
+                      bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+                    })
+                  }
+                })
+            }
+            .alignItems(VerticalAlign.Center)
+            .width('100%')
+            .padding(size.smallGap)
+            .border({
+              width: 1,
+              color: colors.pageBackground,
+              style: BorderStyle.Solid
+            })
+            .borderRadius(size.middleBorderRaduis * 2)
+
+            Row() {
+              Image($r('app.media.icon_password'))
+                .width(size.smallIcon)
+                .height(size.smallIcon)
+                .margin({ left: size.smallGap, right: size.smallGap })
+              TextInput({ placeholder: "请输入验证码", text: '' })
+                .layoutWeight(1)
+                .backgroundColor(Color.Transparent)
+                .onChange((value) => {
+                  this.code = value;
+                })
+            }
+            .alignItems(VerticalAlign.Center)
+            .width('100%')
+            .margin({ top: size.middleGap })
+            .padding(size.smallGap)
+            .border({
+              width: 1,
+              color: colors.pageBackground,
+              style: BorderStyle.Solid
+            })
+            .borderRadius(size.middleBorderRaduis * 2)
+          }
+        }
+
+
+        Text('登录')
+          .width('100%')
+          .padding(size.middleGap)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(colors.primary)
+          .margin({ top: size.middleGap })
+          .fontColor(Color.White)
+          .borderRadius(size.middleBorderRaduis * 2)
+          .onClick(this.useLogin)
+
+        Text('注册')
+          .padding(size.smallGap)
+          .border({
+            width: 1,
+            color: colors.borderColor,
+            style: BorderStyle.Solid
+          })
+          .borderRadius(size.middleBorderRaduis * 2)
+          .width('100%')
+          .padding(size.middleGap)
+          .textAlign(TextAlign.Center)
+          .margin({ top: size.middleGap })
+          .onClick(() => {
+            router.replaceUrl({
+              url: 'pages/RegisterPage', // 目标url
+            }, router.RouterMode.Single, (err) => {
+              if (err) {
+                console.error(`Invoke showAlertBeforeBackPage failed, code is ${err.code}, message is ${err.message}`);
+              }
+            });
+            router.clear(); // 清除历史页面
+          })
+
+        Text('忘记密码?')
+          .padding(size.smallGap)
+          .width('100%')
+          .fontColor(colors.gray)
+          .padding(size.middleGap)
+          .textAlign(TextAlign.Center)
+          .margin({ top: size.middleGap })
+          .onClick(() => {
+            router.pushUrl({
+              url: 'pages/ForgetPasswordPage', // 目标url
+            }, router.RouterMode.Single, (err) => {
+              if (err) {
+                console.error(`Invoke showAlertBeforeBackPage failed, code is ${err.code}, message is ${err.message}`);
+              }
+            });
+            router.clear(); // 清除历史页面
+          })
+      }
+      .alignItems(HorizontalAlign.Center)
+      .blockStyle()
+      .padding({ top: 0, left: size.middleGap, right: size.middleGap })
+      .flexGrow(1)
+
+      Divider().height(size.middleGap).color(Color.Transparent)
+    }
+    .width('100%')
+    .height('100%')
+    .padding({ left: size.middleGap, right: size.middleGap })
+    .backgroundColor(colors.pageBackground)
+  }
+}
+
+
+// TenantManagerPage.ets
+import * as colors from '../theme/color';
+import * as size from '../theme/size';
+import {
+  addTenantUserService,
+  deleteTenantUserService, getTenantUserListService,searchUserListService } from '../service/Index';
+import NavigatorTitleComponent from '../components/NavigatorTitleComponent';
+import { TenantUserType,UserDataType,UserWithChecked } from '../type/Index';
+import AvaterComponent from '../components/AvaterComponent';
+import {PAGE_SIZE,TENANT_USER_DATA,USER_DATA} from "../common/constant";
+import DialogComponent from '../components/DialogComponent';
+import { display, promptAction } from '@kit.ArkUI';
+import BottomDialogComponent from '../components/BottomDialogComponent';
+import GlobalLoading from '../components/GlobalLoading';
+import LoadingController from '../controller/LoadingController';
+
+@Entry
+@Component
+struct TenantManagerPage {
+  @State tenantUserList:Array<TenantUserType> = [];
+  @StorageLink(TENANT_USER_DATA) tenantUser: TenantUserType = {} as TenantUserType;
+  @StorageLink(USER_DATA) userData: UserDataType = {} as UserDataType;
+  @State keyword:string = "";
+  @State searchUserList:UserWithChecked[] = [];
+  @State total:number = 0;
+  private loadingController: LoadingController = new LoadingController()
+  dialogController: CustomDialogController | null = null;
+  deleteIndex:number = -1;
+  pageNum:number = 1;
+  @Styles blockStyle(){
+    .backgroundColor(colors.white)
+    .borderRadius(size.middleBorderRaduis)
+    .padding(size.middleGap)
+    .width('100%')
+    .margin({ top: size.middleGap })
+  }
+
+  aboutToAppear(): void {
+    getTenantUserListService(this.tenantUser.tenantId,this.pageNum,PAGE_SIZE).then((res)=>{
+      this.tenantUserList.push(...res.data);
+    })
+  }
+
+  /**
+   * @author: wuwenqiang
+   * @description: 删除弹窗
+   * @date: 2025-04-13 12:07
+   */
+  @Builder
+  DeleteButton(tenantUser:TenantUserType,index:number) {
+    Column() {
+      Text('删除')
+        .fontColor(Color.White)
+        .fontSize(16)
+    }
+    .justifyContent(FlexAlign.Center)
+    .width(80)
+    .height('100%')
+    .backgroundColor(((tenantUser.roleType ==1 && this.tenantUser.roleType === 2 || tenantUser.roleType === 0 ) && tenantUser.userId !== this.userData.id) ? colors.warn : colors.gray)
+    .onClick(() => {
+      this.deleteIndex = index;
+      this.dialogController = new CustomDialogController({
+        customStyle: false,
+        builder: DialogComponent({
+          title: "是否删除租户？",
+          cancel: (): void => this.onCancel(),
+          confirm: (): void => this.onDeleteTenantUser(),
+        }),
+        alignment: DialogAlignment.Center,
+      })
+      this.dialogController?.open();
+    })
+  }
+
+  /**
+   * @author: wuwenqiang
+   * @description: 关闭弹窗
+   * @date: 2025-09-20 13:21
+   */
+  onCancel(){
+    this.dialogController?.close();
+  }
+
+  /**
+   * @author: wuwenqiang
+   * @description: 关闭弹窗
+   * @date: 2025-09-20 13:21
+   */
+  onDeleteTenantUser(){
+    deleteTenantUserService(this.tenantUserList[this.deleteIndex].tenantId,this.tenantUserList[this.deleteIndex].userId!).then((res)=>{
+      promptAction.showToast({
+        message: `删除租户${res.data ? '成功' : '失败'}`,
+        duration: 2000,
+        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+      });
+      if(res.data){
+        this.tenantUserList.splice(this.deleteIndex,1);
+        this.dialogController?.close()
+      }
+    });
+  }
+
+  onDeleteSearchCheckedUser(){
+    deleteTenantUserService(this.tenantUser.tenantId,this.searchUserList[this.deleteIndex].id!).then((res)=>{
+      promptAction.showToast({
+        message: `删除租户${res.data ? '成功' : '失败'}`,
+        duration: 2000,
+        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+      });
+      if(res.data){
+        const item:UserWithChecked =  JSON.parse(JSON.stringify(this.searchUserList[this.deleteIndex]));
+        item.checked = 0;
+        this.searchUserList.splice(this.deleteIndex,1,item);
+        this.dialogController?.close()
+      }
+    });
+  }
+
+  /**
+   * @author: wuwenqiang
+   * @description: 删除弹窗
+   * @date: 2025-04-13 12:07
+   */
+  @Builder
+  AddIcon() {
+    Image($r('app.media.icon_add'))
+      .width(size.smallIcon)
+      .height(size.smallIcon)
+      .onClick(() => {
+        this.dialogController = new CustomDialogController({
+          customStyle: true,
+          builder: BottomDialogComponent({
+            dialogHeight: '80%',
+            builder: this.addTenantUserBuilder.bind(this)
+          }),
+          alignment: DialogAlignment.Bottom,
+        })
+        this.dialogController.open()
+      })
+  }
+
+
+  onAddTenantUser(index:number){
+    if(this.searchUserList[index].checked === 0){
+      addTenantUserService(this.tenantUser.tenantId,this.searchUserList[index].id!).then(()=>{
+        this.searchUserList[index].checked = 1;
+        const item:UserWithChecked = JSON.parse(JSON.stringify(this.searchUserList[index]));
+        this.searchUserList.splice(index,1,item)
+        promptAction.showToast({
+          message: `添加用户成功`,
+          duration: 2000,
+          bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+        });
+      })
+    }else{
+      this.deleteIndex = index;
+      this.dialogController = new CustomDialogController({
+        customStyle: false,
+        builder: DialogComponent({
+          title: "是否删除租户？",
+          cancel: (): void => this.onCancel(),
+          confirm: (): void => this.onDeleteSearchCheckedUser(),
+        }),
+        alignment: DialogAlignment.Center,
+      })
+      this.dialogController?.open();
+    }
+  }
+
+  @Builder
+  addTenantUserBuilder() {
+    Column() {
+      Row() {
+        Blank()
+          .width(size.smallIcon)
+          .height(size.smallIcon)
+          .margin({left:size.smallIcon})
+        Text('添加用户')
+          .padding(size.middleGap)
+          .textAlign(TextAlign.Center)
+          .layoutWeight(1)
+        Image($r("app.media.icon_close"))
+          .width(size.middleFont)
+          .height(size.middleFont)
+          .opacity(0.5)
+          .onClick(() => {
+            this.dialogController?.close()
+          })
+          .margin({ right: size.middleGap })
+      }
+      .justifyContent(FlexAlign.Center)
+      .border({
+        width: { bottom: 1 },
+        color: { bottom: colors.borderColor },
+        style: { bottom: BorderStyle.Solid }
+      })
+    }
+    Scroll(){
+      Column(){
+        Row(){
+          Row(){
+            TextInput({
+              placeholder: "请输入用户姓名/工号/电话/邮箱",
+              text:this.keyword
+            })
+              .height(size.middleAvater)
+              .layoutWeight(1)
+              .backgroundColor(Color.Transparent)
+              .onChange((value) => {
+                this.keyword = value;
+              }).layoutWeight(1)
+            if(this.keyword){
+              Image($r("app.media.icon_clear"))
+                .margin({left:size.smallGap})
+                .width(size.smallIcon)
+                .height(size.smallIcon)
+                .onClick(()=>{
+                  this.keyword = ""
+                })
+            }
+            Image($r("app.media.icon_search"))
+              .margin({left:size.smallGap,right:size.middleGap})
+              .width(size.smallIcon)
+              .height(size.smallIcon)
+              .onClick(()=>{
+                this.pageNum = 1;
+                this.searchUserList = [];
+                this.loadingController.showLoading()
+                searchUserListService(this.keyword,this.tenantUser.tenantId,this.pageNum,PAGE_SIZE).then((res)=>{
+                  this.total = res.total;
+                  this.searchUserList.push(...res.data);
+                }).finally(()=>{
+                  this.loadingController.showLoading()
+                })
+              })
+          }
+          .backgroundColor(colors.pageBackground)
+          .borderRadius(size.bigAvater)
+          .width("100%")
+          .alignItems(VerticalAlign.Center)
+        }.blockStyle()
+        Column(){
+          if(this.searchUserList.length === 0){
+            Text("暂无数据").padding({top:size.middleGap,bottom:size.middleGap}).textAlign(TextAlign.Center)
+          }else {
+            ForEach(this.searchUserList,(item:UserWithChecked,index:number)=>{
+              Column(){
+                Row(){
+                  Row(){
+                    AvaterComponent({dimensions:size.middleIcon,avater:item.avater})
+                      .margin({right:size.middleGap})
+                    Text(item.username).layoutWeight(1)
+                    Image(item.checked ? $r('app.media.icon_add_tenant_active') : $r('app.media.icon_add_tenant'))
+                      .width(size.smallIcon)
+                      .height(size.smallIcon)
+                      .onClick(()=>{
+                        this.onAddTenantUser(index);
+                      })
+                  }
+                  .border({
+                    width: {
+                      bottom: 1,
+                    },
+                    color: {
+                      bottom: index === this.searchUserList.length - 1 ? Color.Transparent :colors.pageBackground
+                    },
+                    style: {
+                      bottom: BorderStyle.Solid
+                    }
+                  })
+                  .padding({top:index === 0 ? 0 : size.middleGap,bottom:index === this.searchUserList.length -1 ? 0 : size.middleGap})
+
+                }
+              }
+            })
+          }
+        }.blockStyle().margin({bottom:size.middleGap,top:size.middleGap})
+      }
+    }
+    .backgroundColor(colors.pageBackground)
+    .padding({
+      left: size.middleGap,
+      right: size.middleGap,
+    })
+    .layoutWeight(1)
+    .align(Alignment.TopStart)
+    .onScrollEdge(()=>{
+      if(this.total <= this.pageNum * PAGE_SIZE){
+        this.pageNum++
+        searchUserListService(this.keyword,this.tenantUser.tenantId,this.pageNum,PAGE_SIZE).then((res)=>{
+          this.total = res.total;
+          this.searchUserList.push(...res.data);
+        })
+      }
+    })
+  }
+
+  build() {
+    Column() {
+      GlobalLoading({ controller: this.loadingController })
+      NavigatorTitleComponent({
+        title: "租户管理",
+        rightContent: this.AddIcon.bind(this)
+      })
+      Scroll() {
+        List(){
+          ForEach(this.tenantUserList,(item:TenantUserType,index:number)=>{
+            ListItem(){
+              Row(){
+                AvaterComponent({dimensions:size.middleIcon,avater:item.avater})
+                  .margin({right:size.middleGap})
+                Text(item.username).layoutWeight(1)
+              }
+              .border({
+                width: {
+                  bottom: 1,
+                },
+                color: {
+                  bottom: index === this.tenantUserList.length - 1 ? Color.Transparent :colors.pageBackground
+                },
+                style: {
+                  bottom: BorderStyle.Solid
+                }
+              })
+              .padding({top:index === 0 ? 0 : size.middleGap,bottom:index === this.tenantUserList.length -1 ? 0 : size.middleGap})
+            }.swipeAction({
+              end: () => {
+                return this.DeleteButton(item,index)
+              }
+            })
+
+          })
+        }
+        .blockStyle()
+        .margin(size.middleGap)
+        .width("auto")
+      }
+      .layoutWeight(1)
+      .backgroundColor(colors.pageBackground)
+      .scrollable(ScrollDirection.Vertical)
+      .align(Alignment.Top)
+    }
+  }
+}
+
+
+// RegisterPage.ets
+import router from '@ohos.router';
+import * as colors from '../theme/color';
+import * as size from '../theme/size';
+import { MyAwesomeData, UserDataType } from '../type/Index';
+import promptAction from '@ohos.promptAction'
+import { registerService, verifyUserService } from '../service/Index';
+import httpRequest from '../utils/HttpUtil';
+import preference from '../utils/PreferenceModel';
+import display from '@ohos.display';
+import OptionDialogComponent from '../components/OptionDialogComponent';
+import { zerofull } from '../utils/common';
+import { USER_DATA } from '../common/constant';
+import NavigatorTitleComponent from '../components/NavigatorTitleComponent';
+
+@Entry
+@Component
+struct RegisterPage {
+  @State userData: UserDataType = {
+    id: '',
+    userAccount: '',
+    username: '',
+    telephone: '',
+    email: '',
+    avater: '',
+    birthday: '',
+    sex: '',
+    role: '',
+    password: '',
+    sign: '',
+    region: '',
+  }
+  loading: boolean = false;
+  comfirmPassword: string = ''; // 确认密码
+  sexController = new TextInputController()
+  birthdayController = new TextInputController()
+
+  @Styles
+  blockStyle(){
+    .backgroundColor(colors.white)
+    .borderRadius(size.middleBorderRaduis)
+    .padding(size.middleGap)
+    .width('100%')
+    .margin({ top: size.middleGap })
+  }
+
+  @Styles
+  inputStyle(){
+    .border({
+      width: {
+        bottom: 1
+      },
+      color: {
+        bottom: colors.borderColor
+      },
+      style: {
+        bottom: BorderStyle.Solid
+      }
+    })
+    .borderRadius(0)
+    .backgroundColor(Color.Transparent)
+    .width('80%')
+  }
+
+  dialogController: CustomDialogController | null = null; // 性别和姓名弹窗
+
+  /**
+   * @description: 校验必填字段
+   * @date: 2024-01-14 21:47
+   * @author wuwenqiang
+   */
+  verify(value: string, title: string) {
+    if (value.length > 18 || value.length < 6) {
+      promptAction.showToast({
+        message: `请输入6-18的${title}`,
+        duration: 2000,
+        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+      });
+      return false;
+    } else if (!value.trim()) {
+      promptAction.showToast({
+        message: `${title}不能为空`,
+        duration: 2000,
+        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+      });
+      return false;
+    }
+    return true;
+  }
+
+  useRegister = async () => {
+    if (
+      this.verify(this.userData.userAccount, '账号') &&
+      this.verify(this.userData.password, '密码') &&
+      this.verify(this.comfirmPassword, '确认密码') &&
+      this.verify(this.userData.username, '昵称') &&
+      this.verify(this.userData.email, '邮箱')
+    ) {
+      if (this.loading) {
+        return;
+      }
+      this.loading = true;
+      const result: MyAwesomeData<number> = await verifyUserService(this.userData.userAccount, this.userData.email)
+      if (result.data > 0) {
+        promptAction.showToast({
+          message: result.msg,
+          duration: 2000,
+          bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+        });
+        this.loading = false;
+        return
+      }
+      registerService(this.userData).then(async res => {
+        preference.setPassword(this.userData.userAccount, this.userData.password)
+        preference.setToken(res.token);
+        httpRequest.setToken(res.token);
+        AppStorage.SetOrCreate<UserDataType>(USER_DATA, res.data)
+        router.replaceUrl({
+          url: 'pages/ChatPage', // 目标url
+        }, router.RouterMode.Single, (err) => {
+          if (err) {
+            console.error(`Invoke showAlertBeforeBackPage failed, code is ${err.code}, message is ${err.message}`);
+          }
+        });
+        router.clear()
+      }).finally(() => {
+        this.loading = false;
+      })
+    }
+  }
+
+  build() {
+    Column() {
+      NavigatorTitleComponent({ title: "注册" })
+      Scroll() {
+        Column() {
+          Column() {
+            Row() {
+              Row() {
+                Text("*").fontColor(colors.warn)
+                Text("账号:")
+              }.width('20%')
+
+              TextInput({ placeholder: "请输入6-18位数的账号", text: this.userData.userAccount })
+                .inputStyle()
+                .maxLength(18)
+                .onChange((value) => {
+                  this.userData.userAccount = value;
+                }).onBlur(() => {
+                if (this.verify(this.userData.userAccount, '账号')) {
+                  if (this.loading) {
+                    return;
+                  }
+                  this.loading = true;
+                  verifyUserService(this.userData.userAccount, undefined).then((res) => {
+                    if (res.data > 0) {
+                      promptAction.showToast({
+                        message: '该账号已经存在',
+                        duration: 2000,
+                        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+                      });
+                    }
+                  }).finally(() => this.loading = false);
+                }
+              })
+            }
+
+            Row() {
+              Row() {
+                Text("*").fontColor(colors.warn)
+                Text("密码:")
+              }.width('20%')
+
+              TextInput({ placeholder: "请输入6-18位数的密码", text: this.userData.password })
+                .type(InputType.Password)
+                .maxLength(18)
+                .inputStyle()
+                .onChange((value) => {
+                  this.userData.password = value;
+                })
+                .onBlur(() => {
+                  this.verify(this.userData.password, '密码')
+                })
+            }.margin({ top: size.middleGap })
+
+            Row() {
+              Row() {
+                Text("*").fontColor(colors.warn)
+                Text("确认密码:")
+              }.width('20%')
+
+              TextInput({ placeholder: "请输入6-18位数的确认密码", text: this.comfirmPassword })
+                .type(InputType.Password)
+                .maxLength(18)
+                .inputStyle()
+                .onChange((value) => {
+                  this.comfirmPassword = value;
+                })
+                .onBlur(() => {
+                  this.verify(this.comfirmPassword, '确认密码');
+                })
+            }.margin({ top: size.middleGap })
+
+            Row() {
+              Row() {
+                Text("*").fontColor(colors.warn)
+                Text("昵称:")
+              }.width('20%')
+
+              TextInput({ placeholder: "请输入昵称", text: this.userData.username })
+                .inputStyle()
+                .onChange((value) => {
+                  this.userData.username = value;
+                }).onBlur(() => {
+                this.verify(this.userData.username, '昵称');
+              })
+            }.margin({ top: size.middleGap })
+
+            Row() {
+              Row() {
+                Text("性别:")
+              }.width('20%')
+
+              TextInput({
+                placeholder: "请选择性别",
+                text: this.userData.sex,
+                controller: this.birthdayController
+              }).fontColor(colors.black).enabled(false).inputStyle()
+            }.margin({ top: size.middleGap }).onClick(() => {
+              this.useShowDialog()
+            })
+
+            Row() {
+              Row() {
+                Text("出生日期:")
+              }.width('20%')
+
+              TextInput({
+                placeholder: "请选择出生日期",
+                text: this.userData.birthday,
+                controller: this.birthdayController
+              })
+                .enabled(false)
+                .inputStyle()
+                .fontColor(colors.black)
+                .onChange((value) => {
+                  this.userData.birthday = value;
+                })
+            }.margin({ top: size.middleGap }).onClick(() => {
+              DatePickerDialog.show({
+                start: new Date("1970-1-1"),
+                end: new Date("2100-12-31"),
+                selected: new Date(this.userData.birthday || '1990-1-1'),
+                onChange: (value: DatePickerResult) => {
+                  this.userData.birthday = `${value.year}-${zerofull(value?.month ?? 0 + 1)}-${zerofull(value.day)}`;
+                }
+              })
+            })
+
+            Row() {
+              Row() {
+                Text("手机号码:")
+              }.width('20%')
+
+              TextInput({ placeholder: "请输入手机号码", text: this.userData.telephone })
+                .inputStyle()
+                .onChange((value) => {
+                  this.userData.telephone = value;
+                })
+            }.margin({ top: size.middleGap })
+
+            Row() {
+              Row() {
+                Text("*").fontColor(colors.warn)
+                Text("邮箱:")
+              }.width('20%')
+
+              TextInput({ placeholder: "请输入邮箱", text: this.userData.email })
+                .inputStyle()
+                .onChange((value) => {
+                  this.userData.email = value;
+                }).onBlur(() => {
+                if (this.verify(this.userData.email, '邮箱')) {
+                  if (this.loading) {
+                    return;
+                  }
+                  this.loading = true;
+                  verifyUserService(undefined, this.userData.email).then((res) => {
+                    if (res.data > 0) {
+                      promptAction.showToast({
+                        message: '邮箱已经存在',
+                        duration: 2000,
+                        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+                      });
+                    }
+                  }).finally(() => this.loading = false);
+                }
+              })
+            }.margin({ top: size.middleGap })
+
+            Row() {
+              Row() {
+                Text("地区:")
+              }.width('20%')
+
+              TextInput({ placeholder: "请输入地区", text: this.userData.region })
+                .inputStyle()
+                .onChange((value) => {
+                  this.userData.region = value;
+                })
+            }.margin({ top: size.middleGap })
+
+            Row() {
+              Row() {
+                Text("个性签名:")
+              }.width('20%')
+
+              TextInput({ placeholder: "请输入个性签名", text: this.userData.sign })
+                .inputStyle()
+                .onChange((value) => {
+                  this.userData.sign = value;
+                })
+            }.margin({ top: size.middleGap })
+
+          }.blockStyle()
+
+          Text('注册')
+            .width('100%')
+            .padding(size.middleGap)
+            .textAlign(TextAlign.Center)
+            .backgroundColor(colors.warn)
+            .margin({ top: size.middleGap })
+            .fontColor(Color.White)
+            .borderRadius(size.middleBorderRaduis * 2)
+            .onClick(this.useRegister)
+        }.justifyContent(FlexAlign.Start)
+      }
+      .align(Alignment.Top)
+      .scrollable(ScrollDirection.Vertical)
+      .layoutWeight(1)
+      .padding({ left: size.middleGap, right: size.middleGap })
+
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(colors.pageBackground)
+  }
+
+  useShowDialog() {
+    this.dialogController = new CustomDialogController({
+      customStyle: true,
+      builder: OptionDialogComponent({
+        cancel: (): void => this.onCancel(),
+        confirm: (value,index): void => this.onConfirm(index),
+        options: ['男', '女'],
+      }),
+      alignment: DialogAlignment.Bottom,
+    })
+    this.dialogController.open()
+  }
+
+  onCancel() {
+    this.dialogController?.close()
+  }
+
+  /**
+   * @description: 修改用户信息
+   * @date: 2024-01-10 23:01
+   * @author wuwenqiang
+   */
+  onConfirm(index: number) {
+    this.userData.sex = index.toString();
+    this.dialogController?.close();
+  }
+}
+
+
+// ResetPasswordPage.ets
+import * as colors from '../theme/color';
+import * as size from '../theme/size';
+import { resetPasswordService } from '../service/Index';
+import { EmailParamsType, UserDataType } from '../type/Index';
+import { USER_DATA } from '../common/constant';
+import promptAction from '@ohos.promptAction'
+import display from '@ohos.display';
+import NavigatorTitleComponent from '../components/NavigatorTitleComponent';
+import router from '@ohos.router';
+import preference from '../utils/PreferenceModel';
+import httpRequest from '../utils/HttpUtil';
+
+@Entry
+@Component
+struct ResetPasswordPage {
+  code: string = '';
+  password: string = "";
+  comfirmPassword: string = ""
+  email: string = (router.getParams() as EmailParamsType).email;
+  loading: boolean = false;
+
+  @Styles
+  blockStyle(){
+    .backgroundColor(colors.white)
+    .borderRadius(size.middleBorderRaduis)
+    .padding(size.middleGap)
+    .width('100%')
+    .margin({ top: size.middleGap })
+  }
+
+  @Styles
+  rowStyle(){
+    .border({
+      width: {
+        bottom: 1,
+      },
+      color: {
+        bottom: colors.pageBackground
+      },
+      style: {
+        bottom: BorderStyle.Solid
+      }
+    })
+    .width('100%')
+    .padding({ top: size.middleGap, bottom: size.middleGap })
+  }
+
+  verify(value: string, title: string) {
+    if (value.length > 18 || value.length < 6) {
+      promptAction.showToast({
+        message: `请输入6-18的${title}`,
+        duration: 2000,
+        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+      });
+      return false;
+    } else if (!value.trim()) {
+      promptAction.showToast({
+        message: `${title}不能为空`,
+        duration: 2000,
+        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+      });
+      return false;
+    }
+    return true;
+  }
+
+  useSumbit = () => {
+    if (this.loading) {
+      return;
+    }
+    if (!this.code) {
+      promptAction.showToast({
+        message: "验证码不能为空",
+        duration: 2000,
+        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+      });
+    } else if (this.code.length < 4) {
+      promptAction.showToast({
+        message: "请输入四位数的验证码",
+        duration: 2000,
+        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+      });
+    } else if (this.password !== this.comfirmPassword) {
+      promptAction.showToast({
+        message: "密码和确认密码不一致",
+        duration: 2000,
+        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+      });
+    } else if (this.verify(this.password, '密码') &&
+    this.verify(this.password, '确认密码')) {
+      this.loading = true;
+      resetPasswordService(this.email, this.password, this.code).then(async (res) => {
+        // prompt.hideLoading()
+        promptAction.showToast({
+          message: res.msg,
+          duration: 2000,
+          bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+        });
+        await preference.setToken(res.token);
+        httpRequest.setToken(res.token);
+        AppStorage.SetOrCreate<UserDataType>(USER_DATA, res.data)
+        router.replaceUrl({
+          url: 'pages/ChatPage', // 目标url
+        });
+        router.clear(); // 清除历史页面
+      }).finally(() => {
+        // prompt.hideLoading()
+        this.loading = false;
+      })
+    }
+    this.loading = true;
+  }
+
+  build() {
+    Column() {
+      NavigatorTitleComponent({ title: "重置密码" })
+      Column() {
+        Column({ space: size.middleGap }) {
+          Row() {
+            Text("*").fontColor(colors.warn)
+            TextInput({ placeholder: "请输入验证码" })
+              .layoutWeight(1)
+              .backgroundColor(Color.Transparent)
+              .onChange((value) => {
+                this.code = value;
+              })
+          }
+
+          Divider().height(size.middleGap).color(colors.borderColor)
+          Row() {
+            Text("*").fontColor(colors.warn)
+            TextInput({ placeholder: "请输入密码" })
+              .layoutWeight(1)
+              .type(InputType.Password)
+              .backgroundColor(Color.Transparent)
+              .onChange((value) => {
+                this.password = value;
+              })
+          }
+
+          Divider().height(size.middleGap).color(colors.borderColor)
+          Row() {
+            Text("*").fontColor(colors.warn)
+            TextInput({ placeholder: "请输入确认密码" })
+              .layoutWeight(1)
+              .type(InputType.Password)
+              .backgroundColor(Color.Transparent)
+              .onChange((value) => {
+                this.comfirmPassword = value;
+              })
+          }
+        }
+        .blockStyle()
+
+        Text('提交')
+          .width('100%')
+          .padding(size.middleGap)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(colors.warn)
+          .margin({ top: size.middleGap })
+          .fontColor(Color.White)
+          .borderRadius(size.middleBorderRaduis * 2)
+          .onClick(this.useSumbit)
+
+      }
+      .width('100%')
+      .height('100%')
+      .padding({ left: size.middleGap, right: size.middleGap })
+      .backgroundColor(colors.pageBackground)
+    }
+  }
+}
+
+
+// ForgetPasswordPage.ets
+import * as colors from '../theme/color';
+import * as size from '../theme/size';
+import { sendEmailVertifyCodeService } from '../service/Index';
+import { UserDataType } from '../type/Index';
+import { USER_DATA } from '../common/constant';
+import promptAction from '@ohos.promptAction'
+import display from '@ohos.display';
+import NavigatorTitleComponent from '../components/NavigatorTitleComponent';
+import prompt from '@system.prompt'
+import router from '@ohos.router';
+import LoadingController from '../controller/LoadingController';
+import GlobalLoading from '../components/GlobalLoading';
+
+@Entry
+@Component
+struct LoginPage {
+  @StorageLink(USER_DATA) userData: UserDataType = {} as UserDataType;
+  email: string = '';
+  loading: boolean = false;
+  private loadingController: LoadingController = new LoadingController()
+
+  @Styles
+  blockStyle(){
+    .backgroundColor(colors.white)
+    .borderRadius(size.middleBorderRaduis)
+    .padding(size.middleGap)
+    .width('100%')
+    .margin({ top: size.middleGap })
+  }
+
+  @Styles
+  rowStyle(){
+    .border({
+      width: {
+        bottom: 1,
+      },
+      color: {
+        bottom: colors.pageBackground
+      },
+      style: {
+        bottom: BorderStyle.Solid
+      }
+    })
+    .width('100%')
+    .padding({ top: size.middleGap, bottom: size.middleGap })
+  }
+
+  useSumbit = () => {
+    if (this.loading) {
+      return true;
+    }
+    if (!this.email) {
+      return promptAction.showToast({
+        message: "邮箱不能为空",
+        duration: 2000,
+        bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+      })
+    } else {
+      this.loadingController.showLoading();
+      this.loading = true;
+      sendEmailVertifyCodeService(this.email).then((res) => {
+        promptAction.showToast({
+          message: res.msg,
+          duration: 2000,
+          bottom: px2vp(display.getDefaultDisplaySync().height) / 2
+        });
+        router.pushUrl({
+          url: 'pages/ResetPasswordPage', // 目标url
+          params: {
+            email: this.email
+          }
+        }, router.RouterMode.Single, (err) => {
+          if (err) {
+            console.error(`Invoke showAlertBeforeBackPage failed, code is ${err.code}, message is ${err.message}`);
+          }
+        });
+      }).finally(() => {
+        this.loadingController.showLoading();
+        this.loading = false;
+      })
+    }
+    this.loading = true;
+  }
+
+  build() {
+    Column() {
+      GlobalLoading({ controller: this.loadingController })
+      Column() {
+        NavigatorTitleComponent({ title: "忘记密码" })
+        Column() {
+          Row() {
+            Text("*").fontColor(colors.warn)
+            TextInput({ placeholder: "请输入邮箱" })
+              .layoutWeight(1)
+              .backgroundColor(Color.Transparent)
+              .onChange((value) => {
+                this.email = value;
+              })
+          }
+          .alignItems(VerticalAlign.Center)
+          .blockStyle()
+
+          Text('提交')
+            .width('100%')
+            .padding(size.middleGap)
+            .textAlign(TextAlign.Center)
+            .backgroundColor(colors.warn)
+            .margin({ top: size.middleGap })
+            .fontColor(Color.White)
+            .borderRadius(size.middleBorderRaduis * 2)
+            .onClick(this.useSumbit)
+
+        }
+        .padding({ left: size.middleGap, right: size.middleGap })
+        .backgroundColor(colors.pageBackground)
+      }
+      .width('100%')
+      .height('100%')
+    }
+    .width('100%')
+    .height('100%')
+  }
+}
+
+
+// UserPage.ets
+import router from '@ohos.router';
+import { TenantUserType, UserDataType, TenantType, TenantStatus} from "../type/Index";
+import * as colors from '../theme/color';
+import * as size from '../theme/size';
+import { USER_DATA,TENANT_USER_DATA,DEFAULT_TENANT_USER, HOST} from '../common/constant';
+import { getTenantListService, getTenantUserService, updateUserDataService } from '../service/Index';
+import preference from '../utils/PreferenceModel';
+import OptionDialogComponent from '../components/OptionDialogComponent';
+import NavigatorTitleComponent from '../components/NavigatorTitleComponent';
+import DialogComponent from '../components/DialogComponent';
+import { SexValueMap } from '../common/config';
+
+@Entry
+@Component
+struct UserPage {
+  @StorageLink(USER_DATA) userData: UserDataType = {} as UserDataType;
+  @StorageLink(TENANT_USER_DATA) tenantUser: TenantUserType = {} as TenantUserType;
+  title: string = '';
+  @State field: string = '';
+  @State tenantList: Array<TenantType> = [{
+    id: "",// 租户ID（主键）
+    name: "私人空间",// 租户名称
+    code: "personal",// 租户编码（唯一）
+    status: TenantStatus.DISABLED,// 租户状态
+    created_by: ""// 创建人ID
+  }];
+  dialogController: CustomDialogController | null = null
+
+  @Styles
+  blockStyle(){
+    .backgroundColor(colors.white)
+    .borderRadius(size.middleBorderRaduis)
+    .padding(size.middleGap)
+    .width('100%')
+    .margin({ top: size.middleGap })
+  }
+
+  @Styles
+  arrowStyle(){
+    .margin({ left: size.smallGap })
+    .height(size.smallIcon)
+    .width(size.smallIcon)
+  }
+
+  @Styles
+  rowStyle(){
+    .border({
+      width: {
+        bottom: 1,
+      },
+      color: {
+        bottom: colors.pageBackground
+      },
+      style: {
+        bottom: BorderStyle.Solid
+      }
+    })
+    .width('100%')
+    .padding({ top: size.middleGap, bottom: size.middleGap })
+  }
+
+  aboutToAppear() {
+    getTenantListService().then((res)=>{
+      this.tenantList.push(...res.data)
+    })
+  }
+
+  useShowDialog(title: string, field: string) {
+    this.title = title;
+    this.field = field;
+    if (field === 'sex') {
+      this.dialogController = new CustomDialogController({
+        customStyle: true,
+        builder: OptionDialogComponent({
+          cancel: (): void => this.onCancel(),
+          confirm: (value): void => this.onConfirm(value),
+          options: ['男', '女'],
+        }),
+        alignment: DialogAlignment.Bottom,
+      })
+    } else if (title === 'logout') {
+      this.dialogController = new CustomDialogController({
+        customStyle: false,
+        builder: DialogComponent({
+          title: "是否退出登录？",
+          cancel: (): void => this.onCancel(),
+          confirm: (): void => this.onLogout(),
+        }),
+        alignment: DialogAlignment.Center,
+      })
+    } else {
+      this.dialogController = new CustomDialogController({
+        customStyle: true,
+        builder: CustomDialogComponent({
+          cancel: (): void => this.onCancel(),
+          confirm: (value): void => this.onConfirm(value),
+          title: this.title,
+          text: this.userData[this.field]
+        }),
+        alignment: DialogAlignment.Center,
+      })
+    }
+    this.dialogController.open()
+  }
+
+  onCancel() {
+    this.dialogController?.close()
+  }
+
+  /**
+   * @description: 修改用户信息
+   * @date: 2024-01-10 23:01
+   * @author wuwenqiang
+   */
+  onConfirm(value: string) {
+    const userData: UserDataType = JSON.parse(JSON.stringify(this.userData))
+    userData[this.field] = value
+    updateUserDataService(userData).then(() => {
+      this.userData[this.field] = value;
+      this.dialogController?.close()
+    })
+  }
+
+  onLogout() {
+    preference.setToken("");
+    router.replaceUrl({
+      url: 'pages/LoginPage', // 目标url
+    }, router.RouterMode.Single, (err) => {
+      if (err) {
+        console.error(`Invoke showAlertBeforeBackPage failed, code is ${err.code}, message is ${err.message}`);
+      }
+    });
+    router.clear(); // 清除历史页面
+  }
+
+  /**
+   * @description: 修改用户信息
+   * @date: 2025-09-18 16:53
+   * @author wuwenqiang
+   */
+  getTenantUser = (tenantId:string)=>{
+    if(tenantId === ""){
+      AppStorage.SetOrCreate(TENANT_USER_DATA,this.getDefaultTenantUser());
+      this.dialogController?.close();
+    }else {
+      getTenantUserService(tenantId).then((res)=>{
+        AppStorage.SetOrCreate(TENANT_USER_DATA,res.data);
+        this.dialogController?.close();
+      })
+    }
+  }
+
+  getDefaultTenantUser():TenantUserType{
+    const defaultTenantUser:TenantUserType = JSON.parse(JSON.stringify(DEFAULT_TENANT_USER));
+    defaultTenantUser.userId = defaultTenantUser.tenantId = this.userData.id!;
+    defaultTenantUser.username = this.userData.username;
+    return defaultTenantUser
+  }
+
+  build() {
+    Column() {
+      NavigatorTitleComponent({ title: "用户信息" })
+      Scroll() {
+        Column() {
+          Column() {
+            Row() {
+              Text('头像').flexGrow(1)
+              Image(this.userData?.avater ? HOST + this.userData.avater : $r('app.media.default_avater'))
+                .height(size.bigAvater)
+                .width(size.bigAvater)
+                .borderRadius(size.bigAvater)
+              Image($r('app.media.icon_arrow')).arrowStyle()
+            }.rowStyle().justifyContent(FlexAlign.Center)
+
+            Row() {
+              Text('昵称').flexGrow(1)
+              Text(this.userData.username)
+              Image($r('app.media.icon_arrow')).arrowStyle()
+            }.rowStyle().justifyContent(FlexAlign.Center).onClick(() => {
+              this.useShowDialog('昵称', 'username')
+            })
+
+            Row() {
+              Text('性别').flexGrow(1)
+              Text(SexValueMap[this.userData.sex])
+              Image($r('app.media.icon_arrow')).arrowStyle()
+            }.rowStyle().justifyContent(FlexAlign.Center).onClick(() => {
+              this.useShowDialog('性别', 'sex')
+            })
+
+            Row() {
+              Text('电话').flexGrow(1)
+              Text(this.userData.telephone)
+              Image($r('app.media.icon_arrow')).arrowStyle()
+            }.rowStyle().justifyContent(FlexAlign.Center).onClick(() => {
+              this.useShowDialog('电话', 'telephone')
+            })
+
+            Row() {
+              Text('邮箱').flexGrow(1)
+              Text(this.userData.email)
+              Image($r('app.media.icon_arrow')).arrowStyle()
+            }.rowStyle().justifyContent(FlexAlign.Center).onClick(() => {
+              this.useShowDialog('邮箱', 'email')
+            })
+
+            Row() {
+              Text('生日').flexGrow(1)
+              Text(this.userData.birthday)
+              Image($r('app.media.icon_arrow')).arrowStyle()
+            }.rowStyle().justifyContent(FlexAlign.Center).onClick(() => {
+              DatePickerDialog.show({
+                start: new Date("1970-1-1"),
+                end: new Date("2100-12-31"),
+                selected: new Date(this.userData.birthday),
+                onChange: (value: DatePickerResult) => {
+                  this.userData.birthday = `${value.year}-${value.month}-${value.day}`;
+                }
+              })
+            })
+
+            Row() {
+              Text('个性签名').flexGrow(1)
+              Text(this.userData.sign)
+              Image($r('app.media.icon_arrow')).arrowStyle()
+            }.rowStyle().justifyContent(FlexAlign.Center).onClick(() => {
+              this.useShowDialog('个性签名', 'sign')
+            })
+
+            Row() {
+              Text('区域').flexGrow(1)
+              Text(this.userData.region)
+              Image($r('app.media.icon_arrow')).arrowStyle()
+            }.rowStyle().border({ width: 0 }).justifyContent(FlexAlign.Center).onClick(() => {
+              this.useShowDialog('区域', 'region')
+            })
+
+          }.blockStyle().padding({ top: 0, left: size.middleGap, right: size.middleGap })
+
+          Text('修改密码')
+            .padding(size.smallGap)
+            .border({
+              width: 1,
+              color: colors.borderColor,
+              style: BorderStyle.Solid
+            })
+            .backgroundColor(colors.white)
+            .borderRadius(size.middleBorderRaduis * 2)
+            .width('100%')
+            .padding(size.middleGap)
+            .textAlign(TextAlign.Center)
+            .margin({ top: size.middleGap})
+            .onClick(() => {
+              router.pushUrl({
+                url: 'pages/UpdatePasswordPage', // 目标url
+              });
+            })
+
+          if(this.tenantList.length > 0){
+            Text('切换租户')
+              .padding(size.smallGap)
+              .border({
+                width: 1,
+                color: colors.borderColor,
+                style: BorderStyle.Solid
+              })
+              .backgroundColor(colors.white)
+              .borderRadius(size.middleBorderRaduis * 2)
+              .width('100%')
+              .padding(size.middleGap)
+              .textAlign(TextAlign.Center)
+              .margin({ top: size.middleGap })
+              .onClick(() => {
+                this.dialogController = new CustomDialogController({
+                  customStyle: true,
+                  builder: OptionDialogComponent({
+                    cancel: (): void => this.onCancel(),
+                    confirm: (value,index): void => this.getTenantUser(this.tenantList[index].id),
+                    options: this.tenantList.map((item)=>{
+                      return item.name
+                    }),
+                  }),
+                  alignment: DialogAlignment.Bottom,
+                })
+                this.dialogController.open()
+              })
+          }
+
+          if(this.tenantUser.roleType > 1){
+            Text('租户管理')
+              .padding(size.smallGap)
+              .border({
+                width: 1,
+                color: colors.borderColor,
+                style: BorderStyle.Solid
+              })
+              .backgroundColor(colors.white)
+              .borderRadius(size.middleBorderRaduis * 2)
+              .width('100%')
+              .padding(size.middleGap)
+              .textAlign(TextAlign.Center)
+              .margin({ top: size.middleGap})
+              .onClick(() => {
+                router.pushUrl({
+                  url: 'pages/TenantManagerPage', // 目标url
+                });
+              })
+          }
+
+          Button('退出登录')
+            .width('100%')
+            .padding(size.middleGap)
+            .backgroundColor(colors.warn)
+            .margin({ top: size.middleGap })
+            .fontColor(Color.White)
+            .borderRadius(size.middleBorderRaduis * 2)
+            .onClick(() => {
+              this.useShowDialog('logout', '');
+            })
+
+
+        }.padding({ left: size.middleGap, right: size.middleGap })
+      }.layoutWeight(1).scrollable(ScrollDirection.Vertical).align(Alignment.Top)
+
+    }
+    .width('100%')
+    .height('100%')
+    .justifyContent(FlexAlign.Start)
+    .backgroundColor(colors.pageBackground)
+  }
+}
+
+/**
+ * @description: 修改用户信息弹窗
+ * @date: 2024-01-14 21:47
+ * @author wuwenqiang
+ */
+@CustomDialog
+struct CustomDialogComponent {
+  controller: CustomDialogController
+  cancel: () => void = () => {
+  };
+  confirm: (value: string) => void = () => {
+  };
+  title: string = '';
+  text: string = '';
+  value: string = '';
+
+  aboutToAppear() {
+    this.value = this.text
+  }
+
+  build() {
+    Column({ space: size.middleGap }) {
+      Text("请输入")
+        .margin({ top: size.middleGap })
+      Row() {
+        Text(this.title)
+          .margin({ right: size.smallIcon })
+        TextInput({ placeholder: '请输入', text: this.text })
+          .layoutWeight(1)
+          .backgroundColor(colors.pageBackground)
+          .height(size.lineHeight * 2)
+          .onChange((value: string) => {
+            this.value = value
+          })
+      }.width('100%')
+      .padding({ left: size.middleGap, right: size.middleGap })
+      .alignItems(VerticalAlign.Center)
+
+      Row() {
+        Text('取消')
+          .onClick(() => {
+            this.controller.close()
+            this.cancel()
+          })
+          .flexGrow(1)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(colors.white)
+          .fontColor(Color.Black)
+        Divider().width(1).height('100%').backgroundColor(colors.borderColor)
+        Text('确定')
+          .onClick(() => {
+            this.confirm(this.value)
+          })
+          .flexGrow(1)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(colors.white)
+          .fontColor(Color.Red)
+      }.height(size.dialogBtnHeight).border({
+        width: {
+          top: 1,
+        },
+        color: {
+          top: colors.borderColor
+        },
+        style: {
+          top: BorderStyle.Solid
+        }
+      })
+      .width('100%')
+    }
+    .backgroundColor(colors.white)
+    .borderRadius(size.middleBorderRaduis)
+    .margin({ left: size.middleGap, right: size.middleGap })
+  }
+}
+
+
