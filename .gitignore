@@ -4,6 +4,7 @@
 .git/
 *.ipr
 *.iws
-test/
 env/
-__pycache__/test/
+.venv/
+__pycache__/
+test/
