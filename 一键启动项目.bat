@@ -1,11 +1,5 @@
-f:
+source .venv/bin/activate
 
-cd ./python/fast-api-app-service
-
-env\Scripts\activate
-
-cd ./user
-
-uvicorn main:app --reload
+python -m uvicorn user.main:app --reload
 
 pause
