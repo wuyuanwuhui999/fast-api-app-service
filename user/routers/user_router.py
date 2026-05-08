@@ -22,12 +22,12 @@ async def login(form_data: LoginForm, auth_service: AuthService = Depends(get_au
     return await auth_service.login(form_data.userAccount, form_data.password)
 
 
-@router.get("/user-getway/getUserData", response_model=ResultEntity)
+@router.get("/user/getUserData", response_model=ResultEntity)
 async def get_user_data(current_user: UserSchema = Depends(get_current_user), user_service: UserService = Depends()):
     return await user_service.get_user_data(current_user)
 
 
-@router.put("/user-getway/updateUser", response_model=ResultEntity)
+@router.put("/user/updateUser", response_model=ResultEntity)
 async def update_user(user_update: UserUpdate, current_user: UserSchema = Depends(get_current_user),
                       user_service: UserService = Depends()):
     return await user_service.update_user(current_user.id, user_update)
@@ -44,7 +44,7 @@ async def send_email_verify_code(mail_request: MailRequest, user_service: UserSe
     return await user_service.send_email_verify_code(mail_request)
 
 
-@router.post("/user-getway/resetPassword", response_model=ResultEntity)
+@router.post("/user/resetPassword", response_model=ResultEntity)
 async def reset_password(reset_request: ResetPasswordConfirm, user_service: UserService = Depends()):
     return await user_service.reset_password(reset_request)
 
@@ -58,7 +58,7 @@ async def login_by_email(mail_request: MailRequest, user_service: UserService = 
 async def verify_user(user: UserCreate, user_service: UserService = Depends()):
     return await user_service.verify_user(user)
 
-@router.get("/user-getway/searchUsers", response_model=ResultEntity)
+@router.get("/user/searchUsers", response_model=ResultEntity)
 async def search_users(
     keyword: str = Query(..., description="搜索关键词"),
     tenantId:str = Query(0, description="租户id"),

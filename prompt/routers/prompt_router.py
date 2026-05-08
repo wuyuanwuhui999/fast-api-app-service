@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from common.dependencies.auth_dependency import get_current_user
 from common.schemas.user_schema import UserSchema
@@ -11,56 +11,20 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-@router.get("/getPromptCategoryList",response_model=ResultEntity)
-async def get_prompt_category_list(
+@router.get("/getPrompt", response_model=ResultEntity)
+async def get_prompt(
+    tenantId: str = Query(..., description="租户ID"),
+    current_user: UserSchema = Depends(get_current_user),
     prompt_service: PromptService = Depends()
 ):
-    return await prompt_service.get_prompt_category_list()
-
-
-@router.get("/getSystemPromptListByCategory",response_model=ResultEntity)
-async def get_system_prompt_list_by_category(
-        categoryId: str = None,
-        keyword:str = None,
-        pageNum: int = 1,
-        pageSize: int = 10,
-        prompt_service: PromptService = Depends()
-):
-    return await prompt_service.get_system_prompt_list_by_category( categoryId, keyword, pageNum, pageSize)
-
-@router.post("/insertCollectPrompt/{tenantId}/{promptId}",response_model=ResultEntity)
-async def insert_collect_prompt(
-        tenantId: str,
-        promptId: str,
-        current_user: UserSchema = Depends(get_current_user),
-        prompt_service: PromptService = Depends()
-):
-    return await prompt_service.insert_collect_prompt(tenantId, promptId,current_user.id)
-
-@router.delete("/deleteCollectPrompt/{tenantId}/{promptId}",response_model=ResultEntity)
-async def delete_collect_prompt(
-        tenantId: str,
-        promptId: str,
-        current_user: UserSchema = Depends(get_current_user),
-        prompt_service: PromptService = Depends()
-):
-    return await prompt_service.delete_collect_prompt(tenantId, promptId,current_user.id)
-
-@router.get("/getMyCollectPromptCategory",response_model=ResultEntity)
-async def get_my_collect_prompt_category(
-        tenantId: str,
-        current_user: UserSchema = Depends(get_current_user),
-        prompt_service: PromptService = Depends()
-):
-    return await prompt_service.get_my_collect_prompt_category(tenantId, current_user.id)
-
-@router.get("/getMyCollectPromptList",response_model=ResultEntity)
-async def get_my_collect_prompt_list(
-        tenantId: str,
-        categoryId: str = None,
-        pageNum: int = 1,
-        pageSize: int = 10,
-        current_user: UserSchema = Depends(get_current_user),
-        prompt_service: PromptService = Depends()
-):
-    return await prompt_service.get_my_collect_prompt_list(tenantId, categoryId, current_user.id,pageNum,pageSize)
+    """
+    根据租户ID查询提示词记录，如果不存在则自动创建默认提示词
+    
+    Args:
+        tenantId: 租户ID
+        current_user: 当前登录用户
+        
+    Returns:
+        ResultEntity: 包含提示词记录的响应
+    """
+    return await prompt_service.get_prompt(tenantId, current_user)

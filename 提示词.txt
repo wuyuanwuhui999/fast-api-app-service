@@ -1,0 +1,20 @@
+这是fast api多模块项目，有以下四个模块
+common：共用模块
+user：用户模块
+chat：聊天模块
+prompt：提示词模块
+tenant：租户模块
+user、chat、prompt、tenant模块可以单独运行
+
+帮我开发一下service/prompt/getPrompt?tenantId={tenantId}接口，查询prompt表，返回一条记录
+表结构如下
+CREATE TABLE `prompt` (
+  `id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '主键',
+  `prompt` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `user_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `create_time` datetime DEFAULT NULL,
+  `update_time` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`,`tenant_id`,`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+PromptModel里面的字段改成prompt表里对应的字段
