@@ -2,13 +2,13 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import select, delete, func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from common.models.common_model import UserMode
 from common.schemas.user_schema import UserSchema
 from tenant.models.tenants_model import TenantUserModel, TenantModel, TenantUserRoleModel
 from tenant.schemas.tenants_schema import TenantSchema, TenantCreateSchema, TenantUpdateSchema, TenantUserRoleSchema, TenantUserSchema
-from typing import List, Optional, Any, Coroutine
+from typing import List, Optional, Any, Coroutine, Dict
 from fastapi.logger import logger
 
 
@@ -16,8 +16,8 @@ class TenantsRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    async def get_user_tenant_list(self, user_id: str) -> List[TenantSchema]:
-        """获取用户所属的所有租户（优化版，单次查询）"""
+    def get_user_tenant_list(self, user_id: str) -> List[TenantSchema]:
+        """获取用户所属的所有租户（优化版，单次查询）- 同步方法"""
         try:
             stmt = (
                 select(TenantModel, TenantUserModel.role_type)
@@ -42,25 +42,56 @@ class TenantsRepository:
             logger.error(f"获取用户租户列表失败: {str(e)}", exc_info=True)
             raise
 
-    async def get_tenant_user(self, user_id: str, tenant_id: str) -> Optional[TenantUserSchema]:
-        """获取用户在指定租户的信息"""
-        tenant_user = self.db.query(TenantUserModel).filter(
-            (TenantUserModel.tenant_id == tenant_id) &
-            (TenantUserModel.user_id == user_id)
-        ).first()
+    def get_tenant_user(self, user_id: str, tenant_id: str) -> Optional[Dict]:
+        """
+        获取用户在指定租户的信息，并关联查询租户名称
+        
+        Args:
+            user_id: 用户ID
+            tenant_id: 租户ID
+            
+        Returns:
+            包含租户用户信息和租户名称的字典
+        """
+        try:
+            # 使用 join 关联查询 tenant 表
+            result = (
+                self.db.query(TenantUserModel, TenantModel.name.label('tenant_name'))
+                .join(TenantModel, TenantModel.id == TenantUserModel.tenant_id)
+                .filter(
+                    TenantUserModel.tenant_id == tenant_id,
+                    TenantUserModel.user_id == user_id
+                )
+                .first()
+            )
+            
+            if result:
+                tenant_user, tenant_name = result
+                # 转换为字典并添加 tenant_name
+                tenant_user_dict = {
+                    'id': tenant_user.id,
+                    'tenant_id': tenant_user.tenant_id,
+                    'user_id': tenant_user.user_id,
+                    'role_type': tenant_user.role_type,
+                    'join_date': tenant_user.join_date,
+                    'create_by': tenant_user.create_by,
+                    'disabled': tenant_user.disabled,
+                    'tenant_name': tenant_name
+                }
+                return tenant_user_dict
+            return None
+            
+        except Exception as e:
+            logger.error(f"获取租户用户信息失败: {str(e)}", exc_info=True)
+            raise
 
-        if tenant_user:
-            return TenantUserSchema.model_validate(tenant_user)
-        return None
-
-    # 在 TenantsRepository 类中添加以下方法
-    async def get_tenant_users_with_pagination(
+    def get_tenant_users_with_pagination(
             self,
             tenant_id: str,
             page: int = 1,
             page_size: int = 10
     ) -> tuple[List[TenantUserSchema], int]:
-        """获取租户用户列表（分页）"""
+        """获取租户用户列表（分页）- 同步方法"""
         try:
             # 计算偏移量
             offset = (page - 1) * page_size
@@ -89,7 +120,7 @@ class TenantsRepository:
             logger.error(f"获取租户用户分页列表失败: {str(e)}", exc_info=True)
             raise
 
-    async def create_tenant(self, tenant_data: TenantCreateSchema, creator_id: str) -> TenantSchema:
+    def create_tenant(self, tenant_data: TenantCreateSchema, creator_id: str) -> TenantSchema:
         db_tenant = TenantModel(
             id=str(uuid.uuid4()).replace("-", ""),
             name=tenant_data.name,
@@ -99,11 +130,12 @@ class TenantsRepository:
             create_date=datetime.now()
         )
         self.db.add(db_tenant)
-        await self.db.commit()
+        self.db.commit()
+        self.db.refresh(db_tenant)
         return TenantSchema.model_validate(db_tenant)
 
-    async def update_tenant(self, tenant_id: str, update_data: TenantUpdateSchema) -> bool:
-        tenant = await self.db.get(TenantModel, tenant_id)
+    def update_tenant(self, tenant_id: str, update_data: TenantUpdateSchema) -> bool:
+        tenant = self.db.query(TenantModel).filter(TenantModel.id == tenant_id).first()
         if not tenant:
             return False
 
@@ -111,17 +143,17 @@ class TenantsRepository:
             setattr(tenant, field, value)
 
         tenant.update_date = datetime.now()
-        await self.db.commit()
+        self.db.commit()
         return True
 
-    async def delete_tenant(self, tenant_id: str) -> bool:
-        result = await self.db.execute(
+    def delete_tenant(self, tenant_id: str) -> bool:
+        result = self.db.execute(
             delete(TenantModel).where(TenantModel.id == tenant_id)
         )
-        await self.db.commit()
+        self.db.commit()
         return result.rowcount > 0
 
-    async def add_tenant_user(self, tenant_user: TenantUserSchema) -> TenantUserSchema:
+    def add_tenant_user(self, tenant_user: TenantUserSchema) -> TenantUserSchema:
         # 检查是否已存在相同的租户-用户关联
         existing = self.db.query(TenantUserModel).filter(
             TenantUserModel.tenant_id == tenant_user.tenant_id,
@@ -131,7 +163,7 @@ class TenantsRepository:
         if existing:
             return None  # 已存在，不需要重复添加
         else:
-            db_tenant_user = TenantUserModel(**tenant_user.model_dump())
+            db_tenant_user = TenantUserModel(**tenant_user.model_dump(exclude={'tenant_name'}))
             self.db.add(db_tenant_user)
             self.db.commit()
             # 刷新对象以获取数据库生成的字段（如果有的话）
@@ -139,17 +171,17 @@ class TenantsRepository:
             # 将数据库模型转换为 Schema 对象
             return TenantUserSchema.model_validate(db_tenant_user)
     
-    async def get_user_by_id(self, user_id: str) -> Optional[type[UserSchema]]:
-        return  self.db.query(UserMode).filter((UserMode.id == user_id) & (UserMode.disabled == 0)).first()
+    def get_user_by_id(self, user_id: str) -> Optional[UserMode]:
+        return self.db.query(UserMode).filter((UserMode.id == user_id) & (UserMode.disabled == 0)).first()
 
-    async def get_tenant_users(self, tenant_id: str) -> List[TenantUserRoleSchema]:
-        users = await self.db.execute(
+    def get_tenant_users(self, tenant_id: str) -> List[TenantUserRoleSchema]:
+        users = self.db.execute(
             select(TenantUserRoleModel).where(TenantUserRoleModel.tenant_id == tenant_id)
         )
         return [TenantUserRoleSchema.model_validate(u) for u in users.scalars()]
 
-    async def get_user_tenants(self, user_id: str) -> List[TenantUserSchema]:
-        """获取用户的所有租户角色信息"""
+    def get_user_tenants(self, user_id: str) -> List[TenantUserSchema]:
+        """获取用户的所有租户角色信息 - 同步方法"""
         users = self.db.execute(
             select(TenantUserModel).where(
                 (TenantUserModel.user_id == user_id) &
@@ -158,10 +190,8 @@ class TenantsRepository:
         )
         return [TenantUserSchema.model_validate(u) for u in users.scalars()]
 
-        # 添加 get_user 方法
-
-    async def get_user(self, user_id: str) -> Optional[UserMode]:
-        """根据用户ID获取用户信息"""
+    def get_user(self, user_id: str) -> Optional[UserMode]:
+        """根据用户ID获取用户信息 - 同步方法"""
         try:
             user = self.db.query(UserMode).filter(UserMode.id == user_id).first()
             return user
@@ -169,10 +199,8 @@ class TenantsRepository:
             logger.error(f"获取用户信息失败: {str(e)}", exc_info=True)
             return None
 
-    # 在 TenantsRepository 类中添加以下方法
-
-    async def add_admin(self, tenant_id: str, user_id: str) -> bool:
-        """设置用户为管理员"""
+    def add_admin(self, tenant_id: str, user_id: str) -> bool:
+        """设置用户为管理员 - 同步方法"""
         try:
             # 查找用户的租户角色记录
             tenant_user = self.db.query(TenantUserModel).filter(
@@ -191,8 +219,8 @@ class TenantsRepository:
             self.db.rollback()
             return False
 
-    async def delete_admin(self, tenant_id: str, user_id: str) -> bool:
-        """取消用户的管理员权限（设置为普通用户）"""
+    def delete_admin(self, tenant_id: str, user_id: str) -> bool:
+        """取消用户的管理员权限（设置为普通用户）- 同步方法"""
         try:
             # 查找用户的租户角色记录
             tenant_user = self.db.query(TenantUserModel).filter(
@@ -211,8 +239,8 @@ class TenantsRepository:
             self.db.rollback()
             return False
 
-    async def get_tenant_user_role(self, tenant_id: str, user_id: str) -> Optional[TenantUserSchema]:
-        """获取用户在租户中的角色信息"""
+    def get_tenant_user_role(self, tenant_id: str, user_id: str) -> Optional[TenantUserSchema]:
+        """获取用户在租户中的角色信息 - 同步方法"""
         try:
             tenant_user = self.db.query(TenantUserModel).filter(
                 TenantUserModel.tenant_id == tenant_id,
@@ -226,7 +254,7 @@ class TenantsRepository:
             logger.error(f"获取租户用户角色失败: {str(e)}", exc_info=True)
             return None
 
-    async def delete_tenant_user(
+    def delete_tenant_user(
             self,
             tenant_id: str,
             user_id_to_delete: str,

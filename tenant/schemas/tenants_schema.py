@@ -32,6 +32,7 @@ class TenantUserSchema(BaseModel):
     join_date: datetime = Field(..., description="加入时间")
     create_by: str = Field(..., description="创建人ID")
     disabled: Optional[int] = None
+    tenant_name: Optional[str] = None  # 新增：租户名称
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -76,7 +77,7 @@ class TenantUserRoleUpdateSchema(BaseModel):
     role_type: Optional[int] = Field(None, ge=0, le=2)
     disabled: Optional[bool] = None
 
-# 在 tenants_schema.py 末尾添加
+
 class TenantAdminUpdateSchema(BaseModel):
     directory: str
     tenantId: str
