@@ -1,20 +1,29 @@
-这是fast api多模块项目，有以下四个模块
-common：共用模块
-user：用户模块
-chat：聊天模块
-prompt：提示词模块
-tenant：租户模块
-user、chat、prompt、tenant模块可以单独运行
+# 项目背景
+我有一个 FastAPI 多模块项目，包含以下 5 个独立可运行的模块：
+- common（共用模块）
+- user（用户模块）
+- chat（聊天模块）
+- prompt（提示词模块）
+- tenant（租户模块）
 
-帮我开发一下service/prompt/getPrompt?tenantId={tenantId}接口，查询prompt表，返回一条记录
-表结构如下
-CREATE TABLE `prompt` (
-  `id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '主键',
-  `prompt` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `tenant_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `user_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `create_time` datetime DEFAULT NULL,
-  `update_time` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`,`tenant_id`,`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-PromptModel里面的字段改成prompt表里对应的字段
+# 模块识别规则
+根据接口 URL 中的路径段可判断所属模块：
+- URL 格式：`/service/{模块名}/...`
+- 示例：
+  - `/service/user/getUserData` → `user` 模块
+  - `/service/prompt/getPrompt` → `prompt` 模块
+
+# 模块内部结构
+每个业务模块（user / chat / prompt / tenant）均包含以下标准目录：
+
+dependencies/       # 依赖注入或权限校验等
+models/             # 独享的数据库模型文件
+repositories/       # 数据库读写操作
+routers/            # 路由定义
+schemas/            # Pydantic 参数模型
+service/            # 业务逻辑层
+
+# 我的需求
+请帮我根据上述项目结构规范，完成以下任务（请在此处补充你希望 AI 完成的具体任务，例如：新增一个接口、生成模块模板、重构代码等）：
+
+（请补充具体需求）

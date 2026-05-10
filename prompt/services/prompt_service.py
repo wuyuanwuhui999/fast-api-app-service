@@ -6,7 +6,7 @@ from fastapi.logger import logger
 from common.config.common_database import get_db
 from common.utils.result_util import ResultEntity, ResultUtil
 from prompt.models.prompt_model import PromptModel
-from prompt.schemas.prompt_schema import PromptSchema
+from prompt.schemas.prompt_schema import PromptSchema, UpdatePromptSchema
 from prompt.repositories.prompt_repository import PromptRepository
 
 
@@ -48,3 +48,58 @@ class PromptService:
         except Exception as e:
             logger.error(f"获取提示词失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg=f"获取提示词失败: {str(e)}", data=None)
+
+    async def update_prompt(self, prompt_data: UpdatePromptSchema, current_user) -> ResultEntity:
+        """
+        更新提示词记录
+        
+        Args:
+            prompt_data: 更新提示词请求数据
+            current_user: 当前登录用户
+            
+        Returns:
+            ResultEntity: 更新后的提示词记录
+        """
+        try:
+            # 验证必填字段
+            if not prompt_data.id:
+                return ResultUtil.fail(msg="提示词ID不能为空", data=None)
+            
+            if not prompt_data.prompt or not prompt_data.prompt.strip():
+                return ResultUtil.fail(msg="提示词内容不能为空", data=None)
+            
+            if len(prompt_data.prompt) > 255:
+                return ResultUtil.fail(msg="提示词内容不能超过255个字符", data=None)
+            
+            if not prompt_data.tenant_id:
+                return ResultUtil.fail(msg="租户ID不能为空", data=None)
+            
+            # 验证提示词是否存在且有权限修改
+            existing_prompt = await self.repository.get_prompt_by_id(
+                prompt_data.id, 
+                prompt_data.tenant_id
+            )
+            
+            if not existing_prompt:
+                return ResultUtil.fail(
+                    msg="提示词记录不存在或无权修改", 
+                    data=None
+                )
+            
+            # 更新提示词
+            updated_prompt = await self.repository.update_prompt(
+                prompt_data, 
+                current_user.id
+            )
+            
+            if not updated_prompt:
+                return ResultUtil.fail(msg="更新提示词失败", data=None)
+            
+            return ResultUtil.success(
+                data=updated_prompt, 
+                msg="提示词更新成功"
+            )
+            
+        except Exception as e:
+            logger.error(f"更新提示词失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"更新提示词失败: {str(e)}", data=None)

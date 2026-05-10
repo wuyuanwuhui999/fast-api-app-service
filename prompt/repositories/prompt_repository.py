@@ -7,7 +7,7 @@ from fastapi.logger import logger
 
 from common.utils.result_util import ResultEntity
 from prompt.models.prompt_model import PromptModel
-from prompt.schemas.prompt_schema import PromptSchema
+from prompt.schemas.prompt_schema import PromptSchema, UpdatePromptSchema
 
 
 class PromptRepository:
@@ -35,6 +35,68 @@ class PromptRepository:
             
         except Exception as e:
             logger.error(f"查询提示词失败: {str(e)}", exc_info=True)
+            return None
+
+    async def get_prompt_by_id(self, prompt_id: str, tenant_id: str) -> Optional[PromptSchema]:
+        """
+        根据ID和租户ID查询提示词记录（用于权限验证）
+        
+        Args:
+            prompt_id: 提示词ID
+            tenant_id: 租户ID
+            
+        Returns:
+            Optional[PromptSchema]: 提示词记录
+        """
+        try:
+            prompt = self.db.query(PromptModel).filter(
+                PromptModel.id == prompt_id,
+                PromptModel.tenant_id == tenant_id
+            ).first()
+            
+            if prompt:
+                return PromptSchema.model_validate(prompt)
+            return None
+            
+        except Exception as e:
+            logger.error(f"根据ID查询提示词失败: {str(e)}", exc_info=True)
+            return None
+
+    async def update_prompt(self, prompt_data: UpdatePromptSchema, user_id: str) -> Optional[PromptSchema]:
+        """
+        更新提示词记录
+        
+        Args:
+            prompt_data: 更新提示词请求数据
+            user_id: 当前操作用户ID
+            
+        Returns:
+            Optional[PromptSchema]: 更新后的提示词记录
+        """
+        try:
+            # 查询要更新的记录
+            prompt = self.db.query(PromptModel).filter(
+                PromptModel.id == prompt_data.id,
+                PromptModel.tenant_id == prompt_data.tenant_id
+            ).first()
+            
+            if not prompt:
+                logger.warning(f"未找到提示词记录: id={prompt_data.id}, tenant_id={prompt_data.tenant_id}")
+                return None
+            
+            # 更新字段
+            prompt.prompt = prompt_data.prompt
+            prompt.user_id = user_id  # 更新操作用户ID
+            prompt.update_time = datetime.now()
+            
+            self.db.commit()
+            self.db.refresh(prompt)
+            
+            return PromptSchema.model_validate(prompt)
+            
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"更新提示词失败: {str(e)}", exc_info=True)
             return None
 
     async def create_default_prompt(self, tenant_id: str, user_id: str) -> Optional[PromptSchema]:
