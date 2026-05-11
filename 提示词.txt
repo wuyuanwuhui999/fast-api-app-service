@@ -5,6 +5,7 @@
 - chat（聊天模块）
 - prompt（提示词模块）
 - tenant（租户模块）
+- gateway（网关模块）
 
 # 模块识别规则
 根据接口 URL 中的路径段可判断所属模块：
@@ -14,7 +15,7 @@
   - `/service/prompt/getPrompt` → `prompt` 模块
 
 # 模块内部结构
-每个业务模块（user / chat / prompt / tenant）均包含以下标准目录：
+每个业务模块（user / chat / prompt / tenant / gateway）均包含以下标准目录：
 
 dependencies/       # 依赖注入或权限校验等
 models/             # 独享的数据库模型文件

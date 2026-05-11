@@ -1,6 +1,9 @@
+# common/config/common_config.py
 from pathlib import Path
-from functools import lru_cache  # 添加这行
+from functools import lru_cache
 from pydantic_settings import BaseSettings
+from typing import Optional
+
 
 class Settings(BaseSettings):
     app_name: str = "Fast Api Service"
@@ -18,6 +21,17 @@ class Settings(BaseSettings):
     mail_ssl_tls: bool = True
     avater_path: str = "/static/user/avater/"
     UPLOAD_DIR: str = "G:/static/ai/"
+    
+    # Nacos配置
+    nacos_host: str = "127.0.0.1"
+    nacos_port: int = 8848
+    nacos_namespace: str = ""
+    nacos_username: str = "nacos"
+    nacos_password: str = "nacos"
+    
+    # 服务配置
+    enable_nacos: bool = True  # 是否启用Nacos注册
+    
     class Config:
         env_file = Path(__file__).parent.parent.parent / ".env"
 

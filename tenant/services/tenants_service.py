@@ -90,27 +90,27 @@ class TenantsService:
             logger.error(f"获取租户用户分页列表失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg="获取用户列表失败", data=None)
 
-    async def create_tenant(self, tenant_data: TenantCreateSchema, current_user: UserSchema) -> ResultEntity:
+    async def create_tenant(self, tenant_data: TenantCreateSchema, user_id: str) -> ResultEntity:
         if not await self._check_admin_permission(current_user.id):
             return ResultUtil.fail(msg="无权创建租户", data=None)
 
         try:
-            tenant = self.tenants_repository.create_tenant(tenant_data, current_user.id)
+            tenant = self.tenants_repository.create_tenant(tenant_data, user_id)
             return ResultUtil.success(data=tenant)
         except Exception as e:
             logger.error(f"创建租户失败: {str(e)}")
             return ResultUtil.fail(msg="创建租户失败", data=None)
 
     async def update_tenant(self, tenant_id: str, update_data: TenantUpdateSchema,
-                            current_user: UserSchema) -> ResultEntity:
-        if not await self._check_tenant_admin(tenant_id, current_user.id):
+                            user_id:str) -> ResultEntity:
+        if not await self._check_tenant_admin(tenant_id, user_id):
             return ResultUtil.fail(msg="无权修改此租户", data=None)
 
         success = self.tenants_repository.update_tenant(tenant_id, update_data)
         return ResultUtil.success() if success else ResultUtil.fail(msg="租户不存在", data=None)
 
-    async def delete_tenant(self, tenant_id: str, current_user: UserSchema) -> ResultEntity:
-        if not await self._check_super_admin(current_user.id):
+    async def delete_tenant(self, tenant_id: str, user_id: str) -> ResultEntity:
+        if not await self._check_super_admin(user_id):
             return ResultUtil.fail(msg="需要超级管理员权限", data=None)
 
         success = self.tenants_repository.delete_tenant(tenant_id)
@@ -120,10 +120,10 @@ class TenantsService:
             self,
             tenant_id: str,
             user_id: str,
-            current_user: UserSchema
+            current_user_id: str
     ) -> ResultEntity:
         # 权限检查
-        if not await self._check_tenant_admin(tenant_id, current_user.id):
+        if not await self._check_tenant_admin(tenant_id, current_user_id):
             return ResultUtil.fail(msg="无权添加此租户用户", data=None)
 
         user = self.tenants_repository.get_user_by_id(user_id)
@@ -192,12 +192,12 @@ class TenantsService:
     async def get_tenant_users(
             self,
             tenant_id: str,
-            current_user: UserSchema
+            user_id: str
     ) -> ResultEntity:
         """获取租户下的所有用户（需要租户管理员权限）"""
         try:
             # 权限检查 - 只有租户管理员或超级管理员可以查看
-            if not await self._check_tenant_admin(tenant_id, current_user.id):
+            if not await self._check_tenant_admin(tenant_id, user_id):
                 return ResultUtil.fail(msg="无权查看此租户用户列表", data=None)
 
             # 获取租户用户列表

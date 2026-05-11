@@ -12,6 +12,7 @@ from datetime import datetime
 class ServiceManager:
     def __init__(self):
         self.services = [
+            {"name": "Gateway Service", "port": 4009, "module": "gateway.main", "color": "\033[96m"},  # 青色
             {"name": "User Service", "port": 4005, "module": "user.main", "color": "\033[92m"},  # 绿色
             {"name": "Chat Service", "port": 4006, "module": "chat.main", "color": "\033[94m"},  # 蓝色
             {"name": "Tenant Service", "port": 4007, "module": "tenant.main", "color": "\033[93m"},  # 黄色
@@ -22,7 +23,12 @@ class ServiceManager:
         
         # 获取项目根目录
         self.project_dir = os.path.dirname(os.path.abspath(__file__))
-        self.venv_python = os.path.join(self.project_dir, ".venv", "bin", "python")
+        
+        # 根据操作系统选择虚拟环境的python路径
+        if sys.platform == "win32":
+            self.venv_python = os.path.join(self.project_dir, ".venv", "Scripts", "python.exe")
+        else:
+            self.venv_python = os.path.join(self.project_dir, ".venv", "bin", "python")
         
         # 检查虚拟环境是否存在
         if not os.path.exists(self.venv_python):
@@ -34,7 +40,7 @@ class ServiceManager:
         banner = """
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║     FastAPI 多模块服务一键启动器                              ║
+║     FastAPI 微服务一键启动器 (Nacos + Gateway)               ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
         """
@@ -43,6 +49,27 @@ class ServiceManager:
     def log(self, message, color="\033[0m"):
         timestamp = datetime.now().strftime("%H:%M:%S")
         print(f"{color}[{timestamp}] {message}\033[0m")
+    
+    def check_port_in_use(self, port):
+        """检查端口是否被占用（跨平台）"""
+        try:
+            if sys.platform == "win32":
+                result = subprocess.run(
+                    f'netstat -ano | findstr :{port} | findstr LISTENING',
+                    shell=True,
+                    capture_output=True,
+                    text=True
+                )
+            else:
+                result = subprocess.run(
+                    f"lsof -i :{port} | grep LISTEN",
+                    shell=True,
+                    capture_output=True,
+                    text=True
+                )
+            return result.returncode == 0
+        except:
+            return False
     
     def start_service(self, service):
         """启动单个服务"""
@@ -89,22 +116,36 @@ class ServiceManager:
         """启动所有服务"""
         self.print_banner()
         
+        # 检查Nacos是否可用
+        self.log("检查Nacos服务状态...", "\033[96m")
+        nacos_available = self.check_nacos()
+        if not nacos_available:
+            self.log("警告: Nacos服务不可用，服务将无法注册", "\033[93m")
+            self.log("请确保Nacos已启动: cd nacos/bin && ./startup.sh -m standalone", "\033[93m")
+        else:
+            self.log("Nacos服务连接成功", "\033[92m")
+        print()
+        
         # 检查端口是否被占用
         for service in self.services:
             port = service['port']
-            result = subprocess.run(
-                f"lsof -i :{port} | grep LISTEN",
-                shell=True,
-                capture_output=True,
-                text=True
-            )
-            if result.returncode == 0:
-                self.log(f"警告: 端口 {port} 已被占用", "\033[93m")
+            if self.check_port_in_use(port):
+                self.log(f"警告: 端口 {port} ({service['name']}) 已被占用", "\033[93m")
         
         self.log("正在启动所有服务...", "\033[96m")
+        self.log("注意: Gateway会先启动，其他服务稍后启动", "\033[96m")
         print()
         
-        for service in self.services:
+        # 先启动Gateway
+        gateway_service = self.services[0]
+        self.log(f"启动 {gateway_service['name']} (端口 {gateway_service['port']})...", gateway_service['color'])
+        gateway_process = self.start_service(gateway_service)
+        if gateway_process:
+            self.processes.append(gateway_process)
+        time.sleep(2)  # 等待Gateway完全启动
+        
+        # 启动其他业务服务
+        for service in self.services[1:]:
             self.log(f"启动 {service['name']} (端口 {service['port']})...", service['color'])
             process = self.start_service(service)
             if process:
@@ -112,14 +153,26 @@ class ServiceManager:
             time.sleep(1)  # 等待启动
         
         print()
-        self.log("=" * 60, "\033[96m")
+        self.log("=" * 70, "\033[96m")
         self.log("所有服务已启动！", "\033[92m")
-        self.log("=" * 60, "\033[96m")
+        self.log("=" * 70, "\033[96m")
         
         # 打印服务地址
         print()
+        print("  \033[96m┌─────────────────────────────────────────────────────────────────────┐\033[0m")
+        print("  \033[96m│                        服务地址列表                                  │\033[0m")
+        print("  \033[96m├─────────────────────────────────────────────────────────────────────┤\033[0m")
         for service in self.services:
-            print(f"  {service['name']}:  \033[96mhttp://localhost:{service['port']}\033[0m")
+            if service['name'] == 'Gateway Service':
+                print(f"  \033[96m│  🚪 {service['name']:15} │ \033[92mhttp://localhost:{service['port']}\033[0m \033[96m(统一入口)           │\033[0m")
+            else:
+                print(f"  \033[96m│  📦 {service['name']:15} │ \033[90mhttp://localhost:{service['port']}\033[0m \033[96m                               │\033[0m")
+        print("  \033[96m├─────────────────────────────────────────────────────────────────────┤\033[0m")
+        print(f"  \033[96m│  🌐 Nacos控制台        │ \033[94mhttp://localhost:8848/nacos\033[0m \033[96m(账号: nacos/nacos)    │\033[0m")
+        print("  \033[96m└─────────────────────────────────────────────────────────────────────┘\033[0m")
+        print()
+        print("  \033[93m💡 提示: 所有客户端请求都应通过Gateway访问\033[0m")
+        print("  \033[93m   Gateway地址: http://localhost:4009/service/{模块名}/{接口路径}\033[0m")
         print()
         
         self.log("按 Ctrl+C 停止所有服务", "\033[93m")
@@ -132,12 +185,25 @@ class ServiceManager:
         except KeyboardInterrupt:
             self.stop_all()
     
+    def check_nacos(self):
+        """检查Nacos是否可用"""
+        try:
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(2)
+            result = sock.connect_ex(('127.0.0.1', 8848))
+            sock.close()
+            return result == 0
+        except:
+            return False
+    
     def stop_all(self):
         """停止所有服务"""
         print()
         self.log("正在停止所有服务...", "\033[93m")
         
-        for process in self.processes:
+        # 先停止业务服务，最后停止Gateway
+        for process in reversed(self.processes):
             if process.poll() is None:  # 如果进程还在运行
                 process.terminate()
         
