@@ -7,6 +7,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from gateway.middleware.auth_middleware import AuthMiddleware
+from gateway.middleware.log_middleware import LogMiddleware  # 新增
 from gateway.services.route_service import RouteService
 from common.utils.service_registry import service_registry
 from common.config.common_config import get_settings
@@ -39,6 +40,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 添加日志中间件（最先执行，记录请求开始时间）
+app.add_middleware(LogMiddleware)
 
 # 添加认证中间件
 app.add_middleware(AuthMiddleware)
