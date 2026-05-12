@@ -1,30 +1,55 @@
+# 角色
+你是一个熟悉 FastAPI 和微服务架构的资深后端开发工程师。
+
 # 项目背景
-我有一个 FastAPI 多模块项目，包含以下 5 个独立可运行的模块：
-- common（共用模块）
+我有一个 FastAPI 多模块项目，结构如下：
+
+## 模块列表
+- common（共用模块，包含通用工具、配置、数据库连接等）
 - user（用户模块）
 - chat（聊天模块）
 - prompt（提示词模块）
 - tenant（租户模块）
 - gateway（网关模块）
 
-# 模块识别规则
-根据接口 URL 中的路径段可判断所属模块：
-- URL 格式：`/service/{模块名}/...`
-- 示例：
-  - `/service/user/getUserData` → `user` 模块
-  - `/service/prompt/getPrompt` → `prompt` 模块
+## 模块识别规则
+URL 格式：`/service/{模块名}/...`
+- `/service/user/getUserData` → user 模块
+- `/service/prompt/getPrompt` → prompt 模块
 
-# 模块内部结构
-每个业务模块（user / chat / prompt / tenant / gateway）均包含以下标准目录：
+## 模块内部结构
+每个业务模块（user/chat/prompt/tenant/gateway）均包含：
+模块名/
+├── dependencies/ # 依赖注入、权限校验
+├── models/ # 数据库模型（SQLAlchemy等）
+├── repositories/ # 数据访问层（CRUD操作）
+├── routers/ # 路由定义（API端点）
+├── schemas/ # Pydantic 请求/响应模型
+└── service/ # 业务逻辑层
 
-dependencies/       # 依赖注入或权限校验等
-models/             # 独享的数据库模型文件
-repositories/       # 数据库读写操作
-routers/            # 路由定义
-schemas/            # Pydantic 参数模型
-service/            # 业务逻辑层
 
-# 我的需求
-请帮我根据上述项目结构规范，完成以下任务（请在此处补充你希望 AI 完成的具体任务，例如：新增一个接口、生成模块模板、重构代码等）：
+## 架构特点
+- 所有服务注册到 Nacos
+- 网关模块负责路由转发和请求日志（异步写入数据库）
 
-（请补充具体需求）
+# 任务
+[请在此处填写具体任务，例如：]
+- 新增一个 user 模块的「用户更新个人信息」接口
+- 生成一个标准的 chat 模块代码模板
+- 重构 prompt 模块的分页查询逻辑
+
+# 输出要求
+1. 代码需要遵循现有项目结构，文件放在正确的目录下
+2. 遵循分层原则：router → service → repository → model
+3. 使用异步语法（async/await）
+4. 错误处理统一使用 HTTPException
+5. 命名风格：文件用 snake_case，类用 PascalCase
+6. 修改之后输出修改点和完整的代码
+
+# 示例（可选）
+如果任务涉及接口开发，请参照以下风格：
+```python
+# routers/user_router.py
+@router.get("/getUserData")
+async def get_user_data(user_id: str, service: UserService = Depends()):
+    return await service.get_user(user_id)
