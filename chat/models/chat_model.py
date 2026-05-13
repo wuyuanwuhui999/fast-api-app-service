@@ -13,13 +13,14 @@ class ChatDocModel(Base):
     }
 
     id = Column(String(32), primary_key=True, comment='文档id')
-    directory_id = Column(String(255), comment='目录id')  # 修改注释
+    directory_id = Column(String(255), comment='目录id')
     name = Column(String(255), comment='文档原标题')
     ext = Column(String(255), comment='文档格式')
     user_id = Column(String(32), comment='用户id')
-    tenant_id = Column(String(32), comment='租户id')  # 新增tenant_id字段
+    tenant_id = Column(String(32), comment='租户id')
     create_time = Column(DateTime, server_default=func.now(), comment='创建时间')
     update_time = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment='修改时间')
+
 
 class ChatDocDirectory(Base):
     __tablename__ = 'chat_doc_directory'
@@ -29,12 +30,12 @@ class ChatDocDirectory(Base):
         'mysql_collate': 'utf8_general_ci',
         'mysql_engine': 'InnoDB'
     }
-    id = Column(String(64), primary_key=True, comment='租户id')  # 字符串类型主键
-    user_id = Column(String(64), nullable=True, comment='用户id')  # 可为空的字符串字段
-    directory = Column(String(255), nullable=False, comment='目录')  # 非空的字符串字段
-    tenant_id = Column(String(255), nullable=False, comment='租户id')  # 非空的字符串字段
-    create_time = Column(DateTime, nullable=True, comment='创建时间')  # 可为空的日期时间字段
-    update_time = Column(DateTime, nullable=True, comment='更新时间')  # 可为空的日期时间字段
+    id = Column(String(64), primary_key=True, comment='租户id')
+    user_id = Column(String(64), nullable=True, comment='用户id')
+    directory = Column(String(255), nullable=False, comment='目录')
+    tenant_id = Column(String(255), nullable=False, comment='租户id')
+    create_time = Column(DateTime, nullable=True, comment='创建时间')
+    update_time = Column(DateTime, nullable=True, comment='更新时间')
 
 
 class ChatHistory(Base):
@@ -47,15 +48,17 @@ class ChatHistory(Base):
     }
     id = Column(Integer, primary_key=True, autoincrement=True, comment='主键')
     user_id = Column(String(64), nullable=True, comment='用户id')
-    model_name = Column(String(64), nullable=True, comment='模型名称')
+    tenant_id = Column(String(255), nullable=True, comment='租户id')
+    model_id = Column(String(64), nullable=True, comment='模型ID')  # 修改：model_name -> model_id
     files = Column(String(1000), nullable=True, comment='文件')
     chat_id = Column(String(128), nullable=True, comment='会话id')
     prompt = Column(Text, nullable=True, comment='问题')
-    system_prompt = Column(Text,nullable=True, comment='系统提示词')
+    system_prompt = Column(Text, nullable=True, comment='系统提示词')
     think_content = Column(Text, nullable=True, comment='思考内容')
     response_content = Column(Text, nullable=True, comment='正文')
     content = Column(Text, nullable=True, comment='回复内容')
     create_time = Column(DateTime, nullable=True, comment='创建时间')
+
 
 class ChatModel(Base):
     __tablename__ = 'chat_model'

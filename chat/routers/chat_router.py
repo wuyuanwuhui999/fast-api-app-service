@@ -1,6 +1,10 @@
-from fastapi import APIRouter, Depends, UploadFile, Header, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, UploadFile, Header, HTTPException, WebSocket, WebSocketDisconnect, Query
 from chat.schemas.chat_schema import ChatParamsEntity, CreateDirectoryShema
 from chat.services.chat_service import ChatService
+import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/service/chat", tags=["chat"])
 
@@ -20,33 +24,74 @@ async def get_model_list(chat_service: ChatService = Depends()):
 @router.websocket("/ws/chat")
 async def websocket_chat(
     websocket: WebSocket,
+    X_User_Id: str = Query(None, alias="X-User-Id"),  # 从URL参数获取用户ID
     chat_service: ChatService = Depends()
 ):
+    """
+    WebSocket聊天接口
+    
+    用户ID通过URL参数X-User-Id传递（由网关设置）
+    其他参数（prompt, chatId, modelId等）通过WebSocket send方法传递
+    """
+    
+    # 验证用户ID（由网关传递）
+    if not X_User_Id:
+        await websocket.close(code=4001, reason="Missing user id")
+        return
+    
+    user_id = X_User_Id
+    logger.info(f"WebSocket连接建立，用户ID: {user_id}")
+    
     await websocket.accept()
+    
     try:
         while True:
-            data = await websocket.receive_json()
-            chat_params = ChatParamsEntity(**data)
-            # WebSocket场景下，token应该从消息中获取并验证
-            # 这里由gateway已经验证过，直接从token解析用户ID
-            from common.utils.jwt_util import verify_token
-            import json
-            payload = verify_token(chat_params.token)
-            if not payload:
-                await websocket.send_text("认证失败")
-                await websocket.close()
-                return
-            sub = payload.get("sub")
-            if isinstance(sub, str):
-                user_info = json.loads(sub)
-                user_id = user_info.get("id")
-            else:
-                user_id = sub.get("id") if sub else None
+            # 接收客户端发送的消息
+            data = await websocket.receive_text()
             
-            async for response in chat_service.chat_with_websocket(user_id, chat_params):
-                await websocket.send_text(response)
+            try:
+                # 解析JSON消息
+                if isinstance(data, str):
+                    chat_params_data = json.loads(data)
+                else:
+                    chat_params_data = data
+                
+                # 构建ChatParamsEntity
+                chat_params = ChatParamsEntity(
+                    prompt=chat_params_data.get("prompt", ""),
+                    systemPrompt=chat_params_data.get("systemPrompt", None),
+                    directoryId=chat_params_data.get("directoryId", "default"),
+                    chatId=chat_params_data.get("chatId", ""),
+                    token="",  # token已经在网关验证过了，这里不需要
+                    modelId=chat_params_data.get("modelId", ""),
+                    showThink=chat_params_data.get("showThink", False),
+                    type=chat_params_data.get("type", None),
+                    language=chat_params_data.get("language", None),
+                    tenant_id=chat_params_data.get("tenant_id", None)
+                )
+                
+                # 处理聊天请求
+                async for response in chat_service.chat_with_websocket(user_id, chat_params):
+                    # 发送响应给客户端
+                    await websocket.send_text(response)
+                    
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON解析错误: {str(e)}")
+                await websocket.send_text(f"Error: Invalid JSON format - {str(e)}")
+                await websocket.send_text("[completed]")
+            except Exception as e:
+                logger.error(f"处理消息错误: {str(e)}", exc_info=True)
+                await websocket.send_text(f"Error: {str(e)}")
+                await websocket.send_text("[completed]")
+                
     except WebSocketDisconnect:
-        pass
+        logger.info(f"WebSocket连接断开，用户ID: {user_id}")
+    except Exception as e:
+        logger.error(f"WebSocket错误: {str(e)}", exc_info=True)
+        try:
+            await websocket.close(code=4000, reason=f"Internal error: {str(e)}")
+        except:
+            pass
 
 
 @router.post("/uploadDoc")

@@ -6,15 +6,16 @@ from typing import Optional, List
 class ChatSchema(BaseModel):
     id: Optional[int] = None
     user_id: str
+    tenant_id: Optional[str] = None  # 新增租户ID字段
     files: Optional[str] = None
     chat_id: str
     prompt: str
     system_prompt: Optional[str] = None
-    model_name: str
+    model_id: str  # 修改：model_name -> model_id
     content: Optional[str] = None
     think_content: Optional[str] = None
     response_content: Optional[str] = None
-    create_time: Optional[datetime] = None  # 改为 datetime 类型
+    create_time: Optional[datetime] = None
 
     # 自定义内容处理方法
     def set_content(self, content: str):
@@ -43,22 +44,23 @@ class ChatSchema(BaseModel):
         }
     )
 
+
 class ChatParamsEntity(BaseModel):
+    """WebSocket消息参数 - 通过send方法传递"""
     prompt: str
     systemPrompt: Optional[str] = None
     directoryId: str = "default"
     chatId: str
-    token: str
-    modelId: str  # 改为modelId
+    modelId: str  # 模型ID
     showThink: bool = False
     type: Optional[str] = None  # document/db
     language: Optional[str] = None  # zh/cn
     tenant_id: Optional[str] = None
 
+
 class ClientMessage(BaseModel):
     chat_id: str
     prompt: str
-    token: str
     files: List[str]
 
 
@@ -71,7 +73,7 @@ class DirectorySchema(BaseModel):
     create_time: Optional[str] = None
 
     class Config:
-        from_attributes = True  # 允许ORM模型转换
+        from_attributes = True
 
 
 class ChatModelSchema(BaseModel):
@@ -80,7 +82,7 @@ class ChatModelSchema(BaseModel):
     api_key: Optional[str] = None
     model_name: str
     base_url: Optional[str] = None
-    disabled: int = 0  # 新增disabled字段
+    disabled: int = 0
     create_time: Optional[datetime] = None
     update_time: Optional[datetime] = None
 
@@ -92,16 +94,16 @@ class ChatModelSchema(BaseModel):
     )
 
 
-
 class ChatDocSchema(BaseModel):
     id: str
     directory_id: Optional[str] = None
     name: Optional[str] = None
     ext: Optional[str] = None
     user_id: Optional[str] = None
-    tenant_id: Optional[str] = None  # 新增tenant_id字段
+    tenant_id: Optional[str] = None
     create_time: Optional[datetime] = None
     update_time: Optional[datetime] = None
+
 
 class CreateDirectoryShema(BaseModel):
     directory: str
