@@ -23,16 +23,18 @@ class TenantsService:
 
     async def get_user_tenant_list(self, user_id: str) -> ResultEntity:
         """获取用户所属的所有租户 - 使用同步方法"""
-        try:
+        try:            
             # 移除 await，因为 get_user_tenant_list 现在是同步方法
             tenants = self.tenants_repository.get_user_tenant_list(user_id)
-            if tenants:
-                # 直接返回租户列表
+            
+            if tenants:                
                 return ResultUtil.success(data=tenants, total=len(tenants))
+            
             return ResultUtil.fail(msg="用户不属于任何租户", data=None)
+            
         except Exception as e:
-            logger.error(f"获取用户租户列表失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg="获取租户列表失败", data=None)
+
 
     async def get_tenant_user(self, user_id: str, tenant_id: str) -> ResultEntity:
         """

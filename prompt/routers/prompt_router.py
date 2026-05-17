@@ -21,11 +21,10 @@ def get_user_id_from_header(x_user_id: str = Header(None, alias="X-User-Id")):
 @router.get("/getPrompt", response_model=ResultEntity)
 async def get_prompt(
     tenantId: str = Query(..., description="租户ID"),
-    current_user_id: str = Depends(get_user_id_from_header),
+    current_user_id: str = Depends(get_user_id_from_header),  # 这里返回的是字符串
     prompt_service: PromptService = Depends()
 ):
-    """根据租户ID查询提示词记录"""
-    return await prompt_service.get_prompt(tenantId, current_user_id)
+    return await prompt_service.get_prompt(tenantId, current_user_id)  # 传递的是字符串
 
 
 @router.post("/updatePrompt", response_model=ResultEntity)

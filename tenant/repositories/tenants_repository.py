@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, delete, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from common.models.common_model import UserMode
@@ -17,24 +17,50 @@ class TenantsRepository:
         self.db = db
 
     def get_user_tenant_list(self, user_id: str) -> List[TenantSchema]:
-        """获取用户所属的所有租户（优化版，单次查询）- 同步方法"""
+        """获取用户所属的所有租户（包括公开租户）- 同步方法"""
         try:
+            from sqlalchemy import or_
+            
             stmt = (
                 select(TenantModel, TenantUserModel.role_type)
-                    .join(
+                    .outerjoin(  # 使用 outerjoin 以包含没有关联的公开租户
                     TenantUserModel,
                     TenantModel.id == TenantUserModel.tenant_id
                 )
-                    .where(TenantUserModel.user_id == user_id)
+                    .where(
+                    or_(
+                        TenantUserModel.user_id == user_id,  # 用户直接所属的租户
+                        TenantModel.code == 'public'         # 公开租户
+                    )
+                )
+                    .distinct()  # 去重，避免重复返回相同租户
             )
 
             results = self.db.execute(stmt)
-
+            
+            # ========== 打印原始查询结果 ==========
+            logger.info(f"[get_user_tenant_list] 用户ID: {user_id}")
+            
             result = []
-            for tenant, role_type in results:
+            for idx, (tenant, role_type) in enumerate(results):
+                logger.info(f"[get_user_tenant_list] 结果 {idx + 1}:")
+                logger.info(f"  - 租户ID: {tenant.id}")
+                logger.info(f"  - 租户名称: {tenant.name}")
+                logger.info(f"  - 租户编码: {tenant.code}")
+                logger.info(f"  - 租户描述: {tenant.description}")
+                logger.info(f"  - 租户状态: {tenant.status}")
+                logger.info(f"  - 角色类型: {role_type}")
+                
                 tenant_schema = TenantSchema.model_validate(tenant)
-                tenant_schema.role_type = role_type
+                # 对于公开租户，如果没有关联记录，role_type 可能为 None
+                tenant_schema.role_type = role_type if role_type is not None else 0
                 result.append(tenant_schema)
+            
+            # 打印最终返回的数据
+            logger.info(f"[get_user_tenant_list] 最终返回租户数量: {len(result)}")
+            for idx, tenant in enumerate(result):
+                logger.info(f"[get_user_tenant_list] 返回数据 {idx + 1}: id={tenant.id}, name={tenant.name}, code={tenant.code}, role_type={tenant.role_type}")
+            # ========== 打印结束 ==========
 
             return result
 

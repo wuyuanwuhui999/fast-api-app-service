@@ -307,6 +307,29 @@ async def gateway(request: Request, path: str):
             
             logger.info(f"[Gateway] 收到响应: status_code={response.status_code}")
             
+            # ========== 新增：打印接口返回数据 ==========
+            # 获取响应内容
+            response_content = response.content
+            
+            # 尝试解析为JSON以便美化输出
+            try:
+                response_json = response.json()
+                # 限制打印长度，避免日志过大
+                response_str = json.dumps(response_json, ensure_ascii=False)
+                if len(response_str) > 2000:
+                    response_str = response_str[:2000] + "... [truncated]"
+                logger.info(f"[Gateway] 响应数据 (JSON): {response_str}")
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                # 如果不是JSON，尝试作为文本处理
+                try:
+                    response_text = response_content.decode('utf-8', errors='ignore')
+                    if len(response_text) > 2000:
+                        response_text = response_text[:2000] + "... [truncated]"
+                    logger.info(f"[Gateway] 响应数据 (Text): {response_text}")
+                except Exception:
+                    logger.info(f"[Gateway] 响应数据 (Binary): {len(response_content)} bytes")
+            # ========== 打印结束 ==========
+            
             # 返回响应
             return Response(
                 content=response.content,

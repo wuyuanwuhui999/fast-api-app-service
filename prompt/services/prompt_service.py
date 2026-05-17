@@ -14,7 +14,7 @@ class PromptService:
     def __init__(self, db: Session = Depends(get_db)):
         self.repository = PromptRepository(db)
 
-    async def get_prompt(self, tenant_id: str, current_user) -> ResultEntity:
+    async def get_prompt(self, tenant_id: str, current_user_id) -> ResultEntity:
         """
         根据租户ID查询提示词记录，如果不存在则创建默认提示词
         
@@ -36,7 +36,7 @@ class PromptService:
             # 如果没有查到数据，则创建默认提示词
             if not prompt:
                 logger.info(f"租户 {tenant_id} 未找到提示词，正在创建默认提示词...")
-                prompt = await self.repository.create_default_prompt(tenant_id, current_user.id)
+                prompt = await self.repository.create_default_prompt(tenant_id, current_user_id)
                 
                 if not prompt:
                     return ResultUtil.fail(msg="创建默认提示词失败", data=None)
@@ -49,7 +49,7 @@ class PromptService:
             logger.error(f"获取提示词失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg=f"获取提示词失败: {str(e)}", data=None)
 
-    async def update_prompt(self, prompt_data: UpdatePromptSchema, current_user) -> ResultEntity:
+    async def update_prompt(self, prompt_data: UpdatePromptSchema, current_user_id:str) -> ResultEntity:
         """
         更新提示词记录
         
@@ -89,7 +89,7 @@ class PromptService:
             # 更新提示词
             updated_prompt = await self.repository.update_prompt(
                 prompt_data, 
-                current_user.id
+                current_user_id
             )
             
             if not updated_prompt:
