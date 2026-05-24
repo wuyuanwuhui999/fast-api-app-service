@@ -1,3 +1,4 @@
+# gateway/services/route_service.py
 import random
 import logging
 from typing import Optional, Dict, Any, List
@@ -15,6 +16,7 @@ class RouteService:
         "chat": "chat-service",
         "tenant": "tenant-service",
         "prompt": "prompt-service",
+        "agent": "agent-service",  # 新增
     }
     
     # 服务实例缓存（不依赖Nacos的本地配置）
@@ -23,6 +25,7 @@ class RouteService:
         "chat-service": {"ip": "127.0.0.1", "port": 4006, "healthy": True, "weight": 1.0},
         "tenant-service": {"ip": "127.0.0.1", "port": 4007, "healthy": True, "weight": 1.0},
         "prompt-service": {"ip": "127.0.0.1", "port": 4008, "healthy": True, "weight": 1.0},
+        "agent-service": {"ip": "127.0.0.1", "port": 3010, "healthy": True, "weight": 1.0},  # 新增
     }
     
     def __init__(self):
@@ -51,9 +54,13 @@ class RouteService:
         local_instance = self.LOCAL_SERVICES.get(service_name)
         if local_instance:
             logger.debug(f"使用本地配置的服务实例: {service_name} -> {local_instance['ip']}:{local_instance['port']}")
-            return local_instance.copy()
+            # 验证本地服务是否可用
+            if await self._check_service_health(local_instance['ip'], local_instance['port']):
+                return local_instance.copy()
+            else:
+                logger.warning(f"本地服务实例不可用: {service_name} -> {local_instance['ip']}:{local_instance['port']}")
         
-        # 方案2: 尝试从Nacos获取（如果本地配置不存在）
+        # 方案2: 尝试从Nacos获取（如果本地配置不可用）
         instances = self.nacos.get_service_instances(service_name)
         
         if not instances:
@@ -61,9 +68,44 @@ class RouteService:
             return None
         
         # 解析Nacos返回的实例数据
+        parsed_instances = self._parse_nacos_instances(instances)
+        
+        if not parsed_instances:
+            logger.warning(f"没有有效的服务实例: {service_name}")
+            return None
+        
+        # 过滤健康的实例
+        healthy_instances = [
+            inst for inst in parsed_instances 
+            if inst.get("healthy", True) and inst.get("ip") and inst.get("port")
+        ]
+        
+        if not healthy_instances:
+            logger.warning(f"服务 {service_name} 没有健康的实例")
+            # 如果没有健康实例，返回第一个可用实例
+            if parsed_instances:
+                return parsed_instances[0]
+            return None
+        
+        # 加权随机负载均衡
+        return self._weighted_random_choice(healthy_instances)
+    
+    async def _check_service_health(self, ip: str, port: int) -> bool:
+        """检查服务健康状态"""
+        import socket
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(2)
+            result = sock.connect_ex((ip, port))
+            sock.close()
+            return result == 0
+        except Exception:
+            return False
+    
+    def _parse_nacos_instances(self, instances) -> List[Dict[str, Any]]:
+        """解析Nacos返回的实例数据"""
         parsed_instances = []
         
-        # 检查返回的数据结构
         if isinstance(instances, dict):
             # 如果是字典，可能包含hosts字段
             if "hosts" in instances:
@@ -102,41 +144,13 @@ class RouteService:
                             "weight": 1.0
                         })
         
-        if not parsed_instances:
-            logger.warning(f"没有有效的服务实例: {service_name}")
-            return None
-        
-        # 过滤健康的实例
-        healthy_instances = [
-            inst for inst in parsed_instances 
-            if inst.get("healthy", True) and inst.get("ip") and inst.get("port")
-        ]
-        
-        if not healthy_instances:
-            logger.warning(f"服务 {service_name} 没有健康的实例")
-            # 如果没有健康实例，返回第一个可用实例
-            if parsed_instances:
-                return parsed_instances[0]
-            return None
-        
-        # 加权随机负载均衡
-        return self._weighted_random_choice(healthy_instances)
+        return parsed_instances
     
     def _weighted_random_choice(self, instances: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        加权随机选择实例
-        
-        Args:
-            instances: 实例列表，每个实例包含weight字段
-        
-        Returns:
-            选中的实例
-        """
-        # 收集权重
+        """加权随机选择实例"""
         weights = [inst.get("weight", 1.0) for inst in instances]
         total_weight = sum(weights)
         
-        # 随机选择
         r = random.uniform(0, total_weight)
         cumulative = 0
         for inst, weight in zip(instances, weights):
@@ -149,7 +163,6 @@ class RouteService:
                     "metadata": inst.get("metadata", {})
                 }
         
-        # 默认返回第一个
         return {
             "ip": instances[0].get("ip"),
             "port": instances[0].get("port"),
@@ -159,4 +172,4 @@ class RouteService:
     
     def refresh_cache(self):
         """刷新服务实例缓存"""
-        pass  # 本地配置不需要刷新
+        pass

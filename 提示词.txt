@@ -27,29 +27,65 @@ URL 格式：`/service/{模块名}/...`
 ├── schemas/ # Pydantic 请求/响应模型
 └── service/ # 业务逻辑层
 
-
 ## 架构特点
 - 所有服务注册到 Nacos
 - 网关模块负责路由转发和请求日志（异步写入数据库）
 
+# 开发规范与约束（重要）
+
+## 1. 统一接口返回规范
+所有接口返回结果必须使用 `ResultUtil` 类进行包装，返回结果类从 `common` 模块导入。
+- **导入路径**：`from common.utils.result_util import ResultEntity, ResultUtil`
+- **成功返回**：使用 `ResultUtil.success` 方法包装。
+- **方法参数**：
+  - `data: Optional[Any] = None`：接口返回的实际业务数据。
+  - `msg: Optional[str] = None`：提示信息（通常在错误提示，或增删改成功提示时使用）。
+  - `total: Optional[int] = None`：记录总数（仅在分页查询接口时设置）。
+  - `token: Optional[str] = None`：用户凭证（仅在登录、注册接口返回，其他接口无需返回）。
+
+## 2. 服务注册规范
+- 所有接口/服务都需要向 Nacos 注册服务。
+- **服务名称命名规则**：`模块名称-service`（例如：user 模块的服务名为 `user-service`）。
+
+## 3. 认证与身份透传规范（Gateway + 业务模块）
+- **Gateway 模块**：
+  - 作为统一入口，负责处理所有外部请求的 JWT Token 验证（从请求头 `Authorization` 中获取）。
+  - 验证通过后，从 Token 中解析出 `userId`，并将其放入请求头（例如 `X-User-Id`）透传给下游业务模块。
+  - **严禁** Gateway 直接调用业务模块的内部逻辑，只能通过路由转发。
+- **业务模块（user/chat/prompt/tenant）**：
+  - 业务模块**不需要**也不应该再次进行 JWT 校验。
+  - 统一使用依赖注入获取当前登录人 ID。
+  - **获取方式**：在路由函数参数中添加 `current_user_id: str = Depends(get_user_id_from_header)`。
+  - `get_user_id_from_header` 的实现逻辑是从请求头中提取 Gateway 透传过来的 `userId`。
+
+## 4. 代码结构与风格
+- 代码需要遵循现有项目结构，文件放在正确的目录下。
+- 遵循分层原则：router → service → repository → model。
+- 使用异步语法（async/await）。
+- 错误处理统一使用 `HTTPException`。
+- **命名风格**：
+  - 文件命名用 `snake_case`，命名规则为 `模块名称_分层名称.py`（例如：user路由命名为 `user_router.py`）。
+  - 类名用 `PascalCase`。
+
 # 任务
-[请在此处填写具体任务，例如：]
-- 新增一个 user 模块的「用户更新个人信息」接口
-- 生成一个标准的 chat 模块代码模板
-- 重构 prompt 模块的分页查询逻辑
+- 在此处输入你的具体开发任务
 
 # 输出要求
-1. 代码需要遵循现有项目结构，文件放在正确的目录下
-2. 遵循分层原则：router → service → repository → model
-3. 使用异步语法（async/await）
-4. 错误处理统一使用 HTTPException
-5. 命名风格：文件用 snake_case，类用 PascalCase
-6. 修改之后输出修改点和完整的代码
+1. 修改之后请输出具体的修改点说明。
+2. 输出修改或新增的完整代码。
 
 # 示例（可选）
 如果任务涉及接口开发，请参照以下风格：
 ```python
 # routers/user_router.py
+from common.utils.result_util import ResultUtil
+from fastapi import Depends
+
 @router.get("/getUserData")
-async def get_user_data(user_id: str, service: UserService = Depends()):
-    return await service.get_user(user_id)
+async def get_user_data(
+    current_user_id: str = Depends(get_user_id_from_header), 
+    service: UserService = Depends()
+):
+    # 业务逻辑中使用 current_user_id
+    data = await service.get_user_data_by_owner(current_user_id)
+    return ResultUtil.success(data=data)

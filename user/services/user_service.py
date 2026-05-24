@@ -45,8 +45,8 @@ class UserService:
             token=access_token
         )
 
-    async def get_user_data(self, current_user: UserSchema) -> ResultEntity:
-        user = self.user_repository.get_user_by_id(current_user.id)
+    async def get_user_data(self, current_user_id: str) -> ResultEntity:
+        user = self.user_repository.get_user_by_id(current_user_id)
         user_data = UserSchema.model_validate(user).dict()
         # 生成新的访问令牌，默认30天有效期
         token = create_access_token(data={"sub": user_data})

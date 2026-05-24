@@ -206,7 +206,7 @@ class TenantsRepository:
         )
         return [TenantUserRoleSchema.model_validate(u) for u in users.scalars()]
 
-    def get_user_tenants(self, user_id: str) -> List[TenantUserSchema]:
+    def get_tenant_list(self, user_id: str) -> List[TenantUserSchema]:
         """获取用户的所有租户角色信息 - 同步方法"""
         users = self.db.execute(
             select(TenantUserModel).where(

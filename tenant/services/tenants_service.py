@@ -1,3 +1,4 @@
+# tenant/services/tenants_service.py
 import uuid
 from datetime import datetime
 
@@ -21,10 +22,9 @@ class TenantsService:
         self.tenants_repository = TenantsRepository(db)
         self.redis = redis.Redis.from_url(settings.redis_url)
 
-    async def get_user_tenant_list(self, user_id: str) -> ResultEntity:
-        """获取用户所属的所有租户 - 使用同步方法"""
+    async def get_tenant_list(self, user_id: str) -> ResultEntity:
+        """获取用户所属的所有租户"""
         try:            
-            # 移除 await，因为 get_user_tenant_list 现在是同步方法
             tenants = self.tenants_repository.get_user_tenant_list(user_id)
             
             if tenants:                
@@ -61,12 +61,12 @@ class TenantsService:
             tenant_id: str,
             page: int,
             page_size: int,
-            current_user: UserSchema
+            current_user_id: str
     ) -> ResultEntity:
         """获取租户用户列表（分页）"""
         try:
             # 权限检查 - 只有租户管理员或超级管理员可以查看
-            if not await self._check_tenant_admin(tenant_id, current_user.id):
+            if not await self._check_tenant_admin(tenant_id, current_user_id):
                 return ResultUtil.fail(msg="无权查看此租户用户列表", data=None)
 
             # 获取租户用户分页列表
@@ -92,12 +92,12 @@ class TenantsService:
             logger.error(f"获取租户用户分页列表失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg="获取用户列表失败", data=None)
 
-    async def create_tenant(self, tenant_data: TenantCreateSchema, user_id: str) -> ResultEntity:
-        if not await self._check_admin_permission(current_user.id):
+    async def create_tenant(self, tenant_data: TenantCreateSchema, current_user_id: str) -> ResultEntity:
+        if not await self._check_admin_permission(current_user_id):
             return ResultUtil.fail(msg="无权创建租户", data=None)
 
         try:
-            tenant = self.tenants_repository.create_tenant(tenant_data, user_id)
+            tenant = self.tenants_repository.create_tenant(tenant_data, current_user_id)
             return ResultUtil.success(data=tenant)
         except Exception as e:
             logger.error(f"创建租户失败: {str(e)}")
@@ -139,7 +139,7 @@ class TenantsService:
             join_date=datetime.now(),
             tenant_id=tenant_id,
             user_id=user_id,
-            create_by=current_user.id,
+            create_by=current_user_id,
             disabled=0
         )
         
@@ -159,7 +159,7 @@ class TenantsService:
         """检查用户是否有管理员权限（至少是某个租户的管理员）"""
         try:
             # 获取用户的所有租户角色
-            tenant_roles = self.tenants_repository.get_user_tenants(user_id)
+            tenant_roles = self.tenants_repository.get_tenant_list(user_id)
             # 检查是否有至少一个租户的角色是管理员(1)或超级管理员(2)
             return any(tenant.role_type >= 1 for tenant in tenant_roles)
         except Exception as e:
@@ -170,7 +170,7 @@ class TenantsService:
         """检查用户是否是超级管理员（任意租户的角色为2）"""
         try:
             # 获取用户的所有租户角色
-            tenant_roles = self.tenants_repository.get_user_tenants(user_id)
+            tenant_roles = self.tenants_repository.get_tenant_list(user_id)
             # 检查是否有任意租户的角色是超级管理员(2)
             return any(tenant.role_type == 2 for tenant in tenant_roles)
         except Exception as e:
@@ -180,8 +180,8 @@ class TenantsService:
     async def _check_tenant_admin(self, tenant_id: str, user_id: str) -> bool:
         """检查用户是否是特定租户的管理员或超级管理员"""
         try:
-            # 获取用户在该租户的角色
-            tenant_roles = self.tenants_repository.get_user_tenants(user_id)
+            # 获取用户的所有租户角色
+            tenant_roles = self.tenants_repository.get_tenant_list(user_id)
             for tenant in tenant_roles:
                 if tenant.tenant_id == tenant_id:
                     # 角色类型1(管理员)或2(超级管理员)都有权限

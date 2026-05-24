@@ -21,6 +21,9 @@ sleep 2
 python -m uvicorn prompt.main:app --reload --port 4008 --host 0.0.0.0 &
 sleep 2
 
+python -m uvicorn agent.main:app --reload --port 3010 --host 0.0.0.0 &  # 新增
+sleep 2
+
 python -m uvicorn gateway.main:app --reload --port 4009 --host 0.0.0.0 &
 
 echo ""
@@ -31,6 +34,7 @@ echo "User:       http://localhost:4005"
 echo "Chat:       http://localhost:4006"
 echo "Tenant:     http://localhost:4007"
 echo "Prompt:     http://localhost:4008"
+echo "Agent:      http://localhost:3010"  # 新增
 echo "========================================"
 echo ""
 echo "Nacos控制台: http://localhost:8848/nacos"
