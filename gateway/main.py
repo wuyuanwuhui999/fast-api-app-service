@@ -1,3 +1,4 @@
+# gateway/main.py - 完整修复版本
 from fastapi import FastAPI, Request, HTTPException, status, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -43,10 +44,6 @@ app.add_middleware(
 
 # 添加日志中间件（最先执行，记录请求开始时间）
 app.add_middleware(LogMiddleware)
-
-# 注意：WebSocket不使用HTTP中间件，所以认证中间件对WebSocket无效
-# 我们只在WebSocket路由中直接进行认证
-# app.add_middleware(AuthMiddleware)  # 暂时注释，因为WebSocket不适用
 
 # 初始化路由服务
 route_service = RouteService()
@@ -111,61 +108,148 @@ def verify_token_and_get_user_id(token: str) -> Optional[str]:
 
 
 @app.websocket("/service/chat/ws/chat")
-async def websocket_gateway(
+async def websocket_gateway_chat(
     websocket: WebSocket,
     token: str = None,
 ):
     """
-    WebSocket网关 - 代理WebSocket连接到chat服务
+    Chat WebSocket网关 - 代理WebSocket连接到chat服务
+    """
+    logger.info(f"[ChatWebSocketGateway] ========== 收到WebSocket连接请求 ==========")
+    logger.info(f"[ChatWebSocketGateway] token参数: {token[:100] if token else 'None'}...")
+    
+    if not token:
+        logger.error(f"[ChatWebSocketGateway] 未提供token参数")
+        await websocket.close(code=4001, reason="Missing token")
+        return
+    
+    user_id = verify_token_and_get_user_id(token)
+    if not user_id:
+        logger.error(f"[ChatWebSocketGateway] token验证失败")
+        await websocket.close(code=4001, reason="Invalid token")
+        return
+    
+    logger.info(f"[ChatWebSocketGateway] ✅ token验证成功，用户ID: {user_id}")
+    
+    service_name = "chat-service"
+    instance = await route_service.get_service_instance(service_name)
+    
+    if not instance:
+        logger.error(f"[ChatWebSocketGateway] ❌ 服务不可用: {service_name}")
+        await websocket.close(code=4003, reason=f"Service {service_name} unavailable")
+        return
+    
+    target_url = f"ws://{instance['ip']}:{instance['port']}/service/chat/ws/chat?X-User-Id={user_id}"
+    logger.info(f"[ChatWebSocketGateway] 目标WebSocket URL: {target_url}")
+    
+    try:
+        await websocket.accept()
+        logger.info(f"[ChatWebSocketGateway] ✅ 已接受客户端WebSocket连接")
+    except Exception as e:
+        logger.error(f"[ChatWebSocketGateway] 接受连接失败: {str(e)}")
+        return
+    
+    import asyncio
+    import websockets as ws_lib
+    
+    target_websocket = None
+    
+    try:
+        target_websocket = await ws_lib.connect(target_url)
+        logger.info(f"[ChatWebSocketGateway] ✅ 已连接到目标WebSocket服务")
+        
+        async def forward_to_target():
+            try:
+                while True:
+                    message = await websocket.receive_text()
+                    await target_websocket.send(message)
+            except WebSocketDisconnect:
+                logger.info(f"[ChatWebSocketGateway] 客户端WebSocket连接断开")
+            except Exception as e:
+                logger.error(f"[ChatWebSocketGateway] 转发到目标服务失败: {str(e)}")
+            finally:
+                if target_websocket:
+                    await target_websocket.close()
+        
+        async def forward_to_client():
+            try:
+                while True:
+                    message = await target_websocket.recv()
+                    await websocket.send_text(message)
+            except Exception as e:
+                logger.error(f"[ChatWebSocketGateway] 转发到客户端失败: {str(e)}")
+        
+        await asyncio.gather(
+            forward_to_target(),
+            forward_to_client(),
+            return_exceptions=True
+        )
+        
+    except Exception as e:
+        logger.error(f"[ChatWebSocketGateway] WebSocket代理错误: {str(e)}", exc_info=True)
+        try:
+            await websocket.close(code=4000, reason=f"WebSocket proxy error: {str(e)}")
+        except:
+            pass
+    finally:
+        if target_websocket:
+            await target_websocket.close()
+        logger.info(f"[ChatWebSocketGateway] WebSocket连接已关闭")
+
+
+@app.websocket("/service/agent/ws/chat")
+async def websocket_gateway_agent(
+    websocket: WebSocket,
+    token: str = None,
+):
+    """
+    Agent WebSocket网关 - 代理WebSocket连接到agent服务
     
     前端连接方式:
-    ws://localhost:4009/service/chat/ws/chat?token=xxx
-    
-    网关会验证token，然后将用户ID通过X-User-Id参数传递给chat服务
+    ws://localhost:4009/service/agent/ws/chat?token=xxx
     """
     
-    logger.info(f"[WebSocketGateway] ========== 收到WebSocket连接请求 ==========")
-    logger.info(f"[WebSocketGateway] token参数: {token[:100] if token else 'None'}...")
-    logger.info(f"[WebSocketGateway] 所有查询参数: {dict(websocket.query_params)}")
+    logger.info(f"[AgentWebSocketGateway] ========== 收到WebSocket连接请求 ==========")
+    logger.info(f"[AgentWebSocketGateway] token参数: {token[:100] if token else 'None'}...")
     
     # 1. 验证token并获取用户ID
     if not token:
-        logger.error(f"[WebSocketGateway] 未提供token参数")
+        logger.error(f"[AgentWebSocketGateway] 未提供token参数")
         await websocket.close(code=4001, reason="Missing token")
         return
     
     user_id = verify_token_and_get_user_id(token)
     
     if not user_id:
-        logger.error(f"[WebSocketGateway] token验证失败")
+        logger.error(f"[AgentWebSocketGateway] token验证失败")
         await websocket.close(code=4001, reason="Invalid token")
         return
     
-    logger.info(f"[WebSocketGateway] ✅ token验证成功，用户ID: {user_id}")
+    logger.info(f"[AgentWebSocketGateway] ✅ token验证成功，用户ID: {user_id}")
     
-    # 2. 获取chat服务实例
-    service_name = "chat-service"
-    logger.info(f"[WebSocketGateway] 正在获取服务实例: {service_name}")
+    # 2. 获取agent服务实例
+    service_name = "agent-service"
+    logger.info(f"[AgentWebSocketGateway] 正在获取服务实例: {service_name}")
     
     instance = await route_service.get_service_instance(service_name)
     
     if not instance:
-        logger.error(f"[WebSocketGateway] ❌ 服务不可用: {service_name}")
+        logger.error(f"[AgentWebSocketGateway] ❌ 服务不可用: {service_name}")
         await websocket.close(code=4003, reason=f"Service {service_name} unavailable")
         return
     
-    logger.info(f"[WebSocketGateway] ✅ 获取到服务实例: {instance['ip']}:{instance['port']}")
+    logger.info(f"[AgentWebSocketGateway] ✅ 获取到服务实例: {instance['ip']}:{instance['port']}")
     
     # 3. 构建目标WebSocket URL（带上X-User-Id参数）
-    target_url = f"ws://{instance['ip']}:{instance['port']}/service/chat/ws/chat?X-User-Id={user_id}"
-    logger.info(f"[WebSocketGateway] 目标WebSocket URL: {target_url}")
+    target_url = f"ws://{instance['ip']}:{instance['port']}/service/agent/ws/chat?X-User-Id={user_id}"
+    logger.info(f"[AgentWebSocketGateway] 目标WebSocket URL: {target_url}")
     
     # 4. 接受客户端WebSocket连接
     try:
         await websocket.accept()
-        logger.info(f"[WebSocketGateway] ✅ 已接受客户端WebSocket连接")
+        logger.info(f"[AgentWebSocketGateway] ✅ 已接受客户端WebSocket连接")
     except Exception as e:
-        logger.error(f"[WebSocketGateway] 接受连接失败: {str(e)}")
+        logger.error(f"[AgentWebSocketGateway] 接受连接失败: {str(e)}")
         return
     
     # 5. 创建到目标服务的WebSocket连接并转发消息
@@ -175,42 +259,33 @@ async def websocket_gateway(
     target_websocket = None
     
     try:
-        # 连接到目标WebSocket服务
-        logger.info(f"[WebSocketGateway] 正在连接到目标服务...")
         target_websocket = await ws_lib.connect(target_url)
-        logger.info(f"[WebSocketGateway] ✅ 已连接到目标WebSocket服务")
+        logger.info(f"[AgentWebSocketGateway] ✅ 已连接到目标WebSocket服务")
         
         # 双向消息转发
         async def forward_to_target():
-            """将客户端的消息转发到目标服务"""
             try:
                 while True:
-                    # 接收客户端消息
                     message = await websocket.receive_text()
-                    logger.debug(f"[WebSocketGateway] 客户端 -> 目标: {message[:100]}...")
-                    # 转发到目标服务
+                    logger.debug(f"[AgentWebSocketGateway] 客户端 -> 目标: {message[:100]}...")
                     await target_websocket.send(message)
             except WebSocketDisconnect:
-                logger.info(f"[WebSocketGateway] 客户端WebSocket连接断开")
+                logger.info(f"[AgentWebSocketGateway] 客户端WebSocket连接断开")
             except Exception as e:
-                logger.error(f"[WebSocketGateway] 转发到目标服务失败: {str(e)}")
+                logger.error(f"[AgentWebSocketGateway] 转发到目标服务失败: {str(e)}")
             finally:
                 if target_websocket:
                     await target_websocket.close()
         
         async def forward_to_client():
-            """将目标服务的消息转发到客户端"""
             try:
                 while True:
-                    # 接收目标服务消息
                     message = await target_websocket.recv()
-                    logger.debug(f"[WebSocketGateway] 目标 -> 客户端: {message[:100]}...")
-                    # 转发到客户端
+                    logger.debug(f"[AgentWebSocketGateway] 目标 -> 客户端: {message[:100]}...")
                     await websocket.send_text(message)
             except Exception as e:
-                logger.error(f"[WebSocketGateway] 转发到客户端失败: {str(e)}")
+                logger.error(f"[AgentWebSocketGateway] 转发到客户端失败: {str(e)}")
         
-        # 并发执行转发任务
         await asyncio.gather(
             forward_to_target(),
             forward_to_client(),
@@ -218,13 +293,13 @@ async def websocket_gateway(
         )
         
     except ws_lib.exceptions.WebSocketException as e:
-        logger.error(f"[WebSocketGateway] WebSocket连接错误: {str(e)}")
+        logger.error(f"[AgentWebSocketGateway] WebSocket连接错误: {str(e)}")
         try:
             await websocket.close(code=4002, reason=f"WebSocket connection error: {str(e)}")
         except:
             pass
     except Exception as e:
-        logger.error(f"[WebSocketGateway] WebSocket代理错误: {str(e)}", exc_info=True)
+        logger.error(f"[AgentWebSocketGateway] WebSocket代理错误: {str(e)}", exc_info=True)
         try:
             await websocket.close(code=4000, reason=f"WebSocket proxy error: {str(e)}")
         except:
@@ -232,52 +307,32 @@ async def websocket_gateway(
     finally:
         if target_websocket:
             await target_websocket.close()
-        logger.info(f"[WebSocketGateway] WebSocket连接已关闭")
+        logger.info(f"[AgentWebSocketGateway] WebSocket连接已关闭")
 
 
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
 async def gateway(request: Request, path: str):
-    """
-    网关核心路由 - 转发所有请求到对应的微服务
+    """网关核心路由 - 转发所有请求到对应的微服务"""
+    logger.info(f"[Gateway] 收到HTTP请求: method={request.method}, path={path}")
     
-    路由规则：
-    - /service/user/* -> user-service
-    - /service/chat/* -> chat-service  
-    - /service/tenant/* -> tenant-service
-    - /service/prompt/* -> prompt-service
-    """
-    logger.info(f"[Gateway] 收到HTTP请求: method={request.method}, path={path}, full_url={request.url}")
-    
-    # 解析服务名
     service_name = route_service.get_service_name_from_path(path)
-    logger.info(f"[Gateway] 解析服务名: {service_name}")
-    
     if not service_name:
-        logger.warning(f"[Gateway] 无法识别的服务路径: {path}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"无法识别的服务路径: {path}"
         )
     
-    # 获取服务实例
     instance = await route_service.get_service_instance(service_name)
-    logger.info(f"[Gateway] 获取服务实例: {instance}")
-    
     if not instance:
-        logger.error(f"[Gateway] 服务不可用: {service_name}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"服务 {service_name} 暂时不可用"
         )
     
-    # 构建目标URL
     target_url = f"http://{instance['ip']}:{instance['port']}/{path}"
-    logger.info(f"[Gateway] 目标URL: {target_url}")
     
-    # 获取请求体
     body = await request.body()
     
-    # 准备请求头
     headers = dict(request.headers)
     headers.pop("host", None)
     headers["x-forwarded-host"] = request.headers.get("host", "")
@@ -293,10 +348,8 @@ async def gateway(request: Request, path: str):
             headers["X-User-Id"] = user_id
             logger.info(f"[Gateway] 添加用户ID到请求头: X-User-Id={user_id}")
     
-    # 创建客户端并转发请求
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
-            logger.info(f"[Gateway] 转发请求: {request.method} {target_url}")
             response = await client.request(
                 method=request.method,
                 url=target_url,
@@ -305,32 +358,16 @@ async def gateway(request: Request, path: str):
                 params=request.query_params
             )
             
-            logger.info(f"[Gateway] 收到响应: status_code={response.status_code}")
-            
-            # ========== 新增：打印接口返回数据 ==========
-            # 获取响应内容
-            response_content = response.content
-            
-            # 尝试解析为JSON以便美化输出
+            # 打印响应数据
             try:
                 response_json = response.json()
-                # 限制打印长度，避免日志过大
                 response_str = json.dumps(response_json, ensure_ascii=False)
                 if len(response_str) > 2000:
                     response_str = response_str[:2000] + "... [truncated]"
-                logger.info(f"[Gateway] 响应数据 (JSON): {response_str}")
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                # 如果不是JSON，尝试作为文本处理
-                try:
-                    response_text = response_content.decode('utf-8', errors='ignore')
-                    if len(response_text) > 2000:
-                        response_text = response_text[:2000] + "... [truncated]"
-                    logger.info(f"[Gateway] 响应数据 (Text): {response_text}")
-                except Exception:
-                    logger.info(f"[Gateway] 响应数据 (Binary): {len(response_content)} bytes")
-            # ========== 打印结束 ==========
+                logger.info(f"[Gateway] 响应数据: {response_str}")
+            except:
+                pass
             
-            # 返回响应
             return Response(
                 content=response.content,
                 status_code=response.status_code,
@@ -338,16 +375,9 @@ async def gateway(request: Request, path: str):
             )
             
         except httpx.TimeoutException:
-            logger.error(f"[Gateway] 请求超时: {target_url}")
             raise HTTPException(
                 status_code=status.HTTP_504_GATEWAY_TIMEOUT,
                 detail="上游服务响应超时"
-            )
-        except httpx.ConnectError:
-            logger.error(f"[Gateway] 连接失败: {target_url}")
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="无法连接到上游服务"
             )
         except Exception as e:
             logger.error(f"[Gateway] 转发请求失败: {str(e)}", exc_info=True)

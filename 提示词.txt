@@ -10,6 +10,7 @@
 - chat（聊天模块）
 - prompt（提示词模块）
 - tenant（租户模块）
+- agent（智能体）
 - gateway（网关模块）
 
 ## 模块识别规则
@@ -38,7 +39,7 @@ URL 格式：`/service/{模块名}/...`
 - **导入路径**：`from common.utils.result_util import ResultEntity, ResultUtil`
 - **成功返回**：使用 `ResultUtil.success` 方法包装。
 - **方法参数**：
-  - `data: Optional[Any] = None`：接口返回的实际业务数据。
+  - `data: Optional[Any] = None`：接口返回的实际业务数据，如果是字典，把字段的下划线写法转成驼峰写法
   - `msg: Optional[str] = None`：提示信息（通常在错误提示，或增删改成功提示时使用）。
   - `total: Optional[int] = None`：记录总数（仅在分页查询接口时设置）。
   - `token: Optional[str] = None`：用户凭证（仅在登录、注册接口返回，其他接口无需返回）。

@@ -1,13 +1,26 @@
-# agent/services/agent_service.py
+import asyncio
+import uuid
+import json
+import logging
+from datetime import datetime, timedelta
+from typing import Optional, AsyncGenerator, Any, List, Dict
+
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
+from langchain_community.chat_models import ChatOpenAI
+from langchain_ollama import OllamaLLM
+from langchain.prompts.chat import ChatPromptTemplate
+
 from common.config.common_database import get_db
-from common.utils.result_util import ResultEntity, ResultUtil
+from common.config.common_config import get_settings
+from common.utils.result_util import ResultUtil
 from agent.repositories.agent_repository import AgentRepository
-import logging
+from agent.schemas.agent_schema import AgentParamsEntity, ChatHistorySchema, ChatModelSchema, MusicSchema
+
+import redis
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 
 class AgentService:
@@ -15,61 +28,322 @@ class AgentService:
 
     def __init__(self, db: Session = Depends(get_db)):
         self.agent_repository = AgentRepository(db)
+        self.redis = redis.Redis.from_url(settings.redis_url)
+        self.db = db
 
-    async def get_chat_history(
-        self,
-        user_id: str,
-        page_num: int = 1,
-        page_size: int = 10
-    ) -> ResultEntity:
+    async def chat_with_websocket(
+            self,
+            user_id: str,
+            chat_params: AgentParamsEntity
+    ) -> AsyncGenerator[str, None]:
         """
-        获取用户的聊天历史记录（分页）
+        WebSocket聊天处理
         
         Args:
-            user_id: 用户ID
-            page_num: 页码，从1开始
-            page_size: 每页记录数
-            
-        Returns:
-            分页的聊天历史记录
+            user_id: 用户ID（由网关验证后传递）
+            chat_params: 聊天参数
         """
+        logger.info(f"[AgentService] ========== 开始处理聊天请求 ==========")
+        logger.info(f"[AgentService] user_id={user_id}")
+        logger.info(f"[AgentService] chatId={chat_params.chatId}")
+        logger.info(f"[AgentService] modelId={chat_params.modelId}")
+        logger.info(f"[AgentService] tenant_id={chat_params.tenant_id}")
+        logger.info(f"[AgentService] prompt={chat_params.prompt[:50] if chat_params.prompt else 'None'}...")
+
+        # 创建聊天记录实体
+        chat_entity = ChatHistorySchema(
+            user_id=user_id,
+            tenant_id="music",  # 固定租户ID为music
+            model_id=chat_params.modelId,
+            files=None,
+            chat_id=chat_params.chatId,
+            prompt=chat_params.prompt,
+            system_prompt=None,
+            think_content=None,
+            response_content=None,
+            content=""
+        )
+
         try:
-            # 计算偏移量
-            offset = (page_num - 1) * page_size
+            # 1. 从数据库获取模型配置
+            model_config = await self.agent_repository.get_model_by_id(chat_params.modelId)
+            if not model_config:
+                logger.error(f"[AgentService] 未找到模型配置: {chat_params.modelId}")
+                yield f"Error: 未找到模型配置 {chat_params.modelId}"
+                yield "[completed]"
+                return
+
+            logger.info(f"[AgentService] 获取到模型配置: id={model_config.id}, type={model_config.type}, model_name={model_config.model_name}")
+
+            # 2. 使用AI提取音乐意图并生成SQL
+            intent_result = await self._extract_music_intent(
+                chat_params.prompt,
+                model_config,
+                chat_params.showThink
+            )
+
+            if not intent_result.get("is_music_related", False):
+                yield "抱歉，我只能回答与音乐相关的问题。请尝试询问关于歌曲、歌手、专辑或音乐标签的问题。"
+                yield "[completed]"
+                return
+
+            # 3. 执行音乐查询
+            music_list = await self._execute_music_query(
+                intent_result.get("sql_condition", ""),
+                intent_result.get("search_keyword", ""),
+                user_id
+            )
+
+            # 4. 格式化返回结果
+            if music_list:
+                response_text = self._format_music_response(music_list, intent_result.get("explanation", ""))
+            else:
+                response_text = "抱歉，没有找到符合您要求的音乐。请尝试其他关键词或描述。"
+
+            # 5. 流式返回结果
+            # 模拟流式输出（将结果分块发送）
+            chunk_size = 50
+            for i in range(0, len(response_text), chunk_size):
+                chunk = response_text[i:i + chunk_size]
+                yield chunk
+                await asyncio.sleep(0.01)  # 模拟流式延迟
+
+            # 发送完成标识
+            yield "[completed]"
+
+            # 6. 保存聊天记录
+            chat_entity.content = response_text
+            chat_entity.response_content = response_text
+            chat_entity.create_time = datetime.now()
+
+            asyncio.create_task(self.save_chat_history_async(chat_entity))
+
+        except Exception as e:
+            logger.error(f"[AgentService] WebSocket chat error: {str(e)}", exc_info=True)
+            yield f"Error occurred: {str(e)}"
+            yield "[completed]"
+
+    async def _extract_music_intent(
+            self,
+            prompt: str,
+            model_config: ChatModelSchema,
+            show_think: bool
+    ) -> Dict[str, Any]:
+        """
+        使用AI提取音乐意图并生成查询SQL条件
+        
+        Returns:
+            {
+                "is_music_related": bool,
+                "explanation": str,
+                "search_type": str,  # song_name/author_name/label
+                "search_keyword": str,
+                "sql_condition": str
+            }
+        """
+        system_prompt = """你是一个音乐查询助手。你的任务是分析用户输入，判断是否与音乐相关，并生成查询条件。
+
+如果用户输入与音乐相关（询问歌曲、歌手、专辑、音乐标签等），请返回以下JSON格式：
+{
+    "is_music_related": true,
+    "explanation": "简短说明用户的意图",
+    "search_type": "song_name|author_name|label",  // 选择查询类型
+    "search_keyword": "提取的关键词",
+    "sql_condition": "生成的SQL WHERE条件，使用%%s作为参数占位符"
+}
+
+如果用户输入与音乐无关，请返回：
+{
+    "is_music_related": false,
+    "explanation": "说明为什么不相关"
+}
+
+SQL查询示例：
+- 按歌名查询: song_name LIKE '%s%'
+- 按歌手查询: author_name LIKE '%s%'
+- 按标签查询: label LIKE '%s%'
+- 组合查询: (song_name LIKE '%s%' OR author_name LIKE '%s%' OR label LIKE '%s%')
+
+注意：
+1. 只返回JSON，不要有其他内容
+2. search_keyword是提取的纯关键词，不要包含SQL通配符
+3. sql_condition中的占位符使用%s
+"""
+
+        try:
+            # 创建聊天模型用于意图提取（使用较简单的模型或复用）
+            chat_model = await self._create_chat_model(model_config, show_think)
             
-            # 查询聊天历史列表
-            chat_history_list = self.agent_repository.get_chat_history_list(
+            messages = [
+                ("system", system_prompt),
+                ("human", f"用户输入: {prompt}")
+            ]
+            
+            response = await chat_model.ainvoke(messages)
+            response_text = response.content if hasattr(response, 'content') else str(response)
+            
+            # 解析JSON响应
+            # 提取JSON部分（可能包含在```json代码块中）
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0]
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0]
+            
+            result = json.loads(response_text.strip())
+            logger.info(f"[AgentService] 意图提取结果: {result}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"[AgentService] 意图提取失败: {str(e)}")
+            # 降级处理：尝试直接关键词匹配
+            return await self._fallback_intent_extraction(prompt)
+
+    async def _fallback_intent_extraction(self, prompt: str) -> Dict[str, Any]:
+        """降级的意图提取方法"""
+        # 简单的关键词匹配
+        music_keywords = ["歌", "音乐", "歌曲", "歌手", "专辑", "唱", "听", "播放"]
+        is_music = any(keyword in prompt for keyword in music_keywords)
+        
+        if not is_music:
+            return {"is_music_related": False, "explanation": "未检测到音乐相关关键词"}
+        
+        # 简单提取关键词
+        import re
+        # 提取引号内的内容
+        quoted = re.findall(r'["\']([^"\']+)["\']', prompt)
+        if quoted:
+            keyword = quoted[0]
+        else:
+            # 去除常见词语后的关键词
+            words = prompt.replace("推荐", "").replace("搜索", "").replace("找", "").replace("听", "")
+            keyword = words.strip()[:50]
+        
+        return {
+            "is_music_related": True,
+            "explanation": f"搜索音乐关键词: {keyword}",
+            "search_type": "song_name",
+            "search_keyword": keyword,
+            "sql_condition": "(song_name LIKE '%s%' OR author_name LIKE '%s%' OR label LIKE '%s%')"
+        }
+
+    async def _execute_music_query(
+            self,
+            sql_condition: str,
+            keyword: str,
+            user_id: str
+    ) -> List[Dict[str, Any]]:
+        """执行音乐查询并获取点赞/收藏状态"""
+        try:
+            # 执行查询
+            music_list = await self.agent_repository.execute_music_query(sql_condition, keyword)
+            
+            if not music_list:
+                return []
+            
+            # 获取用户点赞和收藏状态
+            result = []
+            for music in music_list:
+                music_dict = dict(music)
+                music_dict['is_like'] = await self.agent_repository.get_user_like_status(user_id, music['id'])
+                music_dict['is_favorite'] = await self.agent_repository.get_user_favorite_status(user_id, music['id'])
+                result.append(music_dict)
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"[AgentService] 音乐查询失败: {str(e)}")
+            return []
+
+    def _format_music_response(self, music_list: List[Dict[str, Any]], explanation: str = "") -> str:
+        """格式化音乐查询结果为用户友好的文本"""
+        if not music_list:
+            return "抱歉，没有找到符合您要求的音乐。"
+        
+        response_lines = [explanation if explanation else "为您找到以下音乐：", ""]
+        
+        for i, music in enumerate(music_list[:10], 1):  # 最多返回10首
+            song_name = music.get('song_name', '未知歌曲')
+            author_name = music.get('author_name', '未知歌手')
+            album_name = music.get('album_name', '')
+            label = music.get('label', '')
+            
+            like_status = "❤️ 已点赞" if music.get('is_like') else "🤍 未点赞"
+            fav_status = "⭐ 已收藏" if music.get('is_favorite') else "☆ 未收藏"
+            
+            line = f"{i}. 《{song_name}》 - {author_name}"
+            if album_name:
+                line += f" (专辑: {album_name})"
+            if label:
+                line += f" [标签: {label}]"
+            line += f"\n   {like_status} | {fav_status}"
+            
+            response_lines.append(line)
+        
+        if len(music_list) > 10:
+            response_lines.append(f"\n... 共找到{len(music_list)}首歌曲，仅显示前10首")
+        
+        return "\n".join(response_lines)
+
+    async def _create_chat_model(self, model_config: ChatModelSchema, show_think: bool) -> Any:
+        """根据模型配置创建对应的聊天模型实例"""
+        try:
+            if model_config.type == "ollama":
+                logger.info(f"[AgentService] 创建Ollama模型: {model_config.model_name}")
+                return OllamaLLM(
+                    model=model_config.model_name,
+                    base_url=model_config.base_url or "http://localhost:11434",
+                    model_kwargs={"options": {"think": show_think}}
+                )
+            elif model_config.type in ["deepseek", "tongyi"]:
+                base_url = model_config.base_url
+                if model_config.type == "deepseek":
+                    base_url = base_url or "https://api.deepseek.com/v1"
+                elif model_config.type == "tongyi":
+                    base_url = base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1"
+                
+                logger.info(f"[AgentService] 创建在线模型: {model_config.type}, base_url={base_url}")
+                return ChatOpenAI(
+                    model=model_config.model_name,
+                    api_key=model_config.api_key,
+                    base_url=base_url,
+                    streaming=True,
+                    temperature=0.7
+                )
+            else:
+                logger.error(f"[AgentService] 不支持的模型类型: {model_config.type}")
+                return None
+        except Exception as e:
+            logger.error(f"[AgentService] 创建聊天模型失败: {str(e)}")
+            return None
+
+    async def save_chat_history_async(self, chat_entity: ChatHistorySchema):
+        """异步保存聊天记录"""
+        try:
+            success = await self.agent_repository.save_chat_history(chat_entity)
+            if success:
+                logger.info(f"[AgentService] 聊天记录保存成功: user_id={chat_entity.user_id}, chat_id={chat_entity.chat_id}")
+            else:
+                logger.error("保存聊天记录返回False")
+        except Exception as e:
+            logger.error(f"后台保存聊天记录失败: {str(e)}", exc_info=True)
+
+    async def get_chat_history(
+            self,
+            user_id: str,
+            page_num: int = 1,
+            page_size: int = 10
+    ) -> Dict[str, Any]:
+        """获取用户的聊天历史记录（分页）"""
+        try:
+            offset = (page_num - 1) * page_size
+            chat_history_list = await self.agent_repository.get_chat_history(
                 user_id=user_id,
                 offset=offset,
                 limit=page_size
             )
+            total = await self.agent_repository.get_chat_history_count(user_id)
             
-            # 查询总记录数
-            total = self.agent_repository.get_chat_history_count(user_id)
-            
-            # 转换数据格式
-            data_list = []
-            for record in chat_history_list:
-                data_list.append({
-                    "id": record.id,
-                    "user_id": record.user_id,
-                    "files": record.files,
-                    "chat_id": record.chat_id,
-                    "prompt": record.prompt,
-                    "content": record.content,
-                    "model_id": record.model_id,
-                    "create_time": record.create_time.strftime("%Y-%m-%d %H:%M:%S") if record.create_time else None
-                })
-            
-            return ResultUtil.success(
-                data=data_list,
-                total=total,
-                msg="查询成功"
-            )
-            
+            return ResultUtil.success(data=chat_history_list, total=total).model_dump()
         except Exception as e:
-            logger.error(f"获取聊天历史失败: user_id={user_id}, error={str(e)}", exc_info=True)
-            return ResultUtil.fail(
-                data=None,
-                msg=f"获取聊天历史失败: {str(e)}"
-            )
+            logger.error(f"获取聊天历史失败: {str(e)}")
+            return ResultUtil.fail(data=None, msg=f"获取聊天历史失败: {str(e)}").model_dump()
