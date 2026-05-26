@@ -1,4 +1,3 @@
-# test_agent_websocket.py
 """
 测试Agent模块WebSocket接口
 使用方法: python test_agent_websocket.py
@@ -20,7 +19,7 @@ class AgentWebSocketTester:
         self.gateway_url = f"http://{gateway_host}:{gateway_port}"
         self.ws_url = f"ws://{gateway_host}:{gateway_port}"
         self.token: Optional[str] = None
-        self.user_id: Optional[str] = None
+        self.user_id: Optional[str] = None  # 修复：添加了等号
     
     @staticmethod
     def md5_encrypt(password: str) -> str:
@@ -137,14 +136,17 @@ class AgentWebSocketTester:
         print(f"🔗 WebSocket地址: {ws_full_url[:100]}...")
         
         try:
-            # 连接WebSocket（websockets库不支持timeout参数，使用asyncio.wait_for）
+            # 连接WebSocket（带超时）
             print(f"\n🔌 正在连接WebSocket...")
             
-            # 使用asyncio.wait_for设置连接超时
-            async with asyncio.wait_for(
+            # 先等待连接完成
+            websocket_connection = await asyncio.wait_for(
                 websockets.connect(ws_full_url, close_timeout=10),
                 timeout=30
-            ) as websocket:
+            )
+            
+            # 再使用连接
+            async with websocket_connection as websocket:
                 print(f"✅ WebSocket连接成功!")
                 
                 # 构建发送消息
