@@ -20,7 +20,7 @@ class ServiceManager:
             {"name": "Chat Service", "port": 4006, "module": "chat.main", "color": "\033[94m"},  # 蓝色
             {"name": "Tenant Service", "port": 4007, "module": "tenant.main", "color": "\033[93m"},  # 黄色
             {"name": "Prompt Service", "port": 4008, "module": "prompt.main", "color": "\033[95m"},  # 紫色
-            {"name": "Agent Service", "port": 3010, "module": "agent.main", "color": "\033[96m"},  # 新增：青色
+            {"name": "Agent Service", "port": 4010, "module": "agent.main", "color": "\033[96m"},  # 新增：青色
         ]
         
         self.processes = []

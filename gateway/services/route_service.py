@@ -25,7 +25,7 @@ class RouteService:
         "chat-service": {"ip": "127.0.0.1", "port": 4006, "healthy": True, "weight": 1.0},
         "tenant-service": {"ip": "127.0.0.1", "port": 4007, "healthy": True, "weight": 1.0},
         "prompt-service": {"ip": "127.0.0.1", "port": 4008, "healthy": True, "weight": 1.0},
-        "agent-service": {"ip": "127.0.0.1", "port": 3010, "healthy": True, "weight": 1.0},  # 新增
+        "agent-service": {"ip": "127.0.0.1", "port": 4010, "healthy": True, "weight": 1.0},  # 新增
     }
     
     def __init__(self):

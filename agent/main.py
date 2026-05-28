@@ -38,7 +38,7 @@ def create_app():
 # 注册到Nacos
 @service_registry.register(
     service_name="agent-service",
-    port=3010,
+    port=4010,
     ip="0.0.0.0"
 )
 def start_app():
@@ -48,4 +48,4 @@ def start_app():
 if __name__ == "__main__":
     import uvicorn
     start_app()
-    uvicorn.run(app, host="0.0.0.0", port=3010)
+    uvicorn.run(app, host="0.0.0.0", port=4010)
