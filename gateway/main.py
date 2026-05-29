@@ -1,9 +1,9 @@
-# gateway/main.py - 修改 WebSocket token 从 URL 参数获取
+# gateway/main.py - 重构 WebSocket 公共代理逻辑
 from fastapi import FastAPI, Request, HTTPException, status, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 import httpx
-from typing import Optional
+from typing import Optional, Callable, Awaitable
 import logging
 from contextlib import asynccontextmanager
 import json
@@ -50,31 +50,27 @@ async def health_check():
     return {"status": "healthy", "service": "gateway"}
 
 
-@app.websocket("/service/chat/ws/chat")
-async def websocket_gateway_chat(
-    websocket: WebSocket,
-    token: Optional[str] = None,
-):
+async def extract_user_id_from_token(token: str, service_name: str) -> Optional[str]:
     """
-    Chat WebSocket网关 - 代理WebSocket连接到chat服务
-    认证信息通过URL参数token传递
+    从token中提取用户ID
+    
+    Args:
+        token: JWT token字符串
+        service_name: 服务名称，用于日志标识
+    
+    Returns:
+        用户ID，如果提取失败则返回None
     """
-    user_id = None
-    
-    if not token:
-        logger.warning(f"[ChatWebSocketGateway] 未提供token参数")
-        await websocket.close(code=4001, reason="Missing token parameter")
-        return
-    
     try:
         from common.utils.jwt_util import verify_token
         payload = verify_token(token)
         if not payload:
-            logger.warning(f"[ChatWebSocketGateway] 无效的token")
-            await websocket.close(code=4001, reason="Invalid token")
-            return
+            logger.warning(f"[{service_name}] 无效的token")
+            return None
         
         sub = payload.get("sub")
+        user_id = None
+        
         if sub:
             if isinstance(sub, str):
                 try:
@@ -86,35 +82,70 @@ async def websocket_gateway_chat(
                 user_id = sub.get("id")
         
         if not user_id:
-            logger.warning(f"[ChatWebSocketGateway] 无法从token解析用户ID")
-            await websocket.close(code=4001, reason="Cannot extract user id from token")
-            return
+            logger.warning(f"[{service_name}] 无法从token解析用户ID")
+            return None
         
-        logger.info(f"[ChatWebSocketGateway] 用户认证成功: user_id={user_id}")
+        logger.info(f"[{service_name}] 用户认证成功: user_id={user_id}")
+        return user_id
         
     except Exception as e:
-        logger.error(f"[ChatWebSocketGateway] token验证异常: {str(e)}")
-        await websocket.close(code=4001, reason=f"Token verification failed: {str(e)}")
+        logger.error(f"[{service_name}] token验证异常: {str(e)}")
+        return None
+
+
+async def websocket_proxy(
+    websocket: WebSocket,
+    token: Optional[str],
+    service_name: str,
+    target_path: str,
+    gateway_name: str
+) -> None:
+    """
+    通用的WebSocket代理方法
+    
+    Args:
+        websocket: 客户端的WebSocket连接
+        token: JWT token字符串
+        service_name: 目标服务名称（如 "chat-service", "agent-service"）
+        target_path: 目标服务的WebSocket路径
+        gateway_name: 网关名称，用于日志标识（如 "ChatWebSocketGateway", "AgentWebSocketGateway"）
+    """
+    # 1. 验证token
+    if not token:
+        logger.warning(f"[{gateway_name}] 未提供token参数")
+        await websocket.close(code=4001, reason="Missing token parameter")
+        return
+    elif not token.startswith("Bearer "):
+        await websocket.close(code=4001, reason="token格式错误，不是Bearer开头")
+        return None    
+    
+    token = token[7:]
+
+    user_id = await extract_user_id_from_token(token, gateway_name)
+    if not user_id:
+        await websocket.close(code=4001, reason="Invalid token or cannot extract user id")
         return
     
-    service_name = "chat-service"
+    # 2. 获取服务实例
     instance = await route_service.get_service_instance(service_name)
-    
     if not instance:
-        logger.error(f"[ChatWebSocketGateway] 服务不可用: {service_name}")
+        logger.error(f"[{gateway_name}] 服务不可用: {service_name}")
         await websocket.close(code=4003, reason=f"Service {service_name} unavailable")
         return
     
-    target_url = f"ws://{instance['ip']}:{instance['port']}/service/chat/ws/chat?X-User-Id={user_id}"
-    logger.info(f"[ChatWebSocketGateway] 目标WebSocket URL: {target_url}")
+    # 3. 构建目标URL
+    target_url = f"ws://{instance['ip']}:{instance['port']}{target_path}?X-User-Id={user_id}"
+    logger.info(f"[{gateway_name}] 目标WebSocket URL: {target_url}")
     
+    # 4. 接受客户端连接
     try:
         await websocket.accept()
-        logger.info(f"[ChatWebSocketGateway] 已接受客户端WebSocket连接")
+        logger.info(f"[{gateway_name}] 已接受客户端WebSocket连接")
     except Exception as e:
-        logger.error(f"[ChatWebSocketGateway] 接受连接失败: {str(e)}")
+        logger.error(f"[{gateway_name}] 接受连接失败: {str(e)}")
         return
     
+    # 5. 代理WebSocket通信
     import asyncio
     import websockets as ws_lib
     
@@ -122,28 +153,30 @@ async def websocket_gateway_chat(
     
     try:
         target_websocket = await ws_lib.connect(target_url)
-        logger.info(f"[ChatWebSocketGateway] 已连接到目标WebSocket服务")
+        logger.info(f"[{gateway_name}] 已连接到目标WebSocket服务")
         
         async def forward_to_target():
+            """将客户端的消息转发到目标服务"""
             try:
                 while True:
                     message = await websocket.receive_text()
                     await target_websocket.send(message)
             except WebSocketDisconnect:
-                logger.info(f"[ChatWebSocketGateway] 客户端WebSocket连接断开")
+                logger.info(f"[{gateway_name}] 客户端WebSocket连接断开")
             except Exception as e:
-                logger.error(f"[ChatWebSocketGateway] 转发到目标服务失败: {str(e)}")
+                logger.error(f"[{gateway_name}] 转发到目标服务失败: {str(e)}")
             finally:
                 if target_websocket:
                     await target_websocket.close()
         
         async def forward_to_client():
+            """将目标服务的消息转发到客户端"""
             try:
                 while True:
                     message = await target_websocket.recv()
                     await websocket.send_text(message)
             except Exception as e:
-                logger.error(f"[ChatWebSocketGateway] 转发到客户端失败: {str(e)}")
+                logger.error(f"[{gateway_name}] 转发到客户端失败: {str(e)}")
         
         await asyncio.gather(
             forward_to_target(),
@@ -152,13 +185,13 @@ async def websocket_gateway_chat(
         )
         
     except ws_lib.exceptions.WebSocketException as e:
-        logger.error(f"[ChatWebSocketGateway] WebSocket连接错误: {str(e)}")
+        logger.error(f"[{gateway_name}] WebSocket连接错误: {str(e)}")
         try:
             await websocket.close(code=4002, reason=f"WebSocket connection error: {str(e)}")
         except:
             pass
     except Exception as e:
-        logger.error(f"[ChatWebSocketGateway] WebSocket代理错误: {str(e)}", exc_info=True)
+        logger.error(f"[{gateway_name}] WebSocket代理错误: {str(e)}", exc_info=True)
         try:
             await websocket.close(code=4000, reason=f"WebSocket proxy error: {str(e)}")
         except:
@@ -166,7 +199,25 @@ async def websocket_gateway_chat(
     finally:
         if target_websocket:
             await target_websocket.close()
-        logger.info(f"[ChatWebSocketGateway] WebSocket连接已关闭")
+        logger.info(f"[{gateway_name}] WebSocket连接已关闭")
+
+
+@app.websocket("/service/chat/ws/chat")
+async def websocket_gateway_chat(
+    websocket: WebSocket,
+    token: Optional[str] = None,
+):
+    """
+    Chat WebSocket网关 - 代理WebSocket连接到chat服务
+    认证信息通过URL参数token传递
+    """
+    await websocket_proxy(
+        websocket=websocket,
+        token=token,
+        service_name="chat-service",
+        target_path="/service/chat/ws/chat",
+        gateway_name="ChatWebSocketGateway"
+    )
 
 
 @app.websocket("/service/agent/ws/chat")
@@ -178,114 +229,13 @@ async def websocket_gateway_agent(
     Agent WebSocket网关 - 代理WebSocket连接到agent服务
     认证信息通过URL参数token传递
     """
-    user_id = None
-    
-    if not token:
-        logger.warning(f"[AgentWebSocketGateway] 未提供token参数")
-        await websocket.close(code=4001, reason="Missing token parameter")
-        return
-    
-    try:
-        from common.utils.jwt_util import verify_token
-        payload = verify_token(token)
-        if not payload:
-            logger.warning(f"[AgentWebSocketGateway] 无效的token")
-            await websocket.close(code=4001, reason="Invalid token")
-            return
-        
-        sub = payload.get("sub")
-        if sub:
-            if isinstance(sub, str):
-                try:
-                    user_info = json.loads(sub)
-                    user_id = user_info.get("id")
-                except json.JSONDecodeError:
-                    user_id = sub
-            elif isinstance(sub, dict):
-                user_id = sub.get("id")
-        
-        if not user_id:
-            logger.warning(f"[AgentWebSocketGateway] 无法从token解析用户ID")
-            await websocket.close(code=4001, reason="Cannot extract user id from token")
-            return
-        
-        logger.info(f"[AgentWebSocketGateway] 用户认证成功: user_id={user_id}")
-        
-    except Exception as e:
-        logger.error(f"[AgentWebSocketGateway] token验证异常: {str(e)}")
-        await websocket.close(code=4001, reason=f"Token verification failed: {str(e)}")
-        return
-    
-    service_name = "agent-service"
-    instance = await route_service.get_service_instance(service_name)
-    
-    if not instance:
-        logger.error(f"[AgentWebSocketGateway] 服务不可用: {service_name}")
-        await websocket.close(code=4003, reason=f"Service {service_name} unavailable")
-        return
-    
-    target_url = f"ws://{instance['ip']}:{instance['port']}/service/agent/ws/chat?X-User-Id={user_id}"
-    logger.info(f"[AgentWebSocketGateway] 目标WebSocket URL: {target_url}")
-    
-    try:
-        await websocket.accept()
-        logger.info(f"[AgentWebSocketGateway] 已接受客户端WebSocket连接")
-    except Exception as e:
-        logger.error(f"[AgentWebSocketGateway] 接受连接失败: {str(e)}")
-        return
-    
-    import asyncio
-    import websockets as ws_lib
-    
-    target_websocket = None
-    
-    try:
-        target_websocket = await ws_lib.connect(target_url)
-        logger.info(f"[AgentWebSocketGateway] 已连接到目标WebSocket服务")
-        
-        async def forward_to_target():
-            try:
-                while True:
-                    message = await websocket.receive_text()
-                    await target_websocket.send(message)
-            except WebSocketDisconnect:
-                logger.info(f"[AgentWebSocketGateway] 客户端WebSocket连接断开")
-            except Exception as e:
-                logger.error(f"[AgentWebSocketGateway] 转发到目标服务失败: {str(e)}")
-            finally:
-                if target_websocket:
-                    await target_websocket.close()
-        
-        async def forward_to_client():
-            try:
-                while True:
-                    message = await target_websocket.recv()
-                    await websocket.send_text(message)
-            except Exception as e:
-                logger.error(f"[AgentWebSocketGateway] 转发到客户端失败: {str(e)}")
-        
-        await asyncio.gather(
-            forward_to_target(),
-            forward_to_client(),
-            return_exceptions=True
-        )
-        
-    except ws_lib.exceptions.WebSocketException as e:
-        logger.error(f"[AgentWebSocketGateway] WebSocket连接错误: {str(e)}")
-        try:
-            await websocket.close(code=4002, reason=f"WebSocket connection error: {str(e)}")
-        except:
-            pass
-    except Exception as e:
-        logger.error(f"[AgentWebSocketGateway] WebSocket代理错误: {str(e)}", exc_info=True)
-        try:
-            await websocket.close(code=4000, reason=f"WebSocket proxy error: {str(e)}")
-        except:
-            pass
-    finally:
-        if target_websocket:
-            await target_websocket.close()
-        logger.info(f"[AgentWebSocketGateway] WebSocket连接已关闭")
+    await websocket_proxy(
+        websocket=websocket,
+        token=token,
+        service_name="agent-service",
+        target_path="/service/agent/ws/chat",
+        gateway_name="AgentWebSocketGateway"
+    )
 
 
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])

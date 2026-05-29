@@ -119,7 +119,7 @@ async def test_gateway_agent(
     print("🚀 测试方式2: 通过 Gateway 网关调用 Agent 模块接口")
     print("=" * 70)
     
-    uri = f"ws://localhost:4009/service/agent/ws/chat?token={token}"
+    uri = f"ws://localhost:4009/service/agent/ws/chat?token=Bearer%20{token}"
     print(f"📡 连接地址: {uri[:100]}...")
     print("-" * 70)
     
