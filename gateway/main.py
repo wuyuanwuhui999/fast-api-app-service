@@ -7,6 +7,7 @@ from typing import Optional, Callable, Awaitable
 import logging
 from contextlib import asynccontextmanager
 import json
+import asyncio
 
 from gateway.middleware.auth_middleware import AuthMiddleware
 from gateway.middleware.log_middleware import LogMiddleware
@@ -146,10 +147,11 @@ async def websocket_proxy(
         return
     
     # 5. 代理WebSocket通信
-    import asyncio
     import websockets as ws_lib
     
     target_websocket = None
+    forward_to_target_task = None
+    forward_to_client_task = None
     
     try:
         target_websocket = await ws_lib.connect(target_url)
@@ -162,12 +164,17 @@ async def websocket_proxy(
                     message = await websocket.receive_text()
                     await target_websocket.send(message)
             except WebSocketDisconnect:
-                logger.info(f"[{gateway_name}] 客户端WebSocket连接断开")
+                logger.info(f"[{gateway_name}] 客户端WebSocket连接断开（正常）")
             except Exception as e:
-                logger.error(f"[{gateway_name}] 转发到目标服务失败: {str(e)}")
+                # 检查是否是正常的关闭
+                if "code = 1000" in str(e) or "sent 1000" in str(e):
+                    logger.info(f"[{gateway_name}] WebSocket连接正常关闭")
+                else:
+                    logger.error(f"[{gateway_name}] 转发到目标服务失败: {str(e)}")
             finally:
-                if target_websocket:
-                    await target_websocket.close()
+                # 通知另一个任务结束
+                if forward_to_client_task and not forward_to_client_task.done():
+                    forward_to_client_task.cancel()
         
         async def forward_to_client():
             """将目标服务的消息转发到客户端"""
@@ -175,14 +182,39 @@ async def websocket_proxy(
                 while True:
                     message = await target_websocket.recv()
                     await websocket.send_text(message)
+            except ws_lib.exceptions.ConnectionClosed as e:
+                # WebSocket连接正常关闭
+                logger.info(f"[{gateway_name}] 目标服务连接正常关闭: code={e.code}")
             except Exception as e:
-                logger.error(f"[{gateway_name}] 转发到客户端失败: {str(e)}")
+                # 检查是否是正常的关闭
+                if "code = 1000" in str(e) or "sent 1000" in str(e):
+                    logger.info(f"[{gateway_name}] WebSocket连接正常关闭")
+                else:
+                    logger.error(f"[{gateway_name}] 转发到客户端失败: {str(e)}")
+            finally:
+                # 通知另一个任务结束
+                if forward_to_target_task and not forward_to_target_task.done():
+                    forward_to_target_task.cancel()
         
-        await asyncio.gather(
-            forward_to_target(),
-            forward_to_client(),
-            return_exceptions=True
+        # 创建两个转发任务
+        forward_to_target_task = asyncio.create_task(forward_to_target())
+        forward_to_client_task = asyncio.create_task(forward_to_client())
+        
+        # 等待任一任务完成（使用 wait 而不是 gather）
+        done, pending = await asyncio.wait(
+            [forward_to_target_task, forward_to_client_task],
+            return_when=asyncio.FIRST_COMPLETED
         )
+        
+        # 取消未完成的任务
+        for task in pending:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        
+        logger.info(f"[{gateway_name}] WebSocket代理结束")
         
     except ws_lib.exceptions.WebSocketException as e:
         logger.error(f"[{gateway_name}] WebSocket连接错误: {str(e)}")
