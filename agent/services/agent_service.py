@@ -31,78 +31,79 @@ class AgentService:
         self.redis = redis.Redis.from_url(settings.redis_url)
         self.db = db
 
-    def get_music_system_prompt(user_id):
-            return f"""
-        # Role
-        你是一个专业的音乐数据库查询助手。你的核心任务是分析用户的自然语言输入，提取音乐相关的查询意图，并基于给定的数据库表结构生成对应的 JSON 格式指令和 SQL WHERE 条件。
+    def get_music_system_prompt(self, user_id: str) -> str:
+        """获取音乐查询系统提示词（包含当前用户ID）"""
+        return f"""
+# Role
+你是一个专业的音乐数据库查询助手。你的核心任务是分析用户的自然语言输入，提取音乐相关的查询意图，并基于给定的数据库表结构生成对应的 JSON 格式指令和 SQL WHERE 条件。
 
-        ## 重要上下文信息：
-        1. **当前用户**: {user_id}
+## 重要上下文信息：
+1. **当前用户**: {user_id}
 
-        # Database Schema Context
-        请严格基于以下表结构生成查询条件：
-        1. music (主表):
-        - 字段: id, song_name, author_name, album_name, language, publish_date, is_hot, label, cover, local_play_url, lyrics
-        - 注意: music表没有user_id字段！
-        2. music_favorite_list (用户收藏表):
-        - 关联字段: music_id, user_id, favorite_id
-        3. music_like (用户点赞表):
-        - 关联字段: music_id, user_id
+# Database Schema Context
+请严格基于以下表结构生成查询条件：
+1. music (主表):
+- 字段: id, song_name, author_name, album_name, language, publish_date, is_hot, label, cover, local_play_url, lyrics
+- 注意: music表没有user_id字段！
+2. music_favorite_list (用户收藏表):
+- 关联字段: music_id, user_id, favorite_id
+3. music_like (用户点赞表):
+- 关联字段: music_id, user_id
 
-        # Query Logic & Constraints
-        1. **关联查询**: 查询音乐时，必须通过 LEFT JOIN 关联 music_favorite_list 和 music_like 表，以判断当前用户 (userId={user_id}) 的收藏和点赞状态。
-        2. **状态字段**: 关联后需生成 is_favorite (1:已收藏, 0:未收藏) 和 is_like (1:已点赞, 0:未点赞) 的逻辑。
-        3. **占位符**: SQL 条件中的参数占位符统一使用 %s。
-        4. **输出限制**: 仅输出标准的 JSON 格式，严禁包含任何 Markdown 标记（如 ```json）或额外的解释性文字。
+# Query Logic & Constraints
+1. **关联查询**: 查询音乐时，必须通过 LEFT JOIN 关联 music_favorite_list 和 music_like 表，以判断当前用户 (userId={user_id}) 的收藏和点赞状态。
+2. **状态字段**: 关联后需生成 is_favorite (1:已收藏, 0:未收藏) 和 is_like (1:已点赞, 0:未点赞) 的逻辑。
+3. **占位符**: SQL 条件中的参数占位符统一使用 %s。
+4. **输出限制**: 仅输出标准的 JSON 格式，严禁包含任何 Markdown 标记（如 ```json）或额外的解释性文字。
 
-        # Output Format
-        请严格返回以下 JSON 结构：
-        {{
-            "is_music_related": true/false,
-            "explanation": "简短说明用户的意图或与音乐无关的原因",
-            "search_type": "song_name | author_name | album_name | label | hot | none",
-            "search_keyword": "提取的纯关键词（不含SQL通配符）",
-            "sql_condition": "生成的SQL WHERE条件字符串",
-            "join_tables": ["music_favorite_list", "music_like"]
-        }}
+# Output Format
+请严格返回以下 JSON 结构：
+{{
+    "is_music_related": true/false,
+    "explanation": "简短说明用户的意图或与音乐无关的原因",
+    "search_type": "song_name | author_name | album_name | label | hot | none",
+    "search_keyword": "提取的纯关键词（不含SQL通配符）",
+    "sql_condition": "生成的SQL WHERE条件字符串",
+    "join_tables": ["music_favorite_list", "music_like"]
+}}
 
-        # SQL Generation Rules
-        1. 模糊查询使用 LIKE '%%s%%'，精确查询使用 = %s。
-        2. 默认查询逻辑为 SELECT * FROM music LEFT JOIN ... WHERE [sql_condition]。
-        3. 如果用户未指定具体条件（如“推荐热门歌曲”），sql_condition 可为 "1=1"。
-        4. 涉及用户状态的过滤（如“我收藏的歌”），请在 sql_condition 中显式使用 user_id = %s。
+# SQL Generation Rules
+1. 模糊查询使用 LIKE '%%s%%'，精确查询使用 = %s。
+2. 默认查询逻辑为 SELECT * FROM music LEFT JOIN ... WHERE [sql_condition]。
+3. 如果用户未指定具体条件（如"推荐热门歌曲"），sql_condition 可为 "1=1"。
+4. 涉及用户状态的过滤（如"我收藏的歌"），请在 sql_condition 中显式使用 user_id = %s。
 
-        # Examples
+# Examples
 
-        User Input: "我想听周杰伦的歌"
-        Output:
-        {{
-            "is_music_related": true,
-            "explanation": "用户想查询歌手为周杰伦的歌曲",
-            "search_type": "author_name",
-            "search_keyword": "周杰伦",
-            "sql_condition": "author_name LIKE '%%s%%'",
-            "join_tables": ["music_favorite_list", "music_like"]
-        }}
+User Input: "我想听周杰伦的歌"
+Output:
+{{
+    "is_music_related": true,
+    "explanation": "用户想查询歌手为周杰伦的歌曲",
+    "search_type": "author_name",
+    "search_keyword": "周杰伦",
+    "sql_condition": "author_name LIKE '%%s%%'",
+    "join_tables": ["music_favorite_list", "music_like"]
+}}
 
-        User Input: "帮我找一下我收藏的关于夏天的歌"
-        Output:
-        {{
-            "is_music_related": true,
-            "explanation": "用户查询当前用户收藏列表中歌名或标签包含'夏天'的歌曲",
-            "search_type": "song_name",
-            "search_keyword": "夏天",
-            "sql_condition": "(song_name LIKE '%%s%%' OR label LIKE '%%s%%') AND music_favorite_list.user_id = %s AND music_favorite_list.music_id IS NOT NULL",
-            "join_tables": ["music_favorite_list", "music_like"]
-        }}
+User Input: "帮我找一下我收藏的关于夏天的歌"
+Output:
+{{
+    "is_music_related": true,
+    "explanation": "用户查询当前用户收藏列表中歌名或标签包含'夏天'的歌曲",
+    "search_type": "song_name",
+    "search_keyword": "夏天",
+    "sql_condition": "(song_name LIKE '%%s%%' OR label LIKE '%%s%%') AND music_favorite_list.user_id = %s AND music_favorite_list.music_id IS NOT NULL",
+    "join_tables": ["music_favorite_list", "music_like"]
+}}
 
-        User Input: "今天天气怎么样"
-        Output:
-        {{
-            "is_music_related": false,
-            "explanation": "用户询问天气，与音乐查询无关"
-        }}
-        """
+User Input: "今天天气怎么样"
+Output:
+{{
+    "is_music_related": false,
+    "explanation": "用户询问天气，与音乐查询无关"
+}}
+"""
 
     async def chat_with_websocket(
             self,
@@ -152,7 +153,8 @@ class AgentService:
             intent_result = await self._extract_music_intent(
                 chat_params.prompt,
                 model_config,
-                chat_params.showThink
+                chat_params.showThink,
+                user_id
             )
 
             if not intent_result.get("is_music_related", False):
@@ -174,12 +176,11 @@ class AgentService:
                 response_text = "抱歉，没有找到符合您要求的音乐。请尝试其他关键词或描述。"
 
             # 5. 流式返回结果
-            # 模拟流式输出（将结果分块发送）
             chunk_size = 50
             for i in range(0, len(response_text), chunk_size):
                 chunk = response_text[i:i + chunk_size]
                 yield chunk
-                await asyncio.sleep(0.01)  # 模拟流式延迟
+                await asyncio.sleep(0.01)
 
             # 发送完成标识
             yield "[completed]"
@@ -200,7 +201,8 @@ class AgentService:
             self,
             prompt: str,
             model_config: ChatModelSchema,
-            show_think: bool
+            show_think: bool,
+            user_id: str
     ) -> Dict[str, Any]:
         """
         使用AI提取音乐意图并生成查询SQL条件
@@ -209,15 +211,12 @@ class AgentService:
             {
                 "is_music_related": bool,
                 "explanation": str,
-                "search_type": str,  # song_name/author_name/label
+                "search_type": str,
                 "search_keyword": str,
                 "sql_condition": str
             }
         """
-        
-
         try:
-            # 创建聊天模型用于意图提取（使用较简单的模型或复用）
             chat_model = await self._create_chat_model(model_config, show_think)
             
             messages = [
@@ -228,8 +227,6 @@ class AgentService:
             response = await chat_model.ainvoke(messages)
             response_text = response.content if hasattr(response, 'content') else str(response)
             
-            # 解析JSON响应
-            # 提取JSON部分（可能包含在```json代码块中）
             if "```json" in response_text:
                 response_text = response_text.split("```json")[1].split("```")[0]
             elif "```" in response_text:
@@ -241,26 +238,21 @@ class AgentService:
             
         except Exception as e:
             logger.error(f"[AgentService] 意图提取失败: {str(e)}")
-            # 降级处理：尝试直接关键词匹配
             return await self._fallback_intent_extraction(prompt)
 
     async def _fallback_intent_extraction(self, prompt: str) -> Dict[str, Any]:
         """降级的意图提取方法"""
-        # 简单的关键词匹配
         music_keywords = ["歌", "音乐", "歌曲", "歌手", "专辑", "唱", "听", "播放"]
         is_music = any(keyword in prompt for keyword in music_keywords)
         
         if not is_music:
             return {"is_music_related": False, "explanation": "未检测到音乐相关关键词"}
         
-        # 简单提取关键词
         import re
-        # 提取引号内的内容
         quoted = re.findall(r'["\']([^"\']+)["\']', prompt)
         if quoted:
             keyword = quoted[0]
         else:
-            # 去除常见词语后的关键词
             words = prompt.replace("推荐", "").replace("搜索", "").replace("找", "").replace("听", "")
             keyword = words.strip()[:50]
         
@@ -269,7 +261,7 @@ class AgentService:
             "explanation": f"搜索音乐关键词: {keyword}",
             "search_type": "song_name",
             "search_keyword": keyword,
-            "sql_condition": "(song_name LIKE '%s%' OR author_name LIKE '%s%' OR label LIKE '%s%')"
+            "sql_condition": "(song_name LIKE '%%s%%' OR author_name LIKE '%%s%%' OR label LIKE '%%s%%')"
         }
 
     async def _execute_music_query(
@@ -280,13 +272,15 @@ class AgentService:
     ) -> List[Dict[str, Any]]:
         """执行音乐查询并获取点赞/收藏状态"""
         try:
-            # 执行查询
-            music_list = await self.agent_repository.execute_music_query(sql_condition, keyword)
+            music_list = await self.agent_repository.execute_music_query(
+                sql_condition, 
+                keyword, 
+                limit=20
+            )
             
             if not music_list:
                 return []
             
-            # 获取用户点赞和收藏状态
             result = []
             for music in music_list:
                 music_dict = dict(music)
@@ -297,7 +291,7 @@ class AgentService:
             return result
             
         except Exception as e:
-            logger.error(f"[AgentService] 音乐查询失败: {str(e)}")
+            logger.error(f"[AgentService] 音乐查询失败: {str(e)}", exc_info=True)
             return []
 
     def _format_music_response(self, music_list: List[Dict[str, Any]], explanation: str = "") -> str:
@@ -307,7 +301,7 @@ class AgentService:
         
         response_lines = [explanation if explanation else "为您找到以下音乐：", ""]
         
-        for i, music in enumerate(music_list[:10], 1):  # 最多返回10首
+        for i, music in enumerate(music_list[:10], 1):
             song_name = music.get('song_name', '未知歌曲')
             author_name = music.get('author_name', '未知歌手')
             album_name = music.get('album_name', '')

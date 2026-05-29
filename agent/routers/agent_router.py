@@ -29,17 +29,25 @@ async def websocket_chat(
     WebSocket聊天接口
     """
     if not X_User_Id:
+        logger.warning("[AgentWebSocket] 未提供用户ID")
         await websocket.close(code=4001, reason="Missing user id")
         return
     
     user_id = X_User_Id
     logger.info(f"[AgentWebSocket] WebSocket连接建立，用户ID: {user_id}")
     
-    await websocket.accept()
+    try:
+        await websocket.accept()
+        logger.info(f"[AgentWebSocket] WebSocket连接已接受")
+    except Exception as e:
+        logger.error(f"[AgentWebSocket] 接受连接失败: {str(e)}")
+        return
     
     try:
         while True:
+            # 接收客户端发送的消息
             data = await websocket.receive_text()
+            logger.info(f"[AgentWebSocket] 收到消息: {data[:100]}...")
             
             try:
                 chat_params_data = json.loads(data)
@@ -53,6 +61,7 @@ async def websocket_chat(
                     tenant_id=chat_params_data.get("tenant_id", "music")
                 )
                 
+                # 验证必填参数
                 if not chat_params.prompt:
                     await websocket.send_text("Error: prompt不能为空")
                     await websocket.send_text("[completed]")
@@ -68,8 +77,13 @@ async def websocket_chat(
                     await websocket.send_text("[completed]")
                     continue
                 
+                # 处理聊天请求
                 async for response in agent_service.chat_with_websocket(user_id, chat_params):
-                    await websocket.send_text(response)
+                    try:
+                        await websocket.send_text(response)
+                    except Exception as e:
+                        logger.error(f"[AgentWebSocket] 发送响应失败: {str(e)}")
+                        break
                     
             except json.JSONDecodeError as e:
                 logger.error(f"[AgentWebSocket] JSON解析错误: {str(e)}")

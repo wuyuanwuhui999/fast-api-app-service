@@ -138,15 +138,15 @@ async def test_gateway_agent(
 
 
 async def main():
-    print("\n" + "=" * 70)
-    print("🎯 Agent WebSocket 接口测试")
-    print("=" * 70)
+    # print("\n" + "=" * 70)
+    # print("🎯 Agent WebSocket 接口测试")
+    # print("=" * 70)
     
-    await test_direct_agent()
+    # await test_direct_agent()
     
-    print("\n" + "=" * 70)
-    print("等待 2 秒后开始 Gateway 测试...")
-    await asyncio.sleep(2)
+    # print("\n" + "=" * 70)
+    # print("等待 2 秒后开始 Gateway 测试...")
+    # await asyncio.sleep(2)
     
     await test_gateway_agent()
 

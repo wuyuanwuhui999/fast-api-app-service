@@ -4,6 +4,7 @@ from sqlalchemy import desc, func, text
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import logging
+import re
 
 from agent.schemas.agent_schema import ChatHistorySchema, ChatModelSchema
 
@@ -139,42 +140,55 @@ class AgentRepository:
         执行音乐查询
         
         Args:
-            sql_condition: SQL WHERE条件，使用%s作为占位符
+            sql_condition: SQL WHERE条件
             keyword: 搜索关键词
             limit: 最大返回数量
         """
         try:
             from sqlalchemy import text
             
-            # 构建完整的SQL查询
-            if sql_condition and "%s" in sql_condition:
-                # 使用参数化查询
-                like_keyword = f"%{keyword}%"
-                # 计算需要几个参数
-                param_count = sql_condition.count("%s")
-                params = [like_keyword] * param_count
-                
-                full_sql = f"""
-                    SELECT 
-                        id, song_name, author_name, album_name, cover, play_url, label
-                    FROM music 
-                    WHERE {sql_condition}
-                    LIMIT {limit}
-                """
-                result = self.db.execute(text(full_sql), params)
-            else:
-                # 默认查询
-                like_keyword = f"%{keyword}%"
-                full_sql = f"""
+            like_keyword = f"%{keyword}%"
+            
+            # 如果没有提供有效的 SQL 条件，使用默认查询
+            if not sql_condition or sql_condition.strip() == "":
+                full_sql = """
                     SELECT 
                         id, song_name, author_name, album_name, cover, play_url, label
                     FROM music 
                     WHERE song_name LIKE :keyword 
                        OR author_name LIKE :keyword 
                        OR label LIKE :keyword
-                    LIMIT {limit}
+                    LIMIT :limit
                 """
-                result = self.db.execute(text(full_sql), {"keyword": like_keyword})
+                result = self.db.execute(
+                    text(full_sql), 
+                    {"keyword": like_keyword, "limit": limit}
+                )
+            else:
+                # 处理 SQL 条件：将 %%s%% 替换为实际的 LIKE 语句
+                # 例如: "author_name LIKE '%%s%%'" -> "author_name LIKE :keyword"
+                processed_condition = sql_condition
+                
+                # 替换 %%s%% 为 :keyword
+                processed_condition = re.sub(r"%%s%%", ":keyword", processed_condition)
+                processed_condition = re.sub(r"%s", ":keyword", processed_condition)
+                
+                # 构建完整 SQL
+                full_sql = f"""
+                    SELECT 
+                        id, song_name, author_name, album_name, cover, play_url, label
+                    FROM music 
+                    WHERE {processed_condition}
+                    LIMIT :limit
+                """
+                
+                logger.info(f"[execute_music_query] SQL: {full_sql}")
+                logger.info(f"[execute_music_query] keyword: {like_keyword}")
+                
+                result = self.db.execute(
+                    text(full_sql), 
+                    {"keyword": like_keyword, "limit": limit}
+                )
             
             rows = result.fetchall()
             return [
@@ -190,7 +204,7 @@ class AgentRepository:
                 for row in rows
             ]
         except Exception as e:
-            logger.error(f"音乐查询失败: {str(e)}")
+            logger.error(f"音乐查询失败: {str(e)}", exc_info=True)
             return []
 
     async def get_user_like_status(self, user_id: str, music_id: int) -> int:
@@ -213,7 +227,6 @@ class AgentRepository:
         try:
             from sqlalchemy import text
             
-            # 通过user_id关联favorite_id
             result = self.db.execute(
                 text("""
                     SELECT COUNT(*) FROM music_favorite_list fl
