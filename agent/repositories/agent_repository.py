@@ -145,8 +145,6 @@ class AgentRepository:
             limit: 最大返回数量
         """
         try:
-            from sqlalchemy import text
-            
             like_keyword = f"%{keyword}%"
             
             # 如果没有提供有效的 SQL 条件，使用默认查询
@@ -165,12 +163,18 @@ class AgentRepository:
                     {"keyword": like_keyword, "limit": limit}
                 )
             else:
-                # 处理 SQL 条件：将 %%s%% 替换为实际的 LIKE 语句
-                # 例如: "author_name LIKE '%%s%%'" -> "author_name LIKE :keyword"
+                # 处理 SQL 条件：将 %%s%% 或 %s 替换为 :keyword
+                # 注意：需要移除单引号，因为参数化查询会自动处理字符串转义
                 processed_condition = sql_condition
                 
-                # 替换 %%s%% 为 :keyword
+                # 替换 %%s%% 为 :keyword（不带引号）
+                processed_condition = re.sub(r"'%%s%%'", ":keyword", processed_condition)
+                processed_condition = re.sub(r'"%%s%%"', ":keyword", processed_condition)
                 processed_condition = re.sub(r"%%s%%", ":keyword", processed_condition)
+                
+                # 替换 %s 为 :keyword（不带引号）
+                processed_condition = re.sub(r"'%s'", ":keyword", processed_condition)
+                processed_condition = re.sub(r'"%s"', ":keyword", processed_condition)
                 processed_condition = re.sub(r"%s", ":keyword", processed_condition)
                 
                 # 构建完整 SQL
@@ -182,9 +186,12 @@ class AgentRepository:
                     LIMIT :limit
                 """
                 
-                logger.info(f"[execute_music_query] SQL: {full_sql}")
-                logger.info(f"[execute_music_query] keyword: {like_keyword}")
+                logger.info(f"[execute_music_query] Original condition: {sql_condition}")
+                logger.info(f"[execute_music_query] Processed condition: {processed_condition}")
+                logger.info(f"[execute_music_query] Full SQL: {full_sql}")
+                logger.info(f"[execute_music_query] keyword param: {like_keyword}")
                 
+                # 执行查询
                 result = self.db.execute(
                     text(full_sql), 
                     {"keyword": like_keyword, "limit": limit}

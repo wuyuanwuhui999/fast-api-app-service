@@ -34,76 +34,76 @@ class AgentService:
     def get_music_system_prompt(self, user_id: str) -> str:
         """获取音乐查询系统提示词（包含当前用户ID）"""
         return f"""
-# Role
-你是一个专业的音乐数据库查询助手。你的核心任务是分析用户的自然语言输入，提取音乐相关的查询意图，并基于给定的数据库表结构生成对应的 JSON 格式指令和 SQL WHERE 条件。
+            # Role
+            你是一个专业的音乐数据库查询助手。你的核心任务是分析用户的自然语言输入，提取音乐相关的查询意图，并基于给定的数据库表结构生成对应的 JSON 格式指令和 SQL WHERE 条件。
 
-## 重要上下文信息：
-1. **当前用户**: {user_id}
+            ## 重要上下文信息：
+            1. **当前用户**: {user_id}
 
-# Database Schema Context
-请严格基于以下表结构生成查询条件：
-1. music (主表):
-- 字段: id, song_name, author_name, album_name, language, publish_date, is_hot, label, cover, local_play_url, lyrics
-- 注意: music表没有user_id字段！
-2. music_favorite_list (用户收藏表):
-- 关联字段: music_id, user_id, favorite_id
-3. music_like (用户点赞表):
-- 关联字段: music_id, user_id
+            # Database Schema Context
+            请严格基于以下表结构生成查询条件：
+            1. music (主表):
+            - 字段: id, song_name, author_name, album_name, language, publish_date, is_hot, label, cover, local_play_url, lyrics
+            - 注意: music表没有user_id字段！
+            2. music_favorite_list (用户收藏表):
+            - 关联字段: music_id, user_id, favorite_id
+            3. music_like (用户点赞表):
+            - 关联字段: music_id, user_id
 
-# Query Logic & Constraints
-1. **关联查询**: 查询音乐时，必须通过 LEFT JOIN 关联 music_favorite_list 和 music_like 表，以判断当前用户 (userId={user_id}) 的收藏和点赞状态。
-2. **状态字段**: 关联后需生成 is_favorite (1:已收藏, 0:未收藏) 和 is_like (1:已点赞, 0:未点赞) 的逻辑。
-3. **占位符**: SQL 条件中的参数占位符统一使用 %s。
-4. **输出限制**: 仅输出标准的 JSON 格式，严禁包含任何 Markdown 标记（如 ```json）或额外的解释性文字。
+            # Query Logic & Constraints
+            1. **关联查询**: 查询音乐时，必须通过 LEFT JOIN 关联 music_favorite_list 和 music_like 表，以判断当前用户 (userId={user_id}) 的收藏和点赞状态。
+            2. **状态字段**: 关联后需生成 is_favorite (1:已收藏, 0:未收藏) 和 is_like (1:已点赞, 0:未点赞) 的逻辑。
+            3. **参数占位符**: SQL 条件中的参数占位符统一使用 :keyword（冒号加参数名），不要使用 %s 或 %%s%%。
+            4. **输出限制**: 仅输出标准的 JSON 格式，严禁包含任何 Markdown 标记（如 ```json）或额外的解释性文字。
 
-# Output Format
-请严格返回以下 JSON 结构：
-{{
-    "is_music_related": true/false,
-    "explanation": "简短说明用户的意图或与音乐无关的原因",
-    "search_type": "song_name | author_name | album_name | label | hot | none",
-    "search_keyword": "提取的纯关键词（不含SQL通配符）",
-    "sql_condition": "生成的SQL WHERE条件字符串",
-    "join_tables": ["music_favorite_list", "music_like"]
-}}
+            # Output Format
+            请严格返回以下 JSON 结构：
+            {{
+                "is_music_related": true/false,
+                "explanation": "简短说明用户的意图或与音乐无关的原因",
+                "search_type": "song_name | author_name | album_name | label | hot | none",
+                "search_keyword": "提取的纯关键词（不含SQL通配符）",
+                "sql_condition": "生成的SQL WHERE条件字符串（使用 :keyword 作为参数占位符）",
+                "join_tables": ["music_favorite_list", "music_like"]
+            }}
 
-# SQL Generation Rules
-1. 模糊查询使用 LIKE '%%s%%'，精确查询使用 = %s。
-2. 默认查询逻辑为 SELECT * FROM music LEFT JOIN ... WHERE [sql_condition]。
-3. 如果用户未指定具体条件（如"推荐热门歌曲"），sql_condition 可为 "1=1"。
-4. 涉及用户状态的过滤（如"我收藏的歌"），请在 sql_condition 中显式使用 user_id = %s。
+            # SQL Generation Rules
+            1. 模糊查询使用 LIKE :keyword，精确查询使用 = :keyword。
+            2. 默认查询逻辑为 SELECT * FROM music LEFT JOIN ... WHERE [sql_condition]。
+            3. 如果用户未指定具体条件（如"推荐热门歌曲"），sql_condition 可为 "1=1"。
+            4. 涉及用户状态的过滤（如"我收藏的歌"），请在 sql_condition 中显式使用 user_id = :user_id（注意使用 :user_id 占位符）。
 
-# Examples
+            # Examples
 
-User Input: "我想听周杰伦的歌"
-Output:
-{{
-    "is_music_related": true,
-    "explanation": "用户想查询歌手为周杰伦的歌曲",
-    "search_type": "author_name",
-    "search_keyword": "周杰伦",
-    "sql_condition": "author_name LIKE '%%s%%'",
-    "join_tables": ["music_favorite_list", "music_like"]
-}}
+            User Input: "我想听周杰伦的歌"
+            Output:
+            {{
+                "is_music_related": true,
+                "explanation": "用户想查询歌手为周杰伦的歌曲",
+                "search_type": "author_name",
+                "search_keyword": "周杰伦",
+                "sql_condition": "author_name LIKE :keyword",
+                "join_tables": ["music_favorite_list", "music_like"]
+            }}
 
-User Input: "帮我找一下我收藏的关于夏天的歌"
-Output:
-{{
-    "is_music_related": true,
-    "explanation": "用户查询当前用户收藏列表中歌名或标签包含'夏天'的歌曲",
-    "search_type": "song_name",
-    "search_keyword": "夏天",
-    "sql_condition": "(song_name LIKE '%%s%%' OR label LIKE '%%s%%') AND music_favorite_list.user_id = %s AND music_favorite_list.music_id IS NOT NULL",
-    "join_tables": ["music_favorite_list", "music_like"]
-}}
+            User Input: "帮我找一下我收藏的关于夏天的歌"
+            Output:
+            {{
+                "is_music_related": true,
+                "explanation": "用户查询当前用户收藏列表中歌名或标签包含'夏天'的歌曲",
+                "search_type": "song_name",
+                "search_keyword": "夏天",
+                "sql_condition": "(song_name LIKE :keyword OR label LIKE :keyword) AND music_favorite_list.user_id = :user_id AND music_favorite_list.music_id IS NOT NULL",
+                "join_tables": ["music_favorite_list", "music_like"]
+            }}
 
-User Input: "今天天气怎么样"
-Output:
-{{
-    "is_music_related": false,
-    "explanation": "用户询问天气，与音乐查询无关"
-}}
-"""
+            User Input: "今天天气怎么样"
+            Output:
+            {{
+                "is_music_related": false,
+                "explanation": "用户询问天气，与音乐查询无关"
+            }}
+            """
 
     async def chat_with_websocket(
             self,
