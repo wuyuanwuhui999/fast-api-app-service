@@ -102,7 +102,7 @@ if __name__ == "__main__":
 
     source_directory = "/Users/wuwenqiang/Documents/code/android/andriod-jetpack-compose-chat-app/app/src/main/java/com/player/chat"
     output_txt = "jetpack compose源代码.txt"
-    excluded_files = ["README.md", ".gitignore"]
+    excluded_files = ["README.md", ".gitignore","提示词.txt"]
     excluded_dirs = [".git", "__pycache__","test", "node_modules", "res", '.qtcreator', 'build',".venv",".idea"]
 
     collect_files_to_txt(
@@ -114,7 +114,7 @@ if __name__ == "__main__":
 
     source_directory = "/Users/wuwenqiang/Documents/code/flutter/flutter-chat-app-ui/lib"
     output_txt = "flutter项目源代码.txt"
-    excluded_files = ["README.md", ".gitignore"]
+    excluded_files = ["README.md", ".gitignore","提示词.txt"]
     excluded_dirs = [".git", "__pycache__","test", "node_modules", "res", '.qtcreator', 'build',".venv",".idea"]
 
     collect_files_to_txt(
@@ -126,7 +126,7 @@ if __name__ == "__main__":
 
     source_directory = "/Users/wuwenqiang/Documents/code/harmony/harmony-arkts-chat-app-ui/entry/src/main/ets"
     output_txt = "harmony arkts鸿蒙原生源代码.txt"
-    excluded_files = ["README.md", ".gitignore"]
+    excluded_files = ["README.md", ".gitignore","提示词.txt"]
     excluded_dirs = [".git", "__pycache__","test", "node_modules", "res", '.qtcreator', 'build',".venv",".idea"]
 
     collect_files_to_txt(
@@ -138,7 +138,7 @@ if __name__ == "__main__":
 
     source_directory = "/Users/wuwenqiang/Documents/code/python/fast-api-app-service"
     output_txt = "fast api多模块项目源代码.txt"
-    excluded_files = ["README.md", ".gitignore","__init__.py","play.sql","user.sql","gitee-push.bat","github-push.bat"]
+    excluded_files = ["README.md", ".gitignore","__init__.py","play.sql","user.sql","gitee-push.bat","github-push.bat","提示词.txt"]
     excluded_dirs = [".git", "__pycache__","test", "node_modules", "res", '.qtcreator', 'build',".venv",".idea","venv"]
 
     collect_files_to_txt(

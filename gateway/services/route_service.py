@@ -16,16 +16,18 @@ class RouteService:
         "chat": "chat-service",
         "tenant": "tenant-service",
         "prompt": "prompt-service",
-        "agent": "agent-service",  # 新增
+        "agent": "agent-service",
+        "company": "company-service",  # 新增
     }
-    
-    # 服务实例缓存（不依赖Nacos的本地配置）
+
+    # 服务实例缓存
     LOCAL_SERVICES = {
         "user-service": {"ip": "127.0.0.1", "port": 4005, "healthy": True, "weight": 1.0},
         "chat-service": {"ip": "127.0.0.1", "port": 4006, "healthy": True, "weight": 1.0},
         "tenant-service": {"ip": "127.0.0.1", "port": 4007, "healthy": True, "weight": 1.0},
         "prompt-service": {"ip": "127.0.0.1", "port": 4008, "healthy": True, "weight": 1.0},
-        "agent-service": {"ip": "127.0.0.1", "port": 4010, "healthy": True, "weight": 1.0},  # 新增
+        "agent-service": {"ip": "127.0.0.1", "port": 4010, "healthy": True, "weight": 1.0},
+        "company-service": {"ip": "127.0.0.1", "port": 4011, "healthy": True, "weight": 1.0},  # 新增
     }
     
     def __init__(self):

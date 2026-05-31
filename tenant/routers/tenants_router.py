@@ -1,5 +1,6 @@
 # tenant/routers/tenants_router.py
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from typing import Optional  # 添加这行导入
 from common.utils.result_util import ResultEntity
 from tenant.schemas.tenants_schema import TenantUserRoleUpdateSchema, TenantUpdateSchema, TenantCreateSchema, \
     TenantAdminUpdateSchema
@@ -7,7 +8,7 @@ from tenant.services.tenants_service import TenantsService
 
 router = APIRouter(prefix="/service/tenant", tags=["tenant"])
 
-# 辅助函数：从header获取用户ID
+
 def get_user_id_from_header(x_user_id: str = Header(None, alias="X-User-Id")):
     """从网关传递的header中获取用户ID"""
     if not x_user_id:
@@ -17,11 +18,12 @@ def get_user_id_from_header(x_user_id: str = Header(None, alias="X-User-Id")):
 
 @router.get("/getTenantList", response_model=ResultEntity)
 async def get_tenant_list(
+    companyId: str = Query(..., description="企业ID（必填）"),  # 使用 ... 表示必填
     current_user_id: str = Depends(get_user_id_from_header),
     tenants_service: TenantsService = Depends()
 ):
-    """获取当前用户所属的所有租户"""
-    return await tenants_service.get_tenant_list(current_user_id)
+    """获取当前用户所属的所有租户，支持按企业ID筛选"""
+    return await tenants_service.get_tenant_list(current_user_id, companyId)
 
 
 @router.get("/getTenantUser", response_model=ResultEntity)
@@ -54,7 +56,7 @@ async def create_tenant(
     current_user_id: str = Depends(get_user_id_from_header),
     tenants_service: TenantsService = Depends()
 ):
-    """创建新租户（需要管理员权限）"""
+    """创建新租户（需要管理员权限，必须携带company_id）"""
     return await tenants_service.create_tenant(tenant_data, current_user_id)
 
 

@@ -10,6 +10,7 @@
 - chat（聊天模块）
 - prompt（提示词模块）
 - tenant（租户模块）
+- company（企业）
 - agent（智能体）
 - gateway（网关模块）
 

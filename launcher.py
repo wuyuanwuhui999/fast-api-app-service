@@ -11,16 +11,15 @@ from datetime import datetime
 
 class ServiceManager:
     def __init__(self):
-        # launcher.py
-# 在 services 列表中添加 agent 服务
-
+        
         self.services = [
-            {"name": "Gateway Service", "port": 4009, "module": "gateway.main", "color": "\033[96m"},  # 青色
-            {"name": "User Service", "port": 4005, "module": "user.main", "color": "\033[92m"},  # 绿色
-            {"name": "Chat Service", "port": 4006, "module": "chat.main", "color": "\033[94m"},  # 蓝色
-            {"name": "Tenant Service", "port": 4007, "module": "tenant.main", "color": "\033[93m"},  # 黄色
-            {"name": "Prompt Service", "port": 4008, "module": "prompt.main", "color": "\033[95m"},  # 紫色
-            {"name": "Agent Service", "port": 4010, "module": "agent.main", "color": "\033[96m"},  # 新增：青色
+            {"name": "Gateway Service", "port": 4009, "module": "gateway.main", "color": "\033[96m"},
+            {"name": "User Service", "port": 4005, "module": "user.main", "color": "\033[92m"},
+            {"name": "Chat Service", "port": 4006, "module": "chat.main", "color": "\033[94m"},
+            {"name": "Tenant Service", "port": 4007, "module": "tenant.main", "color": "\033[93m"},
+            {"name": "Prompt Service", "port": 4008, "module": "prompt.main", "color": "\033[95m"},
+            {"name": "Agent Service", "port": 4010, "module": "agent.main", "color": "\033[96m"},
+            {"name": "Company Service", "port": 4011, "module": "company.main", "color": "\033[92m"},  # 新增
         ]
         
         self.processes = []

@@ -5,13 +5,14 @@ from typing import Optional, List
 
 class TenantSchema(BaseModel):
     id: str
+    company_id: str  # 新增
     name: str
     code: str
     description: Optional[str] = None
     status: int = 1
     create_date: Optional[datetime] = None
     update_date: Optional[datetime] = None
-    role_type: Optional[int] = None  # 用户在该租户的角色
+    role_type: Optional[int] = None
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -22,9 +23,6 @@ class TenantSchema(BaseModel):
 
 
 class TenantUserSchema(BaseModel):
-    """
-    租户用户关联表 Schema
-    """
     id: str = Field(..., description="主键ID")
     tenant_id: str = Field(..., description="租户ID")
     user_id: str = Field(..., description="用户ID")
@@ -32,7 +30,7 @@ class TenantUserSchema(BaseModel):
     join_date: datetime = Field(..., description="加入时间")
     create_by: str = Field(..., description="创建人ID")
     disabled: Optional[int] = None
-    tenant_name: Optional[str] = None  # 新增：租户名称
+    tenant_name: Optional[str] = None
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -42,21 +40,10 @@ class TenantUserSchema(BaseModel):
     )
 
 
-# 在 tenants_schema.py 末尾添加
-class TenantUsersQuerySchema(BaseModel):
-    tenant_id: str
-    page: int = Field(1, ge=1, description="页码")
-    page_size: int = Field(10, ge=1, le=20, description="每页数量")
-
-class TenantListResponse(BaseModel):
-    data: List[TenantSchema]
-    total: int
-
-
-# 添加以下Schema
 class TenantCreateSchema(BaseModel):
     name: str
     code: str
+    company_id: str  # 新增必填字段
     description: Optional[str] = None
 
 
@@ -81,3 +68,14 @@ class TenantUserRoleUpdateSchema(BaseModel):
 class TenantAdminUpdateSchema(BaseModel):
     directory: str
     tenantId: str
+
+
+class TenantUsersQuerySchema(BaseModel):
+    tenant_id: str
+    page: int = Field(1, ge=1, description="页码")
+    page_size: int = Field(10, ge=1, le=20, description="每页数量")
+
+
+class TenantListResponse(BaseModel):
+    data: List[TenantSchema]
+    total: int
