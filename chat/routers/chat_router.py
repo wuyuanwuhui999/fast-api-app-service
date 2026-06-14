@@ -17,14 +17,17 @@ def get_user_id_from_header(x_user_id: str = Header(None, alias="X-User-Id")):
 
 
 @router.get("/getModelList")
-async def get_model_list(chat_service: ChatService = Depends()):
-    return await chat_service.get_model_list()
+async def get_model_list(
+    companyId: str = Query(None, description="企业ID，可选，用于筛选企业下的模型"),
+    chat_service: ChatService = Depends()
+):
+    return await chat_service.get_model_list(companyId)
 
 
 @router.websocket("/ws/chat")
 async def websocket_chat(
     websocket: WebSocket,
-    X_User_Id: str = Query(None, alias="X-User-Id"),  # 从URL参数获取用户ID
+    X_User_Id: str = Query(None, alias="X-User-Id"),
     chat_service: ChatService = Depends()
 ):
     """
@@ -34,7 +37,6 @@ async def websocket_chat(
     其他参数（prompt, chatId, modelId等）通过WebSocket send方法传递
     """
     
-    # 验证用户ID（由网关传递）
     if not X_User_Id:
         await websocket.close(code=4001, reason="Missing user id")
         return
@@ -46,23 +48,20 @@ async def websocket_chat(
     
     try:
         while True:
-            # 接收客户端发送的消息
             data = await websocket.receive_text()
             
             try:
-                # 解析JSON消息
                 if isinstance(data, str):
                     chat_params_data = json.loads(data)
                 else:
                     chat_params_data = data
                 
-                # 构建ChatParamsEntity
                 chat_params = ChatParamsEntity(
                     prompt=chat_params_data.get("prompt", ""),
                     systemPrompt=chat_params_data.get("systemPrompt", None),
                     directoryId=chat_params_data.get("directoryId", "default"),
                     chatId=chat_params_data.get("chatId", ""),
-                    token="",  # token已经在网关验证过了，这里不需要
+                    token="",
                     modelId=chat_params_data.get("modelId", ""),
                     showThink=chat_params_data.get("showThink", False),
                     type=chat_params_data.get("type", None),
@@ -70,9 +69,7 @@ async def websocket_chat(
                     tenant_id=chat_params_data.get("tenant_id", None)
                 )
                 
-                # 处理聊天请求
                 async for response in chat_service.chat_with_websocket(user_id, chat_params):
-                    # 发送响应给客户端
                     await websocket.send_text(response)
                     
             except json.JSONDecodeError as e:
@@ -124,13 +121,13 @@ async def get_history(
     return await chat_service.get_chat_history(current_user_id, pageNum, pageSize)
 
 
-@router.get("/getDocList")
+@router.get("/getDocListByDirId")
 async def get_doc_list(
-    tenantId: str = None,
+    directoryId: str,
     current_user_id: str = Depends(get_user_id_from_header),
     chat_service: ChatService = Depends()
 ):
-    return await chat_service.get_doc_list(current_user_id, tenantId)
+    return await chat_service.get_doc_list(current_user_id, directoryId)
 
 
 @router.get("/getDirectoryList")

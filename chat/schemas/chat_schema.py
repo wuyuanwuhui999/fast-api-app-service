@@ -1,23 +1,22 @@
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List
 
 
 class ChatSchema(BaseModel):
     id: Optional[int] = None
     user_id: str
-    tenant_id: Optional[str] = None  # 新增租户ID字段
+    tenant_id: Optional[str] = None
     files: Optional[str] = None
     chat_id: str
     prompt: str
     system_prompt: Optional[str] = None
-    model_id: str  # 修改：model_name -> model_id
+    model_id: str
     content: Optional[str] = None
     think_content: Optional[str] = None
     response_content: Optional[str] = None
     create_time: Optional[datetime] = None
 
-    # 自定义内容处理方法
     def set_content(self, content: str):
         self.content = content
 
@@ -51,10 +50,10 @@ class ChatParamsEntity(BaseModel):
     systemPrompt: Optional[str] = None
     directoryId: str = "default"
     chatId: str
-    modelId: str  # 模型ID
+    modelId: str
     showThink: bool = False
-    type: Optional[str] = None  # document/db
-    language: Optional[str] = None  # zh/cn
+    type: Optional[str] = None
+    language: Optional[str] = None
     tenant_id: Optional[str] = None
 
 
@@ -82,12 +81,14 @@ class ChatModelSchema(BaseModel):
     api_key: Optional[str] = None
     model_name: str
     base_url: Optional[str] = None
+    company_id: Optional[str] = Field(None, alias="companyId")  # 新增字段，支持驼峰
     disabled: int = 0
     create_time: Optional[datetime] = None
     update_time: Optional[datetime] = None
 
     model_config = ConfigDict(
         from_attributes=True,
+        populate_by_name=True,  # 允许通过字段名或别名访问
         json_encoders={
             datetime: lambda v: v.strftime("%Y-%m-%d %H:%M:%S")
         }

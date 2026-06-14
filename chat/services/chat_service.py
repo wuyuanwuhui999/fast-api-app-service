@@ -2,7 +2,7 @@ import asyncio
 import uuid
 import logging
 from datetime import datetime, timedelta
-from typing import List, Any, AsyncGenerator
+from typing import List, Any, AsyncGenerator, Optional
 
 from fastapi import UploadFile, HTTPException, Depends
 from langchain_community.chat_models import ChatOpenAI
@@ -51,11 +51,11 @@ class ChatService:
             chat_params: ChatParamsEntity
     ) -> AsyncGenerator[str, None]:
         """
-        WebSocket聊天处理（不再需要token验证，user_id由网关传递）
+        WebSocket聊天处理
         
         Args:
             user_id: 用户ID（由网关验证后传递）
-            chat_params: 聊天参数（通过WebSocket send方法传递）
+            chat_params: 聊天参数
         """
         logger.info(f"[ChatService] ========== 开始处理聊天请求 ==========")
         logger.info(f"[ChatService] user_id={user_id}")
@@ -64,7 +64,6 @@ class ChatService:
         logger.info(f"[ChatService] tenant_id={chat_params.tenant_id}")
         logger.info(f"[ChatService] prompt={chat_params.prompt[:50] if chat_params.prompt else 'None'}...")
         
-        # 创建聊天记录实体
         chat_entity = ChatSchema(
             user_id=user_id,
             tenant_id=chat_params.tenant_id,
@@ -81,8 +80,12 @@ class ChatService:
         logger.info(f"[ChatService] chat_entity创建成功: model_id={chat_entity.model_id}")
 
         try:
-            # 从数据库获取模型配置
-            model_config = self.chat_repository.get_model_by_id(chat_params.modelId)
+            # 从数据库获取模型配置（传入 tenant_id 作为 company_id 筛选条件）
+            # 注意：这里假设租户ID可以作为企业ID筛选
+            model_config = self.chat_repository.get_model_by_id(
+                chat_params.modelId, 
+                company_id=chat_params.tenant_id
+            )
             if not model_config:
                 logger.error(f"[ChatService] 未找到模型配置: {chat_params.modelId}")
                 yield f"Error: 未找到模型配置 {chat_params.modelId}"
@@ -91,7 +94,6 @@ class ChatService:
 
             logger.info(f"[ChatService] 获取到模型配置: id={model_config.id}, type={model_config.type}, model_name={model_config.model_name}")
 
-            # 根据模型类型创建对应的聊天模型
             chat_model = await self._create_chat_model(model_config, chat_params.showThink)
             if not chat_model:
                 logger.error(f"[ChatService] 不支持的模型类型: {model_config.type}")
@@ -99,17 +101,14 @@ class ChatService:
                 yield "[completed]"
                 return
 
-            # 从Redis获取或初始化会话记忆
             chat_history_key = f"chat_history:{user_id}:{chat_params.chatId}"
             chat_history = self.redis.get(chat_history_key)
 
-            # 初始化聊天模板
             system_prompt = chat_params.systemPrompt if chat_params.systemPrompt and chat_params.systemPrompt != '' else "你叫小吴同学，是一个无所不能的AI助手，上知天文下知地理，请用小吴同学的身份回答问题。"
             messages = [
                 ("system", system_prompt)
             ]
 
-            # 如果有历史会话，添加到消息中
             if chat_history:
                 try:
                     messages.extend(eval(chat_history.decode('utf-8')))
@@ -117,12 +116,10 @@ class ChatService:
                 except Exception as e:
                     logger.warning(f"Failed to parse chat history from Redis: {str(e)}")
 
-            # 添加当前用户消息
             messages.append(("human", chat_params.prompt))
 
             chat_template = ChatPromptTemplate.from_messages(messages)
 
-            # 构建上下文（如果是文档类型）
             prompt = chat_params.prompt
             if chat_params.type == "document":
                 context = await self.build_context(
@@ -141,10 +138,8 @@ class ChatService:
 
             formatted_prompt = chat_template.format_messages(prompt=prompt)
 
-            # 流式返回模型响应
             full_response = ""
 
-            # 根据模型类型调用不同的流式接口
             if model_config.type == "ollama":
                 logger.info(f"[ChatService] 使用Ollama模型流式响应")
                 async for chunk in chat_model.astream(
@@ -155,14 +150,12 @@ class ChatService:
                     full_response += chunk_str
                     yield chunk_str
             else:
-                # 在线大模型的流式处理
                 logger.info(f"[ChatService] 使用在线模型流式响应: {model_config.type}")
                 async for chunk in self._stream_online_model(chat_model, formatted_prompt):
                     chunk_str = chunk
                     full_response += chunk_str
                     yield chunk_str
 
-            # 保存当前会话到Redis
             try:
                 updated_messages = messages.copy()
                 updated_messages.append(("ai", full_response))
@@ -178,7 +171,6 @@ class ChatService:
             except Exception as e:
                 logger.error(f"Failed to save chat history to Redis: {str(e)}")
 
-            # 保存对话记录
             chat_entity.content = full_response
             chat_entity.set_content(chat_entity.content)
             chat_entity.create_time = datetime.now()
@@ -186,13 +178,17 @@ class ChatService:
             logger.info(f"[ChatService] 聊天完成，准备保存记录")
             yield "[completed]"
             
-            # 异步保存记录
             asyncio.create_task(self.save_chat_history_async(chat_entity, full_response))
             
         except Exception as e:
             logger.error(f"WebSocket chat error: {str(e)}", exc_info=True)
             yield f"Error occurred: {str(e)}"
             yield "[completed]"
+
+    async def get_model_list(self, company_id: Optional[str] = None) -> ResultEntity:
+        """获取模型列表，支持按企业ID筛选"""
+        model_list = self.chat_repository.get_model_list(company_id)
+        return ResultUtil.success(data=model_list)
 
     async def _create_chat_model(self, model_config: ChatModelSchema, show_think: bool) -> Any:
         """根据模型配置创建对应的聊天模型实例"""
@@ -206,7 +202,6 @@ class ChatService:
                 )
 
             elif model_config.type in ["deepseek", "tongyi"]:
-                # 配置基础URL
                 base_url = model_config.base_url
                 if model_config.type == "deepseek":
                     base_url = base_url or "https://api.deepseek.com/v1"
@@ -233,7 +228,6 @@ class ChatService:
     async def _stream_online_model(self, chat_model, formatted_prompt):
         """处理在线大模型的流式响应"""
         try:
-            # 对于在线大模型，使用aiter的方式处理流式响应
             async for chunk in chat_model.astream(formatted_prompt):
                 if hasattr(chunk, 'content'):
                     yield chunk.content
@@ -253,7 +247,6 @@ class ChatService:
             chat_entity.content = content
             chat_entity.set_content(content)
 
-            # 确保返回的是协程对象
             result = await self.chat_repository.save_chat_history(chat_entity)
             if result:
                 logger.info(f"[ChatService] 聊天记录保存成功: user_id={chat_entity.user_id}, chat_id={chat_entity.chat_id}")
@@ -368,7 +361,6 @@ class ChatService:
             pdf_reader = PdfReader(BytesIO(content))
             full_text = ""
 
-            # 检查PDF是否有文本内容
             if not pdf_reader.pages:
                 raise HTTPException(status_code=400, detail="PDF文件无有效内容")
 
@@ -384,7 +376,6 @@ class ChatService:
             if not full_text.strip():
                 raise HTTPException(status_code=400, detail="无法从PDF提取文本内容")
 
-            # 处理文本内容
             self.process_text_content(
                 full_text,
                 filename,
@@ -423,10 +414,6 @@ class ChatService:
         except Exception as e:
             logger.error(f"TXT processing failed: {str(e)}")
             raise HTTPException(status_code=500, detail=f"TXT处理失败: {str(e)}")
-
-    async def get_model_list(self) -> ResultEntity:
-        """获取模型列表"""
-        return ResultUtil.success(data=self.chat_repository.get_model_list())
 
     async def delete_document(self, doc_id: str, user_id: str):
         """删除文档"""
@@ -471,7 +458,6 @@ class ChatService:
             else:
                 self.process_txt(content, file.filename, user_id, doc_id, directory_id, tenant_id)
 
-            # 保存文件到本地
             file_path = os.path.join(self.upload_dir, file.filename)
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, "wb") as f:
@@ -492,17 +478,13 @@ class ChatService:
             logger.error(f"Document processing failed: {str(e)}")
             raise HTTPException(status_code=500, detail=f"文件处理失败: {str(e)}")
 
-    async def get_doc_list(self, user_id: str, tenant_id: str = None) -> ResultEntity:
+    async def get_doc_list(self, user_id: str, directory_id: str = None) -> ResultEntity:
         """获取文档列表"""
-        return ResultUtil.success(data=self.chat_repository.get_doc_List(user_id, tenant_id))
+        return ResultUtil.success(data=self.chat_repository.get_doc_List(user_id, directory_id))
 
     async def get_directory_list(self, user_id: str, tenant_id: str) -> ResultEntity:
-        """
-        获取租户下的文件夹列表
-        需要先验证用户是否在该租户内且用户未被禁用
-        """
+        """获取租户下的文件夹列表"""
         try:
-            # 首先验证用户是否存在且未被禁用
             from user.repositories.user_repository import UserRepository
             user_repo = UserRepository(self.db)
 
@@ -510,10 +492,9 @@ class ChatService:
             if not user:
                 return ResultUtil.fail(msg="用户不存在", data=None)
 
-            if user.disabled == 1:  # 检查用户是否被禁用
+            if user.disabled == 1:
                 return ResultUtil.fail(msg="用户已被禁用，无法访问", data=None)
             elif tenant_id != user_id:
-                # 验证用户是否在租户内
                 from tenant.repositories.tenants_repository import TenantsRepository
                 tenants_repo = TenantsRepository(self.db)
 
@@ -521,7 +502,6 @@ class ChatService:
                 if not tenant_user:
                     return ResultUtil.fail(msg="用户不在该租户内或无访问权限", data=None)
 
-            # 查询文件夹列表
             directory_list = await self._get_directory_list_by_tenant(tenant_id, user_id)
 
             return ResultUtil.success(data=directory_list)
@@ -531,13 +511,10 @@ class ChatService:
             return ResultUtil.fail(msg=f"获取文件夹列表失败: {str(e)}", data=None)
 
     async def _get_directory_list_by_tenant(self, tenant_id: str, user_id: str) -> List[DirectorySchema]:
-        """
-        根据租户ID和用户ID查询文件夹列表
-        """
+        """根据租户ID和用户ID查询文件夹列表"""
         try:
             from chat.models.chat_model import ChatDocDirectory
 
-            # 查询当前租户下的文件夹，包括公共目录和用户自己的目录
             directories = self.db.query(ChatDocDirectory).filter(
                 (ChatDocDirectory.tenant_id == tenant_id) &
                 (ChatDocDirectory.user_id == user_id)
@@ -561,11 +538,8 @@ class ChatService:
             return []
 
     async def _check_directory_exists(self, tenant_id: str, user_id: str, directory_name: str) -> bool:
-        """
-        检查文件夹是否已存在（当前租户和当前用户下）
-        """
+        """检查文件夹是否已存在"""
         try:
-            # 检查用户个人文件夹是否已存在
             directories = self.db.query(ChatDocDirectory).filter(
                 ChatDocDirectory.tenant_id == tenant_id,
                 ChatDocDirectory.user_id == user_id,
@@ -579,12 +553,8 @@ class ChatService:
             return False
 
     async def create_directory(self, user_id: str, tenant_id: str, directory_name: str) -> ResultEntity:
-        """
-        创建文件夹
-        需要验证用户是否启用且在指定租户内，并检查文件夹是否已存在
-        """
+        """创建文件夹"""
         try:
-            # 验证文件夹名称
             directory_name = directory_name.strip()
             if not directory_name:
                 return ResultUtil.fail(msg="文件夹名称不能为空")
@@ -592,7 +562,6 @@ class ChatService:
             if len(directory_name) > 255:
                 return ResultUtil.fail(msg="文件夹名称长度不能超过255个字符")
 
-            # 首先验证用户是否存在且未被禁用
             from user.repositories.user_repository import UserRepository
             user_repo = UserRepository(self.db)
 
@@ -600,10 +569,9 @@ class ChatService:
             if not user:
                 return ResultUtil.fail(msg="用户不存在")
 
-            if user.disabled == 1:  # 检查用户是否被禁用
+            if user.disabled == 1:
                 return ResultUtil.fail(msg="用户已被禁用，无法创建文件夹")
 
-            # 验证用户是否在租户内
             from tenant.repositories.tenants_repository import TenantsRepository
             tenants_repo = TenantsRepository(self.db)
 
@@ -611,11 +579,9 @@ class ChatService:
             if not tenant_user:
                 return ResultUtil.fail(msg="用户不在该租户内或无权限创建文件夹", data=None)
 
-            # 检查文件夹是否已存在
             if await self._check_directory_exists(tenant_id, user_id, directory_name):
                 return ResultUtil.fail(msg="文件夹名称已存在，请使用其他名称")
 
-            # 创建文件夹
             directory = await self.chat_repository.create_directory(tenant_id, user_id, directory_name)
 
             if hasattr(directory, 'model_dump'):

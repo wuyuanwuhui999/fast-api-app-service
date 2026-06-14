@@ -10,8 +10,8 @@ class CompanySchema(BaseModel):
     name: str
     code: str
     description: Optional[str] = None
-    # logo: Optional[str] = None  # 暂时注释
     status: int = 1
+    role: int = 0
     create_date: Optional[datetime] = None
     update_date: Optional[datetime] = None
     created_by: Optional[str] = None

@@ -39,55 +39,60 @@ class CompanyRepository:
         根据用户ID查询用户所在的所有企业
         
         规则：
-        1. code='personal' 的企业是所有用户共享的，直接查询出来，不需要根据用户关联过滤
+        1. code == user_id 的企业是所有用户共享的，直接查询出来，不需要根据用户关联过滤
         2. 其他企业需要通过 CompanyUserModel 关联查询用户加入的企业
+        3. 返回数据中包含用户在该企业中的角色
         """
         try:
-            company_dict = {}  # 使用字典去重，key为公司ID
+            company_list = []
             
-            # 1. 查询所有用户共享的 personal 企业（无条件查询）
-            personal_companies = self.db.query(CompanyModel).filter(
-                CompanyModel.code == 'personal',
+            # 1. 查询所有用户共享的企业（code == user_id）
+            shared_companies = self.db.query(CompanyModel).filter(
+                CompanyModel.code == user_id,
                 CompanyModel.status == 1
             ).all()
             
-            for company in personal_companies:
-                company_dict[company.id] = company
+            for company in shared_companies:
+                company_schema = CompanySchema.model_validate(company)
+                # 对于共享企业，角色默认为普通成员，转换为 int 类型
+                company_schema.role = 0  # 修改为 int 类型
+                company_list.append(company_schema)
             
-            # 2. 查询用户关联的企业（排除 personal，因为 personal 已经添加过了）
-            user_companies = (
-                self.db.query(CompanyModel)
-                .join(CompanyUserModel, CompanyModel.id == CompanyUserModel.company_id)
+            # 2. 查询用户关联的企业（排除已经通过共享条件添加的企业）
+            # 使用 LEFT JOIN 获取用户在企业的角色
+            results = (
+                self.db.query(
+                    CompanyModel,
+                    CompanyUserModel.role.label('user_role')
+                )
+                .join(
+                    CompanyUserModel,
+                    CompanyModel.id == CompanyUserModel.company_id
+                )
                 .filter(
                     CompanyUserModel.user_id == user_id,
                     CompanyUserModel.status == 1,
                     CompanyModel.status == 1,
-                    CompanyModel.code != 'personal'  # 排除 personal，避免重复
+                    CompanyModel.code != user_id  # 排除共享企业，避免重复
                 )
-                .order_by(CompanyUserModel.is_default.desc(), CompanyUserModel.join_date.desc())
+                .order_by(
+                    CompanyUserModel.is_default.desc(),
+                    CompanyUserModel.join_date.desc()
+                )
                 .all()
             )
             
-            for company in user_companies:
-                if company.id not in company_dict:
-                    company_dict[company.id] = company
+            for company, user_role in results:
+                company_schema = CompanySchema.model_validate(company)
+                # 将 user_role 转换为 int 类型，如果为 None 则默认为 0
+                company_schema.role = int(user_role) if user_role is not None else 0
+                company_list.append(company_schema)
             
-            # 3. 转换为列表
-            result_list = list(company_dict.values())
-            
-            # 排序：personal 企业排在前面
-            def sort_key(company):
-                return 0 if company.code == 'personal' else 1
-            
-            result_list.sort(key=sort_key)
-            
-            return [CompanySchema.model_validate(c) for c in result_list]
+            return company_list
             
         except Exception as e:
             logger.error(f"查询用户企业列表失败: {str(e)}", exc_info=True)
             return []
-
-    # ==================== 企业用户相关 ====================
     
     def get_company_user(self, company_id: str, user_id: str) -> Optional[CompanyUserModel]:
         """查询用户在指定企业中的关联信息"""
@@ -113,6 +118,7 @@ class CompanyRepository:
         company_user = self.get_company_user(company_id, user_id)
         if not company_user:
             return -1  # 用户不在企业中
+        # 确保返回 int 类型
         return int(company_user.role) if company_user.role else 0
 
     def get_company_users_with_pagination(
@@ -156,7 +162,7 @@ class CompanyRepository:
                         id="",  # personal 企业没有关联ID
                         user_id=user.id,
                         company_id=company_id,
-                        role="0",  # personal 企业所有用户都是普通成员
+                        role="0",  # personal 企业所有用户都是普通成员，保持字符串以匹配数据库
                         status=1,
                         join_date=user.create_date,
                         username=user.username,
@@ -197,7 +203,7 @@ class CompanyRepository:
                     id=company_user.id,
                     user_id=company_user.user_id,
                     company_id=company_user.company_id,
-                    role=company_user.role,
+                    role=company_user.role,  # 保持数据库原始类型（字符串）
                     status=company_user.status,
                     join_date=company_user.join_date,
                     username=user.username,

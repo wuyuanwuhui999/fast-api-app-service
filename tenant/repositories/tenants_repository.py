@@ -28,7 +28,7 @@ class TenantsRepository:
             )
             
             stmt = (
-                select(TenantModel, TenantUserModel.role_type)
+                select(TenantModel, TenantUserModel.role)
                 .outerjoin(
                     TenantUserModel,
                     TenantModel.id == TenantUserModel.tenant_id
@@ -44,9 +44,9 @@ class TenantsRepository:
             results = self.db.execute(stmt)
             
             result = []
-            for idx, (tenant, role_type) in enumerate(results):
+            for idx, (tenant, role) in enumerate(results):
                 tenant_schema = TenantSchema.model_validate(tenant)
-                tenant_schema.role_type = role_type if role_type is not None else 0
+                tenant_schema.role = role if role is not None else 0
                 result.append(tenant_schema)
 
             return result
@@ -56,11 +56,22 @@ class TenantsRepository:
             raise
 
     def get_tenant_user(self, user_id: str, tenant_id: str) -> Optional[Dict]:
-        """获取用户在指定租户的信息，并关联查询租户名称"""
+        """获取用户在指定租户的信息，并关联查询用户表和租户名称"""
         try:
+            from common.models.common_model import UserMode
+            
             result = (
-                self.db.query(TenantUserModel, TenantModel.name.label('tenant_name'))
+                self.db.query(
+                    TenantUserModel,
+                    TenantModel.name.label('tenant_name'),
+                    UserMode.user_account.label('user_account'),
+                    UserMode.username.label('username'),
+                    UserMode.avater.label('avater'),
+                    UserMode.disabled.label('user_disabled'),
+                    UserMode.email.label('email')
+                )
                 .join(TenantModel, TenantModel.id == TenantUserModel.tenant_id)
+                .join(UserMode, UserMode.id == TenantUserModel.user_id)
                 .filter(
                     TenantUserModel.tenant_id == tenant_id,
                     TenantUserModel.user_id == user_id
@@ -69,16 +80,22 @@ class TenantsRepository:
             )
             
             if result:
-                tenant_user, tenant_name = result
+                tenant_user, tenant_name, user_account, username, avater, user_disabled, email = result
                 tenant_user_dict = {
                     'id': tenant_user.id,
                     'tenant_id': tenant_user.tenant_id,
                     'user_id': tenant_user.user_id,
-                    'role_type': tenant_user.role_type,
+                    'role': tenant_user.role,
                     'join_date': tenant_user.join_date,
                     'create_by': tenant_user.create_by,
                     'disabled': tenant_user.disabled,
-                    'tenant_name': tenant_name
+                    'tenant_name': tenant_name,
+                    # 关联查询的用户信息
+                    'user_account': user_account,
+                    'username': username,
+                    'avater': avater,
+                    'disabled': user_disabled,
+                    'email': email
                 }
                 return tenant_user_dict
             return None
@@ -200,7 +217,7 @@ class TenantsRepository:
         users = self.db.execute(
             select(TenantUserModel).where(
                 (TenantUserModel.user_id == user_id) &
-                (TenantUserModel.role_type > 0)
+                (TenantUserModel.role > 0)
             )
         )
         return [TenantUserSchema.model_validate(u) for u in users.scalars()]
@@ -221,7 +238,7 @@ class TenantsRepository:
             ).first()
 
             if tenant_user:
-                tenant_user.role_type = 1
+                tenant_user.role = 1
                 self.db.commit()
                 return True
             return False
@@ -237,8 +254,8 @@ class TenantsRepository:
                 TenantUserModel.user_id == user_id
             ).first()
 
-            if tenant_user and tenant_user.role_type >= 1:
-                tenant_user.role_type = 0
+            if tenant_user and tenant_user.role >= 1:
+                tenant_user.role = 0
                 self.db.commit()
                 return True
             return False
@@ -278,7 +295,7 @@ class TenantsRepository:
             tenant_user = self.db.query(TenantUserModel).filter(
                 TenantUserModel.tenant_id == tenant_id,
                 TenantUserModel.user_id == current_user_id,
-                TenantUserModel.role_type > 1
+                TenantUserModel.role > 1
             ).first()
 
             if not tenant_user:

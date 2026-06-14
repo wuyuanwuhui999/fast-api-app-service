@@ -53,7 +53,7 @@ def collect_files_to_txt(source_dir, output_file, exclude_files=None, exclude_di
 if __name__ == "__main__":
     source_directory = "/Users/wuwenqiang/Documents/code/c++/qt-chat-desktop"
     output_txt = "qt项目源代码.txt"
-    excluded_files = ["README.md", ".gitignore",'提示词.txt',"github-push.bat","gitee-push.bat"]
+    excluded_files = ["README.md", ".gitignore",'提示词.txt','提示词.md',"github-push.bat","gitee-push.bat"]
     excluded_dirs = [".git", "__pycache__", "node_modules","res",'.qtcreator','build']
     collect_files_to_txt(
         source_dir=source_directory,
@@ -63,10 +63,10 @@ if __name__ == "__main__":
     )
     print(f"已完成，结果保存在 {output_txt}")
 
-    source_directory = "/Users/wuwenqiang/Documents/code/java/springboot3-app-service/user/src/main/java/com/player/user"
+    source_directory = "/Users/wuwenqiang/Documents/code/java/springboot3-app-service/"
     output_txt = "springboot源代码.txt"
-    excluded_files = ["README.md", ".gitignore", '提示词.txt', "github-push.bat", "gitee-push.bat",".DS_Store"]
-    excluded_dirs = [".git", "__pycache__", "node_modules", "res", '.qtcreator', 'build',"chat.xcodeproj"]
+    excluded_files = ["README.md", ".gitignore", "gitee-push.bat","github-push.bat","github-push.bat", "gitee-push.bat",".DS_Store",".gitattributes",".gitignore","err.txt","mvnw","mvnw.cmd","提示词.md","提示词.txt","play.sql","user.sql","README.md","start-all.sh"]
+    excluded_dirs = [".git", "__pycache__", "node_modules", "res", '.qtcreator', 'build',"chat.xcodeproj",".mvn","test","target",".idea"]
     collect_files_to_txt(
         source_dir=source_directory,
         output_file=output_txt,
@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
     source_directory = "/Users/wuwenqiang/Documents/code/swiftUI/swift-chat-app/chat"
     output_txt = "swift源代码.txt"
-    excluded_files = ["README.md", ".gitignore", '提示词.txt', "github-push.bat", "gitee-push.bat",".DS_Store"]
+    excluded_files = ["README.md", ".gitignore", '提示词.txt','提示词.md', "github-push.bat", "gitee-push.bat",".DS_Store"]
     excluded_dirs = [".git", "__pycache__", "node_modules", "res", '.qtcreator', 'build',"chat.xcodeproj"]
     collect_files_to_txt(
         source_dir=source_directory,
@@ -89,7 +89,7 @@ if __name__ == "__main__":
 
     source_directory = "/Users/wuwenqiang/Documents/code/uniapp/uniapp-vite-vue3-ts-chat-app-ui/src"
     output_txt = "uniapp源代码.txt"
-    excluded_files = ["README.md", ".gitignore", '提示词.txt', "github-push.bat", "gitee-push.bat",".DS_Store"]
+    excluded_files = ["README.md", ".gitignore", '提示词.txt','提示词.md', "github-push.bat", "gitee-push.bat",".DS_Store"]
     excluded_dirs = [".git", "__pycache__", "node_modules", "res", '.qtcreator', 'build',"chat.xcodeproj"]
 
     collect_files_to_txt(

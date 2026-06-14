@@ -5,7 +5,7 @@ from fastapi.logger import logger
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from chat.models.chat_model import ChatModel, ChatHistory, ChatDocModel
+from chat.models.chat_model import ChatModel, ChatHistory, ChatDocModel, ChatDocDirectory
 from chat.schemas.chat_schema import ChatModelSchema, ChatSchema, ChatDocSchema
 from chat.schemas.chat_schema import DirectorySchema
 
@@ -14,14 +14,30 @@ class ChatRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_model_list(self) -> List[ChatModelSchema]:
-        model_list = self.db.query(ChatModel).filter(ChatModel.disabled == 0).all()
-        return [ChatModelSchema.model_validate(model).dict() for model in model_list]
+    def get_model_list(self, company_id: Optional[str] = None) -> List[ChatModelSchema]:
+        """获取模型列表，支持按企业ID筛选"""
+        query = self.db.query(ChatModel).filter(ChatModel.disabled == 0)
+        
+        # 如果提供了 company_id，则按企业ID筛选
+        if company_id:
+            query = query.filter(ChatModel.company_id == company_id)
+        
+        model_list = query.all()
+        return [ChatModelSchema.model_validate(model).model_dump(by_alias=True) for model in model_list]
 
-    def get_model_by_id(self, model_id: str) -> Optional[ChatModelSchema]:
-        """根据模型ID获取模型配置"""
+    def get_model_by_id(self, model_id: str, company_id: Optional[str] = None) -> Optional[ChatModelSchema]:
+        """根据模型ID获取模型配置，支持按企业ID筛选"""
         try:
-            model = self.db.query(ChatModel).filter(ChatModel.id == model_id, ChatModel.disabled == 0).first()
+            query = self.db.query(ChatModel).filter(
+                ChatModel.id == model_id,
+                ChatModel.disabled == 0
+            )
+            
+            # 如果提供了 company_id，则按企业ID筛选
+            if company_id:
+                query = query.filter(ChatModel.company_id == company_id)
+            
+            model = query.first()
             if model:
                 return ChatModelSchema.model_validate(model)
             return None
@@ -36,11 +52,10 @@ class ChatRepository:
                 logger.error("数据库会话不可用")
                 return False
 
-            # 创建数据库对象 - 使用 model_id 而不是 model_name
             db_chat = ChatHistory(
                 user_id=chat_data.user_id,
-                tenant_id=chat_data.tenant_id,  # 添加租户ID
-                model_id=chat_data.model_id,    # 修改：model_name -> model_id
+                tenant_id=chat_data.tenant_id,
+                model_id=chat_data.model_id,
                 chat_id=chat_data.chat_id,
                 prompt=chat_data.prompt,
                 system_prompt=chat_data.system_prompt,
@@ -160,13 +175,12 @@ class ChatRepository:
             logger.error(f"Failed to delete document {doc_id}: {str(e)}")
             raise
 
-    def get_doc_List(self, user_id: str, tenant_id: Optional[str] = None) -> List[ChatDocSchema]:
+    def get_doc_List(self, user_id: str, directory_id: Optional[str] = None) -> List[ChatDocSchema]:
         query = self.db.query(ChatDocModel).filter(
             ChatDocModel.user_id == user_id,
         )
 
-        if tenant_id:
-            query = query.filter(ChatDocModel.tenant_id == tenant_id)
+        query = query.filter(ChatDocModel.directory_id == directory_id)
 
         doc_list = query.all()
 
@@ -194,7 +208,6 @@ class ChatRepository:
             import uuid
             from datetime import datetime
 
-            # 生成唯一的目录ID
             directory_id = str(uuid.uuid4()).replace("-", "")
 
             db_directory = ChatDocDirectory(
@@ -210,7 +223,6 @@ class ChatRepository:
             self.db.commit()
             self.db.refresh(db_directory)
 
-            # 返回完整的文件夹对象
             return DirectorySchema(
                 id=db_directory.id,
                 user_id=db_directory.user_id,

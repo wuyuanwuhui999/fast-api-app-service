@@ -126,7 +126,7 @@ class TenantsService:
 
         full_data = TenantUserSchema(
             id=str(uuid.uuid4()).replace("-", ""),
-            role_type=0,
+            role=0,
             join_date=datetime.now(),
             tenant_id=tenant_id,
             user_id=user_id,
@@ -149,7 +149,7 @@ class TenantsService:
     async def _check_admin_permission(self, user_id: str) -> bool:
         try:
             tenant_roles = self.tenants_repository.get_tenant_list(user_id)
-            return any(tenant.role_type >= 1 for tenant in tenant_roles)
+            return any(tenant.role >= 1 for tenant in tenant_roles)
         except Exception as e:
             logger.error(f"检查管理员权限失败: {str(e)}", exc_info=True)
             return False
@@ -157,7 +157,7 @@ class TenantsService:
     async def _check_super_admin(self, user_id: str) -> bool:
         try:
             tenant_roles = self.tenants_repository.get_tenant_list(user_id)
-            return any(tenant.role_type == 2 for tenant in tenant_roles)
+            return any(tenant.role == 2 for tenant in tenant_roles)
         except Exception as e:
             logger.error(f"检查超级管理员权限失败: {str(e)}", exc_info=True)
             return False
@@ -167,7 +167,7 @@ class TenantsService:
             tenant_roles = self.tenants_repository.get_tenant_list(user_id)
             for tenant in tenant_roles:
                 if tenant.tenant_id == tenant_id:
-                    return tenant.role_type >= 1
+                    return tenant.role >= 1
             return False
         except Exception as e:
             logger.error(f"检查租户管理员权限失败: {str(e)}", exc_info=True)
@@ -246,7 +246,7 @@ class TenantsService:
             if not tenant_user:
                 return ResultUtil.fail(msg="用户不在该租户中", data=None)
 
-            if tenant_user.role_type == 0:
+            if tenant_user.role == 0:
                 return ResultUtil.fail(msg="用户不是管理员", data=None)
 
             success = self.tenants_repository.delete_admin(tenant_id, user_id)

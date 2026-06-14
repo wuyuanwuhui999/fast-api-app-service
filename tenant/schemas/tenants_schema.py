@@ -12,7 +12,7 @@ class TenantSchema(BaseModel):
     status: int = 1
     create_date: Optional[datetime] = None
     update_date: Optional[datetime] = None
-    role_type: Optional[int] = None
+    role: Optional[int] = None
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -26,7 +26,7 @@ class TenantUserSchema(BaseModel):
     id: str = Field(..., description="主键ID")
     tenant_id: str = Field(..., description="租户ID")
     user_id: str = Field(..., description="用户ID")
-    role_type: int = Field(..., description="角色类型：0-普通用户，1-租户管理员，2-超级管理员")
+    role: int = Field(..., description="角色类型：0-普通用户，1-租户管理员，2-超级管理员")
     join_date: datetime = Field(..., description="加入时间")
     create_by: str = Field(..., description="创建人ID")
     disabled: Optional[int] = None
@@ -56,12 +56,12 @@ class TenantUpdateSchema(BaseModel):
 class TenantUserRoleSchema(BaseModel):
     tenant_id: str
     user_id: str
-    role_type: int = Field(..., ge=0, le=2)
+    role: int = Field(..., ge=0, le=2)
     disabled: bool = False
 
 
 class TenantUserRoleUpdateSchema(BaseModel):
-    role_type: Optional[int] = Field(None, ge=0, le=2)
+    role: Optional[int] = Field(None, ge=0, le=2)
     disabled: Optional[bool] = None
 
 

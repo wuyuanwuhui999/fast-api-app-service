@@ -49,7 +49,7 @@ class ChatHistory(Base):
     id = Column(Integer, primary_key=True, autoincrement=True, comment='主键')
     user_id = Column(String(64), nullable=True, comment='用户id')
     tenant_id = Column(String(255), nullable=True, comment='租户id')
-    model_id = Column(String(64), nullable=True, comment='模型ID')  # 修改：model_name -> model_id
+    model_id = Column(String(64), nullable=True, comment='模型ID')
     files = Column(String(1000), nullable=True, comment='文件')
     chat_id = Column(String(128), nullable=True, comment='会话id')
     prompt = Column(Text, nullable=True, comment='问题')
@@ -73,6 +73,7 @@ class ChatModel(Base):
     api_key = Column(String(255), nullable=True, comment='在线大模型的api_key,ollama本地大模型则为空')
     model_name = Column(String(255), nullable=True, comment='模型名称')
     base_url = Column(String(500), nullable=True, comment='API基础URL')
+    company_id = Column(String(32), nullable=True, comment='企业ID')  # 新增字段
     disabled = Column(Integer, default=0, comment='是否禁用：0启用，1禁用')
     create_time = Column(DateTime, nullable=True, comment='创建时间')
     update_time = Column(DateTime, nullable=True, comment='更新时间')
