@@ -17,7 +17,6 @@ class CompanyModel(Base):
     name = Column(String(100), nullable=False, comment='企业名称')
     code = Column(String(50), nullable=False, unique=True, comment='企业编码')
     description = Column(String(255), comment='企业描述')
-    # logo = Column(String(255), comment='企业Logo')  # 暂时注释，数据库表中没有此字段
     status = Column(SmallInteger, default=1, comment='状态：0-禁用，1-启用')
     create_date = Column(DateTime, nullable=False, default=datetime.now, comment='创建时间')
     update_date = Column(DateTime, onupdate=datetime.now, comment='更新时间')
@@ -35,16 +34,14 @@ class CompanyUserModel(Base):
     }
 
     id = Column(String(32), primary_key=True, comment='主键ID')
-    company_id = Column(String(32), nullable=False, comment='企业ID')
     user_id = Column(String(32), nullable=False, comment='用户ID')
-    role = Column(String(10), nullable=False, default='0', comment='角色：0-普通成员，1-管理员，2-人事，3-企业老板')
+    company_id = Column(String(50), nullable=False, comment='企业ID')
     is_default = Column(SmallInteger, default=0, comment='是否默认企业：0-否，1-是')
+    role = Column(String(50), nullable=True, default='0', comment='在企业中的角色（3：企业老板，2：人事，1:管理员，0：普通成员）')
+    position_id = Column(String(32), nullable=True, comment='职位ID')
     join_date = Column(DateTime, nullable=False, default=datetime.now, comment='加入时间')
-    status = Column(SmallInteger, default=1, comment='状态：0-已移除，1-正常')
+    status = Column(SmallInteger, default=1, comment='状态：0-禁用，1-正常')
     create_by = Column(String(32), nullable=False, comment='创建人ID')
-    create_date = Column(DateTime, nullable=False, default=datetime.now, comment='创建时间')
-    update_by = Column(String(32), comment='更新人ID')
-    update_date = Column(DateTime, onupdate=datetime.now, comment='更新时间')
 
 
 # 导出Base供main.py使用

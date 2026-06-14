@@ -32,28 +32,42 @@ class CompanyService:
             return ResultUtil.fail(msg="获取企业列表失败", data=None)
 
     # ==================== 企业用户管理 ====================
-    
     async def get_company_users(
         self,
         company_id: str,
         page_num: int,
         page_size: int,
-        current_user_id: str
+        current_user_id: str,
+        keyword: Optional[str] = None  # 新增 keyword 参数
     ) -> ResultEntity:
-        """获取企业用户列表（需要企业管理员权限）"""
+        """
+        获取企业用户列表
+        
+        权限要求：当前用户在企业中的 role > 0 才能查询（SQL中EXISTS子查询自动处理）
+        
+        返回数据包含：
+        - 用户基本信息（user_account, username, telephone, email, sex, region, avater, sign）
+        - 职位信息（position_id, position_name）
+        - 部门信息（department_id, department_name）
+        """
         try:
-            # 权限检查：只有企业内的角色>=1的用户才能查看用户列表
-            user_role = self.company_repository.get_user_role_in_company(company_id, current_user_id)
-            if user_role < 1:
-                return ResultUtil.fail(msg="无权查看该企业用户列表", data=None)
-
             # 检查企业是否存在
             if not self.company_repository.check_company_exists(company_id):
                 return ResultUtil.fail(msg="企业不存在", data=None)
 
+            # 查询用户列表（内置权限检查：只有 role > 0 才能查询）
             users, total = self.company_repository.get_company_users_with_pagination(
-                company_id, page_num, page_size
+                company_id, current_user_id, page_num, page_size, keyword
             )
+            
+            # 如果 total == 0，有两种情况：
+            # 1. 用户无权限（角色<=0）
+            # 2. 确实没有用户数据
+            # 为了区分，我们单独检查权限
+            if total == 0:
+                user_role = self.company_repository.get_user_role_in_company(company_id, current_user_id)
+                if user_role <= 0:
+                    return ResultUtil.fail(msg="无权查看该企业用户列表", data=None)
 
             return ResultUtil.success(data=users, total=total)
 
