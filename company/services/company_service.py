@@ -31,7 +31,31 @@ class CompanyService:
             logger.error(f"获取用户企业列表失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg="获取企业列表失败", data=None)
 
-    # ==================== 企业用户管理 ====================
+    async def get_users(
+        self,
+        company_id: str,
+        page_num: int,
+        page_size: int,
+        current_user_id: str,
+        keyword: Optional[str] = None  # 新增 keyword 参数
+    ) -> ResultEntity:
+        """
+        获取系统用户列表
+                
+        返回数据包含：
+        - 用户基本信息（user_account, username, telephone, email, sex, region, avater, sign）
+        """
+        try:
+            users, total = self.company_repository.get_users_with_pagination(
+                company_id, current_user_id, page_num, page_size, keyword
+            )
+
+            return ResultUtil.success(data=users, total=total)
+
+        except Exception as e:
+            logger.error(f"获取系统用户列表失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg="获取用户列表失败", data=None)
+
     async def get_company_users(
         self,
         company_id: str,

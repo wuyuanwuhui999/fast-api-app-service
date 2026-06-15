@@ -1,4 +1,3 @@
-# company/repositories/company_repository.py
 import uuid
 from datetime import datetime
 from typing import List, Optional, Any, Tuple, Dict
@@ -150,8 +149,8 @@ class CompanyRepository:
             offset = (page - 1) * page_size
             
             # 处理搜索关键词（如果为None或空字符串，则跳过搜索条件）
-            has_keyword = keyword and keyword.strip()
-            search_value = keyword.strip() if has_keyword else None
+            keyword = keyword.strip() if keyword is not None else ""
+            search_value = keyword if keyword != '' and keyword is not None else None
             
             # ==================== 查询总数 ====================
             count_sql = """
@@ -168,19 +167,18 @@ class CompanyRepository:
                         AND company_id = :company_id 
                         AND role > 0
                 )
-            """
-            
-            # 如果有搜索关键词，添加搜索条件
-            if has_keyword:
-                count_sql += """
-                AND (
+                AND
+                CASE WHEN :keyword IS NOT NULL AND :keyword != '' THEN 
+                (
                     u.username LIKE CONCAT('%', :keyword, '%')
                     OR u.user_account LIKE CONCAT('%', :keyword, '%')
                     OR u.telephone LIKE CONCAT('%', :keyword, '%')
                     OR u.email LIKE CONCAT('%', :keyword, '%')
                     OR u.id LIKE CONCAT('%', :keyword, '%')
                 )
-                """
+                ELSE 1 = 1
+                END
+            """
             
             total_result = self.db.execute(
                 text(count_sql),
@@ -229,22 +227,17 @@ class CompanyRepository:
                         AND company_id = :company_id 
                         AND role > 0
                 )
-            """
-            
-            # 如果有搜索关键词，添加搜索条件
-            if has_keyword:
-                data_sql += """
-                AND (
-                    u.username LIKE CONCAT('%', :keyword, '%')
-                    OR u.user_account LIKE CONCAT('%', :keyword, '%')
-                    OR u.telephone LIKE CONCAT('%', :keyword, '%')
-                    OR u.email LIKE CONCAT('%', :keyword, '%')
-                    OR u.id LIKE CONCAT('%', :keyword, '%')
-                )
-                """
-            
-            # 排序和分页
-            data_sql += """
+                AND
+                CASE WHEN :keyword IS NOT NULL AND :keyword != '' THEN 
+                    (
+                        u.username LIKE CONCAT('%', :keyword, '%')
+                        OR u.user_account LIKE CONCAT('%', :keyword, '%')
+                        OR u.telephone LIKE CONCAT('%', :keyword, '%')
+                        OR u.email LIKE CONCAT('%', :keyword, '%')
+                        OR u.id LIKE CONCAT('%', :keyword, '%')
+                    )
+                    ELSE 1 = 1
+                END
                 ORDER BY CAST(cu.role AS UNSIGNED) DESC, cu.join_date ASC
                 LIMIT :limit OFFSET :offset
             """
@@ -272,7 +265,7 @@ class CompanyRepository:
                     "avater": row[4],
                     "telephone": row[5],
                     "sex": row[6],
-                    "role": int(row[7]) if row[7] is not None else 0,  # 【修改】转换为整型
+                    "role": int(row[7]) if row[7] is not None else 0,
                     "position_id": row[8],
                     "position_name": row[9],
                     "department_id": row[10],
@@ -290,7 +283,149 @@ class CompanyRepository:
             return users, total
 
         except Exception as e:
-            logger.error(f"查询企业用户列表失败: {str(e)}", exc_info=True)
+            logger.error(f"获取企业用户列表失败: {str(e)}", exc_info=True)
+            return [], 0
+
+    def get_users_with_pagination(
+        self,
+        company_id: str,
+        current_user_id: str,
+        page: int = 1,
+        page_size: int = 10,
+        keyword: Optional[str] = None
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """
+        分页查询用户列表 - 使用原生SQL
+        
+        关联查询：
+        1. user -> company_user (LEFT JOIN)
+        
+        Args:
+            company_id: 企业ID，判断该用户是否在该企业内
+            current_user_id: 当前操作用户ID（用于权限检查）
+            page: 页码，从1开始
+            page_size: 每页数量
+            keyword: 搜索关键词（可选，对username/user_account/telephone/email/id进行模糊匹配）
+        
+        Returns:
+            Tuple[List[Dict], int]: (用户列表, 总记录数)
+        """
+        try:
+            offset = (page - 1) * page_size
+            
+            # 处理搜索关键词（如果为None或空字符串，则跳过搜索条件）
+            keyword = keyword.strip() if keyword is not None else ""
+            search_value = keyword if keyword != '' and keyword is not None else None
+            
+            # ==================== 查询总数 ====================
+            count_sql = """
+                SELECT COUNT(*)
+                FROM user u
+                WHERE u.disabled = 0
+                AND u.role != 'system'
+                AND
+                CASE WHEN :keyword IS NOT NULL AND :keyword != '' THEN 
+                (
+                    u.username LIKE CONCAT('%', :keyword, '%')
+                    OR u.user_account LIKE CONCAT('%', :keyword, '%')
+                    OR u.telephone LIKE CONCAT('%', :keyword, '%')
+                    OR u.email LIKE CONCAT('%', :keyword, '%')
+                    OR u.id LIKE CONCAT('%', :keyword, '%')
+                )
+                ELSE 1 = 1
+                END
+            """
+            
+            total_result = self.db.execute(
+                text(count_sql),
+                {
+                    "keyword": search_value
+                }
+            )
+            total = total_result.scalar() or 0
+            
+            # 如果没有记录，直接返回空列表
+            if total == 0:
+                return [], 0
+            
+            # ==================== 查询数据列表 ====================
+            data_sql = """
+                SELECT
+                    u.id,
+                    u.user_account,
+                    u.username,
+                    u.email,
+                    u.avater,
+                    u.telephone,
+                    u.birthday,
+                    u.sex,
+                    u.sign,
+                    u.region,
+                    u.create_date,
+                    u.update_date,
+                    CASE WHEN cu.user_id IS NOT NULL THEN 1 ELSE 0 END AS checked
+                FROM user u
+                LEFT JOIN company_user cu
+                    ON cu.user_id = u.id
+                    AND cu.company_id = :company_id
+                    AND cu.status = 1
+                WHERE u.disabled = 0
+                AND u.role != 'system'
+                AND
+                CASE WHEN :keyword IS NOT NULL AND :keyword != '' THEN 
+                    (
+                        u.username LIKE CONCAT('%', :keyword, '%')
+                        OR u.user_account LIKE CONCAT('%', :keyword, '%')
+                        OR u.telephone LIKE CONCAT('%', :keyword, '%')
+                        OR u.email LIKE CONCAT('%', :keyword, '%')
+                        OR u.id LIKE CONCAT('%', :keyword, '%')
+                    )
+                    ELSE 1 = 1
+                END
+                ORDER BY u.create_date DESC
+                LIMIT :limit OFFSET :offset
+            """
+            
+            result = self.db.execute(
+                text(data_sql),
+                {
+                    "company_id": company_id,
+                    "keyword": search_value,
+                    "limit": page_size,
+                    "offset": offset
+                }
+            )
+            
+            # 转换为字典列表
+            rows = result.fetchall()
+            users = []
+            for row in rows:
+                user_dict = {
+                    "id": row[0],
+                    "user_account": row[1],
+                    "username": row[2],
+                    "email": row[3],
+                    "avater": row[4],
+                    "telephone": row[5],
+                    "birthday": row[6],
+                    "sex": row[7],
+                    "sign": row[8],
+                    "region": row[9],
+                    "create_date": row[10],
+                    "update_date": row[11],
+                    "checked": row[12]  # 是否已在该企业内
+                }
+                # 处理日期格式
+                if user_dict["create_date"] and hasattr(user_dict["create_date"], 'strftime'):
+                    user_dict["create_date"] = user_dict["create_date"].strftime("%Y-%m-%d %H:%M:%S")
+                if user_dict["update_date"] and hasattr(user_dict["update_date"], 'strftime'):
+                    user_dict["update_date"] = user_dict["update_date"].strftime("%Y-%m-%d %H:%M:%S")
+                users.append(user_dict)
+            
+            return users, total
+
+        except Exception as e:
+            logger.error(f"查询系统用户列表失败: {str(e)}", exc_info=True)
             return [], 0
 
     def add_company_user(

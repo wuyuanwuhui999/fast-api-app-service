@@ -36,6 +36,20 @@ async def get_company_users(
     """获取企业用户列表（需要企业管理员权限）"""
     return await company_service.get_company_users(companyId, pageNum, pageSize, current_user_id, keyword)
 
+
+@router.get("/searchUsers", response_model=ResultEntity)
+async def get_users(
+    companyId: str = Query(..., description="企业ID"),
+    pageNum: int = Query(1, ge=1, description="页码"),
+    pageSize: int = Query(10, ge=1, le=100, description="每页数量"),
+    keyword: Optional[str] = Query(None, description="搜索关键词（用户名/账号/电话/邮箱/ID）"),
+    current_user_id: str = Depends(get_user_id_from_header),
+    company_service: CompanyService = Depends()
+):
+    """获取企业用户列表（需要企业管理员权限）"""
+    return await company_service.get_users(companyId, pageNum, pageSize, current_user_id, keyword)
+
+
 @router.post("/addUser", response_model=ResultEntity)
 async def add_company_user(
     request: AddCompanyUserSchema,
