@@ -18,7 +18,7 @@ def get_user_id_from_header(x_user_id: str = Header(None, alias="X-User-Id")):
 
 @router.get("/getModelList")
 async def get_model_list(
-    companyId: str = Query(None, description="企业ID，可选，用于筛选企业下的模型"),
+    companyId: str = Query(..., description="企业ID，可选，用于筛选企业下的模型"),
     chat_service: ChatService = Depends()
 ):
     return await chat_service.get_model_list(companyId)

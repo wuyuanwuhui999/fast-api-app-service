@@ -56,20 +56,22 @@ class TenantsService:
             if not await self._check_tenant_admin(tenant_id, current_user_id):
                 return ResultUtil.fail(msg="无权查看此租户用户列表", data=None)
 
-            users, total = self.tenants_repository.get_tenant_users_with_pagination(
+            # repository 现在返回包含 user_account 的字典列表
+            users_with_account, total = self.tenants_repository.get_tenant_users_with_pagination(
                 tenant_id, page, page_size
             )
 
+            # 构建包含完整用户信息的返回数据
+            # users_with_account 已经包含了 user_account, username, email, avater 等字段
             user_details = []
-            for tenant_user in users:
-                user = self.tenants_repository.get_user(tenant_user.user_id)
-                if user:
-                    user_details.append({
-                        **tenant_user.model_dump(),
-                        "username": user.username,
-                        "email": user.email,
-                        "avater": user.avater
-                    })
+            for user_data in users_with_account:
+                # 获取用户详细信息（如果 repository 返回的字典中已经包含了所需字段，可以直接使用）
+                user_detail = {
+                    **user_data,
+                    # user_data 已经包含 user_account, username, email, avater
+                    # 如果还需要其他字段，可以从数据库中补充查询
+                }
+                user_details.append(user_detail)
 
             return ResultUtil.success(data=user_details, total=total)
 
@@ -141,7 +143,8 @@ class TenantsService:
                 **db_tenant_user.model_dump(),
                 "username": user.username,
                 "email": user.email,
-                "avater": user.avater
+                "avater": user.avater,
+                "user_account": user.user_account  # 添加 user_account 字段
             })
         else:
             return ResultUtil.fail(msg="该用户已存在", data=None)
@@ -192,7 +195,8 @@ class TenantsService:
                         **user_role.dict(),
                         "username": user.username,
                         "email": user.email,
-                        "avater": user.avater
+                        "avater": user.avater,
+                        "user_account": user.user_account  # 添加 user_account 字段
                     })
 
             return ResultUtil.success(data=user_details)
@@ -220,12 +224,7 @@ class TenantsService:
                 updated_user = self.tenants_repository.get_tenant_user_role(tenant_id, user_id)
                 user_info = self.tenants_repository.get_user_by_id(user_id)
 
-                return ResultUtil.success(data={
-                    **updated_user.model_dump(),
-                    "username": user_info.username,
-                    "email": user_info.email,
-                    "avater": user_info.avater
-                }, msg="设置管理员成功")
+                return ResultUtil.success(data=1, msg="设置管理员成功")
             else:
                 return ResultUtil.fail(msg="设置管理员失败", data=None)
 
@@ -233,7 +232,7 @@ class TenantsService:
             logger.error(f"设置管理员失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg="设置管理员失败", data=None)
 
-    async def delete_admin(self, tenant_id: str, current_user_id: str, user_id: str) -> ResultEntity:
+    async def cancel_admin(self, tenant_id: str, current_user_id: str, user_id: str) -> ResultEntity:
         try:
             if not await self._check_super_admin(current_user_id):
                 return ResultUtil.fail(msg="需要超级管理员权限", data=None)
@@ -249,18 +248,13 @@ class TenantsService:
             if tenant_user.role == 0:
                 return ResultUtil.fail(msg="用户不是管理员", data=None)
 
-            success = self.tenants_repository.delete_admin(tenant_id, user_id)
+            success = self.tenants_repository.cancel_admin(tenant_id, user_id)
 
             if success:
                 updated_user = self.tenants_repository.get_tenant_user_role(tenant_id, user_id)
                 user_info = self.tenants_repository.get_user_by_id(user_id)
 
-                return ResultUtil.success(data={
-                    **updated_user.model_dump(),
-                    "username": user_info.username,
-                    "email": user_info.email,
-                    "avater": user_info.avater
-                }, msg="取消管理员权限成功")
+                return ResultUtil.success(data=1, msg="取消管理员权限成功")
             else:
                 return ResultUtil.fail(msg="取消管理员权限失败", data=None)
 
@@ -280,7 +274,7 @@ class TenantsService:
             )
 
             if success:
-                return ResultUtil.success(msg="用户删除成功", data=True)
+                return ResultUtil.success(msg="用户删除成功", data=1)
             else:
                 return ResultUtil.fail(msg="删除用户失败，请检查权限或用户状态", data=False)
 

@@ -69,8 +69,7 @@ async def update_user_role(
     """
     修改用户在企业中的角色
     权限规则：
-    - role=3（老板）：可修改任何角色
-    - role=2（人事）：可修改 role 0 和 1
+    - role=2（超级管理员）：可修改 role 0 和 1
     - role=1（管理员）：可修改 role 0
     """
     return await company_service.update_user_role(request, current_user_id)

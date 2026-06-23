@@ -24,7 +24,7 @@ class TenantsRepository:
             # 构建查询条件
             conditions = or_(
                 TenantUserModel.user_id == user_id,  # 用户直接所属的租户
-                TenantModel.code == 'public'         # 公开租户
+                TenantModel.code == user_id        # 公开租户
             )
             
             stmt = (
@@ -109,18 +109,31 @@ class TenantsRepository:
             tenant_id: str,
             page: int = 1,
             page_size: int = 10
-    ) -> tuple[List[TenantUserSchema], int]:
-        """获取租户用户列表（分页）- 同步方法"""
+    ) -> tuple[List[Dict[str, Any]], int]:
+        """
+        获取租户用户列表（分页）- 同步方法
+        返回包含用户账号信息的字典列表
+        """
         try:
             offset = (page - 1) * page_size
 
+            # 查询总数
             total_stmt = select(func.count()).select_from(TenantUserModel).where(
                 TenantUserModel.tenant_id == tenant_id
             )
             total = self.db.scalar(total_stmt)
 
+            # 查询租户用户列表，并关联用户表获取 user_account
             stmt = (
-                select(TenantUserModel)
+                select(
+                    TenantUserModel,
+                    UserMode.user_account,
+                    UserMode.username,
+                    UserMode.email,
+                    UserMode.avater,
+                    UserMode.disabled.label('user_disabled')
+                )
+                .join(UserMode, TenantUserModel.user_id == UserMode.id)
                 .where(TenantUserModel.tenant_id == tenant_id)
                 .order_by(TenantUserModel.join_date.desc())
                 .offset(offset)
@@ -128,7 +141,25 @@ class TenantsRepository:
             )
 
             results = self.db.execute(stmt)
-            users = [TenantUserSchema.model_validate(u) for u in results.scalars()]
+            
+            # 构建包含 user_account 的字典列表
+            users = []
+            for row in results:
+                tenant_user, user_account, username, email, avater, user_disabled = row
+                users.append({
+                    'id': tenant_user.id,
+                    'tenant_id': tenant_user.tenant_id,
+                    'user_id': tenant_user.user_id,
+                    'role': tenant_user.role,
+                    'join_date': tenant_user.join_date,
+                    'create_by': tenant_user.create_by,
+                    'disabled': tenant_user.disabled,
+                    'user_account': user_account,
+                    'username': username,
+                    'email': email,
+                    'avater': avater,
+                    'user_disabled': user_disabled
+                })
 
             return users, total
 
@@ -247,7 +278,7 @@ class TenantsRepository:
             self.db.rollback()
             return False
 
-    def delete_admin(self, tenant_id: str, user_id: str) -> bool:
+    def cancel_admin(self, tenant_id: str, user_id: str) -> bool:
         try:
             tenant_user = self.db.query(TenantUserModel).filter(
                 TenantUserModel.tenant_id == tenant_id,

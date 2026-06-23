@@ -1,9 +1,7 @@
-# tenant/routers/tenants_router.py
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from typing import Optional  # 添加这行导入
 from common.utils.result_util import ResultEntity
-from tenant.schemas.tenants_schema import TenantUserRoleUpdateSchema, TenantUpdateSchema, TenantCreateSchema, \
-    TenantAdminUpdateSchema
+from tenant.schemas.tenants_schema import TenantUserRoleUpdateSchema, TenantUpdateSchema, TenantCreateSchema 
 from tenant.services.tenants_service import TenantsService
 
 router = APIRouter(prefix="/service/tenant", tags=["tenant"])
@@ -102,24 +100,26 @@ async def get_tenant_users(
     return await tenants_service.get_tenant_users(tenant_id, current_user_id)
 
 
-@router.post("/addAdmin", response_model=ResultEntity)
+@router.post("/addAdmin/{tenantId}/{userId}", response_model=ResultEntity)
 async def add_admin(
-    tenant_data: TenantAdminUpdateSchema,
+    tenantId: str,
+    userId: str,
     current_user_id: str = Depends(get_user_id_from_header),
     tenants_service: TenantsService = Depends()
 ):
     """设置用户为管理员（需要超级管理员权限）"""
-    return await tenants_service.add_admin(tenant_data.tenantId, current_user_id, tenant_data.userId)
+    return await tenants_service.add_admin(tenantId, current_user_id, userId)
 
 
-@router.delete("/deleteAdmin", response_model=ResultEntity)
-async def delete_admin(
-    tenant_data: TenantAdminUpdateSchema,
+@router.put("/cancelAdmin/{tenantId}/{userId}", response_model=ResultEntity)
+async def cancel_admin(
+    tenantId: str,
+    userId: str,
     current_user_id: str = Depends(get_user_id_from_header),
     tenants_service: TenantsService = Depends()
 ):
     """取消用户的管理员权限（需要超级管理员权限）"""
-    return await tenants_service.delete_admin(tenant_data.tenantId, current_user_id, tenant_data.userId)
+    return await tenants_service.cancel_admin(tenantId, current_user_id, userId)
 
 
 @router.delete("/deleteTenantUser/{tenantId}/{userId}", response_model=ResultEntity)
