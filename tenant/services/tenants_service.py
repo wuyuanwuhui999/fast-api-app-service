@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Optional  # <-- 新增这行导入
 
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -276,7 +277,7 @@ class TenantsService:
 
     # ==================== 新增 search_users 方法 ====================
     
-    async def search_users(
+    async def search_tenant_users(
             self,
             company_id: str,
             tenant_id: str,
@@ -299,7 +300,7 @@ class TenantsService:
         """
         try:
             # 检查当前用户是否有权限查看该企业（企业管理员或租户管理员）
-            # 这里简单检查：用户是否在企业中且角色 > 0，或者用户是否在租户中且角色 >= 1
+            # 这里简单检查：用户是否在企业中且角色 > 0
             from company.repositories.company_repository import CompanyRepository
             company_repo = CompanyRepository(self.tenants_repository.db)
             
@@ -308,7 +309,7 @@ class TenantsService:
                 return ResultUtil.fail(msg="无权查看该企业用户列表", data=None)
 
             # 执行搜索
-            users, total = self.tenants_repository.search_users(
+            users, total = self.tenants_repository.search_tenant_users(
                 company_id=company_id,
                 tenant_id=tenant_id,
                 keyword=keyword,

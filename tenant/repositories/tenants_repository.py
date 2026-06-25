@@ -382,10 +382,8 @@ class TenantsRepository:
             self.db.rollback()
             logger.error(f"删除租户用户失败: {str(e)}")
             return False
-
-    # ==================== 新增 search_users 方法 ====================
     
-    def search_users(
+    def search_tenant_users(
             self,
             company_id: str,
             tenant_id: str,
@@ -471,6 +469,18 @@ class TenantsRepository:
             rows = result.fetchall()
             users = []
             for row in rows:
+                # 安全处理 create_date：支持 datetime 对象和字符串
+                create_date = row[8]
+                if create_date is not None:
+                    if hasattr(create_date, 'strftime'):
+                        # 如果是 datetime 对象，格式化
+                        create_date_str = create_date.strftime("%Y-%m-%d %H:%M:%S")
+                    else:
+                        # 如果是字符串，直接使用
+                        create_date_str = str(create_date)
+                else:
+                    create_date_str = None
+                
                 user_dict = {
                     "id": row[0],
                     "user_account": row[1],
@@ -480,7 +490,7 @@ class TenantsRepository:
                     "avater": row[5],
                     "sex": row[6],
                     "region": row[7],
-                    "create_date": row[8].strftime("%Y-%m-%d %H:%M:%S") if row[8] else None,
+                    "create_date": create_date_str,
                     "checked": row[9]  # 1: 已在租户中, 0: 不在租户中
                 }
                 users.append(user_dict)

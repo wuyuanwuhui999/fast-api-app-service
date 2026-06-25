@@ -82,7 +82,7 @@ async def verify_user(user: UserCreate, user_service: UserService = Depends()):
 
 
 @router.get("/user/searchUsers", response_model=ResultEntity)
-async def search_users(
+async def search_tenant_users(
     keyword: str = Query(..., description="搜索关键词"),
     tenantId: str = Query("", description="租户id"),
     pageNum: int = Query(1, description="页码"),
@@ -90,4 +90,4 @@ async def search_users(
     user_service: UserService = Depends()
 ):
     """模糊查询用户列表"""
-    return await user_service.search_users(keyword, tenantId, (pageNum - 1) * pageSize, pageSize)
+    return await user_service.search_tenant_users(keyword, tenantId, (pageNum - 1) * pageSize, pageSize)

@@ -140,7 +140,7 @@ class UserService:
         user_account_count = self.user_repository.verify_user(user.user_account)
         return ResultUtil.success(data=user_account_count)
 
-    async def search_users(self, keyword: str, tenant_id: str, skip: int = 0,
+    async def search_tenant_users(self, keyword: str, tenant_id: str, skip: int = 0,
                                             limit: int = 100) -> ResultEntity:
         """
         模糊查询用户列表，并标记用户是否在指定租户中
@@ -151,7 +151,7 @@ class UserService:
         :return: 用户列表和总数（包含租户关联标识）
         """
         # 查询用户列表（包含租户标识）
-        users_with_flag = self.user_repository.search_users(keyword, tenant_id, skip, limit)
+        users_with_flag = self.user_repository.search_tenant_users(keyword, tenant_id, skip, limit)
         total = self.user_repository.count_search_users(keyword)
 
         # 构建返回数据

@@ -43,7 +43,7 @@ class UserRepository:
     def get_users(self, skip: int = 0, limit: int = 100) -> list[UserMode]:
         return self.db.query(UserMode).offset(skip).limit(limit).all()
 
-    def search_users(self, keyword: str, tenant_id: str, skip: int = 0, limit: int = 100) -> list:
+    def search_tenant_users(self, keyword: str, tenant_id: str, skip: int = 0, limit: int = 100) -> list:
         """
         模糊查询用户列表，并标记用户是否在指定租户中
         :param keyword: 搜索关键词

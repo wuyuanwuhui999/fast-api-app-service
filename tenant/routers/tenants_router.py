@@ -134,8 +134,8 @@ async def delete_tenant_user(
     return await tenants_service.delete_tenant_user(tenantId, userId, current_user_id)
 
 
-@router.get("/searchUsers", response_model=ResultEntity)
-async def search_users(
+@router.get("/searchTenantUsers", response_model=ResultEntity)
+async def search_tenant_users(
     companyId: str = Query(..., description="企业ID"),
     tenantId: str = Query(..., description="租户ID"),
     keyword: Optional[str] = Query(None, description="搜索关键词（用户名/账号/电话/邮箱）"),
@@ -148,7 +148,7 @@ async def search_users(
     搜索用户列表（支持模糊搜索）
     查询该企业下的所有用户，并标记是否已在该租户中
     """
-    return await tenants_service.search_users(
+    return await tenants_service.search_tenant_users(
         company_id=companyId,
         tenant_id=tenantId,
         keyword=keyword,
