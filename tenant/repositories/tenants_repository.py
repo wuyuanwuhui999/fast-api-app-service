@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import select, delete, func, or_, and_
+from sqlalchemy import select, delete, func, or_, and_, text
 from sqlalchemy.orm import Session, joinedload
 
 from common.models.common_model import UserMode
@@ -108,22 +108,43 @@ class TenantsRepository:
             self,
             tenant_id: str,
             page: int = 1,
-            page_size: int = 10
+            page_size: int = 10,
+            keyword: Optional[str] = None
     ) -> tuple[List[Dict[str, Any]], int]:
         """
         获取租户用户列表（分页）- 同步方法
+        支持根据用户表中的 user_account、username、telephone、email 进行模糊搜索
+        
         返回包含用户账号信息的字典列表
         """
         try:
             offset = (page - 1) * page_size
+            
+            # 处理搜索关键词
+            search_value = keyword.strip() if keyword is not None and keyword.strip() else None
 
             # 查询总数
-            total_stmt = select(func.count()).select_from(TenantUserModel).where(
-                TenantUserModel.tenant_id == tenant_id
+            total_stmt = (
+                select(func.count())
+                .select_from(TenantUserModel)
+                .join(UserMode, TenantUserModel.user_id == UserMode.id)
+                .where(TenantUserModel.tenant_id == tenant_id)
             )
+            
+            # 如果有关键词，添加模糊搜索条件
+            if search_value:
+                total_stmt = total_stmt.where(
+                    or_(
+                        UserMode.user_account.like(f"%{search_value}%"),
+                        UserMode.username.like(f"%{search_value}%"),
+                        UserMode.telephone.like(f"%{search_value}%"),
+                        UserMode.email.like(f"%{search_value}%")
+                    )
+                )
+            
             total = self.db.scalar(total_stmt)
 
-            # 查询租户用户列表，并关联用户表获取 user_account
+            # 查询租户用户列表，并关联用户表获取用户信息
             stmt = (
                 select(
                     TenantUserModel,
@@ -131,7 +152,10 @@ class TenantsRepository:
                     UserMode.username,
                     UserMode.email,
                     UserMode.avater,
-                    UserMode.disabled.label('user_disabled')
+                    UserMode.disabled.label('user_disabled'),
+                    UserMode.telephone,
+                    UserMode.sex,
+                    UserMode.region
                 )
                 .join(UserMode, TenantUserModel.user_id == UserMode.id)
                 .where(TenantUserModel.tenant_id == tenant_id)
@@ -139,13 +163,24 @@ class TenantsRepository:
                 .offset(offset)
                 .limit(page_size)
             )
+            
+            # 如果有关键词，添加模糊搜索条件
+            if search_value:
+                stmt = stmt.where(
+                    or_(
+                        UserMode.user_account.like(f"%{search_value}%"),
+                        UserMode.username.like(f"%{search_value}%"),
+                        UserMode.telephone.like(f"%{search_value}%"),
+                        UserMode.email.like(f"%{search_value}%")
+                    )
+                )
 
             results = self.db.execute(stmt)
             
-            # 构建包含 user_account 的字典列表
+            # 构建包含用户信息的字典列表
             users = []
             for row in results:
-                tenant_user, user_account, username, email, avater, user_disabled = row
+                tenant_user, user_account, username, email, avater, user_disabled, telephone, sex, region = row
                 users.append({
                     'id': tenant_user.id,
                     'tenant_id': tenant_user.tenant_id,
@@ -158,7 +193,10 @@ class TenantsRepository:
                     'username': username,
                     'email': email,
                     'avater': avater,
-                    'user_disabled': user_disabled
+                    'user_disabled': user_disabled,
+                    'telephone': telephone,
+                    'sex': sex,
+                    'region': region
                 })
 
             return users, total
@@ -344,3 +382,145 @@ class TenantsRepository:
             self.db.rollback()
             logger.error(f"删除租户用户失败: {str(e)}")
             return False
+
+    # ==================== 新增 search_users 方法 ====================
+    
+    def search_users(
+            self,
+            company_id: str,
+            tenant_id: str,
+            keyword: Optional[str] = None,
+            page: int = 1,
+            page_size: int = 10
+    ) -> tuple[List[Dict[str, Any]], int]:
+        """
+        搜索用户列表（使用原生SQL）
+        
+        查询该企业下的所有用户，并标记是否已在该租户中
+        
+        Args:
+            company_id: 企业ID
+            tenant_id: 租户ID
+            keyword: 搜索关键词（对 user_account, username, telephone, email 进行模糊搜索）
+            page: 页码
+            page_size: 每页数量
+            
+        Returns:
+            (用户列表, 总数)
+        """
+        try:
+            offset = (page - 1) * page_size
+            
+            # 处理搜索关键词
+            search_value = keyword.strip() if keyword is not None and keyword.strip() else None
+
+            # ==================== 查询记录集 ====================
+            data_sql = """
+                SELECT
+                    u.id,
+                    u.user_account,
+                    u.username,
+                    u.telephone,
+                    u.email,
+                    u.avater,
+                    u.sex,
+                    u.region,
+                    u.create_date,
+                    CASE
+                        WHEN tu.id IS NOT NULL THEN 1
+                        ELSE 0
+                    END AS checked
+                FROM `user` u
+                LEFT JOIN `tenant_user` tu
+                    ON u.id = tu.user_id
+                    AND tu.tenant_id = :tenant_id
+                WHERE
+                    EXISTS (
+                        SELECT 1
+                        FROM `company_user` cu
+                        WHERE cu.user_id = u.id
+                        AND cu.company_id = :company_id
+                        AND cu.status = 1
+                    )
+                    AND u.disabled = 0
+                    AND
+                    CASE WHEN :keyword IS NOT NULL AND :keyword != '' THEN
+                        (
+                            u.user_account LIKE CONCAT('%', :keyword, '%')
+                            OR u.username LIKE CONCAT('%', :keyword, '%')
+                            OR u.telephone LIKE CONCAT('%', :keyword, '%')
+                            OR u.email LIKE CONCAT('%', :keyword, '%')
+                        )
+                        ELSE 1 = 1
+                    END
+                ORDER BY u.create_date DESC
+                LIMIT :limit OFFSET :offset
+            """
+            
+            result = self.db.execute(
+                text(data_sql),
+                {
+                    "company_id": company_id,
+                    "tenant_id": tenant_id,
+                    "keyword": search_value,
+                    "limit": page_size,
+                    "offset": offset
+                }
+            )
+            
+            rows = result.fetchall()
+            users = []
+            for row in rows:
+                user_dict = {
+                    "id": row[0],
+                    "user_account": row[1],
+                    "username": row[2],
+                    "telephone": row[3],
+                    "email": row[4],
+                    "avater": row[5],
+                    "sex": row[6],
+                    "region": row[7],
+                    "create_date": row[8].strftime("%Y-%m-%d %H:%M:%S") if row[8] else None,
+                    "checked": row[9]  # 1: 已在租户中, 0: 不在租户中
+                }
+                users.append(user_dict)
+
+            # ==================== 查询总数 ====================
+            count_sql = """
+                SELECT COUNT(*)
+                FROM `user` u
+                WHERE
+                    EXISTS (
+                        SELECT 1
+                        FROM `company_user` cu
+                        WHERE cu.user_id = u.id
+                        AND cu.company_id = :company_id
+                        AND cu.status = 1
+                    )
+                    AND u.disabled = 0
+                    AND
+                    CASE WHEN :keyword IS NOT NULL AND :keyword != '' THEN
+                        (
+                            u.user_account LIKE CONCAT('%', :keyword, '%')
+                            OR u.username LIKE CONCAT('%', :keyword, '%')
+                            OR u.telephone LIKE CONCAT('%', :keyword, '%')
+                            OR u.email LIKE CONCAT('%', :keyword, '%')
+                        )
+                        ELSE 1 = 1
+                    END
+            """
+            
+            total_result = self.db.execute(
+                text(count_sql),
+                {
+                    "company_id": company_id,
+                    "keyword": search_value
+                }
+            )
+            total = total_result.scalar() or 0
+
+            return users, total
+
+        except Exception as e:
+            logger.error(f"搜索用户列表失败: {str(e)}", exc_info=True)
+            return [], 0

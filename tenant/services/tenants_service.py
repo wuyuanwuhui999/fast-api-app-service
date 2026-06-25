@@ -50,30 +50,22 @@ class TenantsService:
             tenant_id: str,
             page: int,
             page_size: int,
+            keyword: Optional[str],
             current_user_id: str
     ) -> ResultEntity:
+        """
+        获取租户用户列表（分页），支持模糊搜索
+        """
         try:
             if not await self._check_tenant_admin(tenant_id, current_user_id):
                 return ResultUtil.fail(msg="无权查看此租户用户列表", data=None)
 
-            # repository 现在返回包含 user_account 的字典列表
+            # repository 返回包含用户信息的字典列表
             users_with_account, total = self.tenants_repository.get_tenant_users_with_pagination(
-                tenant_id, page, page_size
+                tenant_id, page, page_size, keyword
             )
 
-            # 构建包含完整用户信息的返回数据
-            # users_with_account 已经包含了 user_account, username, email, avater 等字段
-            user_details = []
-            for user_data in users_with_account:
-                # 获取用户详细信息（如果 repository 返回的字典中已经包含了所需字段，可以直接使用）
-                user_detail = {
-                    **user_data,
-                    # user_data 已经包含 user_account, username, email, avater
-                    # 如果还需要其他字段，可以从数据库中补充查询
-                }
-                user_details.append(user_detail)
-
-            return ResultUtil.success(data=user_details, total=total)
+            return ResultUtil.success(data=users_with_account, total=total)
 
         except Exception as e:
             logger.error(f"获取租户用户分页列表失败: {str(e)}", exc_info=True)
@@ -144,7 +136,7 @@ class TenantsService:
                 "username": user.username,
                 "email": user.email,
                 "avater": user.avater,
-                "user_account": user.user_account  # 添加 user_account 字段
+                "user_account": user.user_account
             })
         else:
             return ResultUtil.fail(msg="该用户已存在", data=None)
@@ -196,7 +188,7 @@ class TenantsService:
                         "username": user.username,
                         "email": user.email,
                         "avater": user.avater,
-                        "user_account": user.user_account  # 添加 user_account 字段
+                        "user_account": user.user_account
                     })
 
             return ResultUtil.success(data=user_details)
@@ -281,3 +273,51 @@ class TenantsService:
         except Exception as e:
             logger.error(f"删除租户用户服务错误: {str(e)}")
             return ResultUtil.fail(msg=f"删除用户失败: {str(e)}", data=None)
+
+    # ==================== 新增 search_users 方法 ====================
+    
+    async def search_users(
+            self,
+            company_id: str,
+            tenant_id: str,
+            keyword: Optional[str],
+            page_num: int,
+            page_size: int,
+            current_user_id: str
+    ) -> ResultEntity:
+        """
+        搜索用户列表（支持模糊搜索）
+        查询该企业下的所有用户，并标记是否已在该租户中
+        
+        Args:
+            company_id: 企业ID
+            tenant_id: 租户ID
+            keyword: 搜索关键词
+            page_num: 页码
+            page_size: 每页数量
+            current_user_id: 当前用户ID
+        """
+        try:
+            # 检查当前用户是否有权限查看该企业（企业管理员或租户管理员）
+            # 这里简单检查：用户是否在企业中且角色 > 0，或者用户是否在租户中且角色 >= 1
+            from company.repositories.company_repository import CompanyRepository
+            company_repo = CompanyRepository(self.tenants_repository.db)
+            
+            user_role_in_company = company_repo.get_user_role_in_company(company_id, current_user_id)
+            if user_role_in_company < 1:
+                return ResultUtil.fail(msg="无权查看该企业用户列表", data=None)
+
+            # 执行搜索
+            users, total = self.tenants_repository.search_users(
+                company_id=company_id,
+                tenant_id=tenant_id,
+                keyword=keyword,
+                page=page_num,
+                page_size=page_size
+            )
+
+            return ResultUtil.success(data=users, total=total)
+
+        except Exception as e:
+            logger.error(f"搜索用户列表失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"搜索用户失败: {str(e)}", data=None)

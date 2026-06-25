@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from typing import Optional  # 添加这行导入
+from typing import Optional
 from common.utils.result_util import ResultEntity
 from tenant.schemas.tenants_schema import TenantUserRoleUpdateSchema, TenantUpdateSchema, TenantCreateSchema 
 from tenant.services.tenants_service import TenantsService
@@ -16,7 +16,7 @@ def get_user_id_from_header(x_user_id: str = Header(None, alias="X-User-Id")):
 
 @router.get("/getTenantList", response_model=ResultEntity)
 async def get_tenant_list(
-    companyId: str = Query(..., description="企业ID（必填）"),  # 使用 ... 表示必填
+    companyId: str = Query(..., description="企业ID（必填）"),
     current_user_id: str = Depends(get_user_id_from_header),
     tenants_service: TenantsService = Depends()
 ):
@@ -39,12 +39,13 @@ async def get_tenant_users_with_pagination(
     tenantId: str,
     pageNum: int = 1,
     pageSize: int = 10,
+    keyword: Optional[str] = Query(None, description="搜索关键词（用户名/账号/电话/邮箱）"),
     current_user_id: str = Depends(get_user_id_from_header),
     tenants_service: TenantsService = Depends()
 ):
-    """获取租户用户列表（分页）"""
+    """获取租户用户列表（分页），支持模糊搜索"""
     return await tenants_service.get_tenant_users_with_pagination(
-        tenantId, pageNum, pageSize, current_user_id
+        tenantId, pageNum, pageSize, keyword, current_user_id
     )
 
 
@@ -131,3 +132,27 @@ async def delete_tenant_user(
 ):
     """管理员删除租户"""
     return await tenants_service.delete_tenant_user(tenantId, userId, current_user_id)
+
+
+@router.get("/searchUsers", response_model=ResultEntity)
+async def search_users(
+    companyId: str = Query(..., description="企业ID"),
+    tenantId: str = Query(..., description="租户ID"),
+    keyword: Optional[str] = Query(None, description="搜索关键词（用户名/账号/电话/邮箱）"),
+    pageNum: int = Query(1, ge=1, description="页码"),
+    pageSize: int = Query(10, ge=1, le=100, description="每页数量"),
+    current_user_id: str = Depends(get_user_id_from_header),
+    tenants_service: TenantsService = Depends()
+):
+    """
+    搜索用户列表（支持模糊搜索）
+    查询该企业下的所有用户，并标记是否已在该租户中
+    """
+    return await tenants_service.search_users(
+        company_id=companyId,
+        tenant_id=tenantId,
+        keyword=keyword,
+        page_num=pageNum,
+        page_size=pageSize,
+        current_user_id=current_user_id
+    )
