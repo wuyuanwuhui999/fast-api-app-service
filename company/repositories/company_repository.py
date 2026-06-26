@@ -580,24 +580,54 @@ class CompanyRepository:
 
     # ==================== 部门相关 ====================
 
-    def get_departments_by_company_id(self, company_id: str) -> List[Dict[str, Any]]:
+    def get_departments_by_company_id(
+        self, 
+        company_id: str, 
+        current_user_id: str
+    ) -> List[Dict[str, Any]]:
         """
-        根据公司ID查询所有部门
+        根据公司ID查询所有部门（根据用户角色过滤）
+        
+        权限规则：用户在企业中的角色必须 <= 部门所需的角色
         
         Args:
             company_id: 企业ID
+            current_user_id: 当前登录用户ID
             
         Returns:
-            List[Dict]: 部门列表
+            List[Dict]: 部门列表（不包含 role 字段）
         """
         try:
             from company.models.company_department import CompanyDepartment
+            from company.models.company_model import CompanyUserModel
             
-            departments = self.db.query(CompanyDepartment).filter(
-                CompanyDepartment.company_id == company_id
-            ).order_by(
-                CompanyDepartment.create_time.desc()
-            ).all()
+            # 使用 SQLAlchemy 查询，关联 company_user 表获取用户角色
+            results = (
+                self.db.query(
+                    CompanyDepartment.id,
+                    CompanyDepartment.company_id,
+                    CompanyDepartment.department_name,
+                    CompanyDepartment.description,
+                    CompanyDepartment.create_time
+                    # 注意：不查询 role 字段，不返回给前端
+                )
+                .join(
+                    CompanyUserModel,
+                    CompanyUserModel.company_id == CompanyDepartment.company_id
+                )
+                .filter(
+                    CompanyDepartment.company_id == company_id,
+                    CompanyUserModel.user_id == current_user_id,
+                    CompanyUserModel.status == 1,
+                    # 用户角色必须小于或等于部门所需的角色
+                    CompanyUserModel.role <= CompanyDepartment.role
+                )
+                .order_by(
+                    CompanyDepartment.role.asc(),  # 按角色升序（权限要求低的在前）
+                    CompanyDepartment.create_time.desc()
+                )
+                .all()
+            )
             
             return [
                 {
@@ -606,8 +636,9 @@ class CompanyRepository:
                     "department_name": dept.department_name,
                     "description": dept.description,
                     "create_time": dept.create_time.strftime("%Y-%m-%d %H:%M:%S") if dept.create_time else None
+                    # 不返回 role 字段
                 }
-                for dept in departments
+                for dept in results
             ]
             
         except Exception as e:
