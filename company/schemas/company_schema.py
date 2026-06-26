@@ -101,13 +101,39 @@ class RemoveUserSchema(BaseModel):
     user_id: str = Field(..., description="用户ID")
 
 
-class CompanyListResponse(BaseModel):
-    """公司列表响应"""
-    data: List[CompanySchema]
-    total: int
+# ==================== 部门相关 Schema ====================
+
+class DepartmentSchema(BaseModel):
+    """部门 Schema（响应模型）"""
+    id: str = Field(..., description="部门ID")
+    company_id: str = Field(..., description="所属企业ID", alias="companyId")
+    department_name: str = Field(..., description="部门名称", alias="departmentName")
+    description: Optional[str] = Field(None, description="部门描述")
+    create_time: Optional[datetime] = Field(None, description="创建时间", alias="createTime")
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        json_encoders={
+            datetime: lambda v: v.strftime("%Y-%m-%d %H:%M:%S") if v else None
+        }
+    )
 
 
-class CompanyUserListResponse(BaseModel):
-    """企业用户列表响应"""
-    data: List[CompanyUserDetailSchema]
-    total: int
+# ==================== 职位相关 Schema ====================
+
+class PositionSchema(BaseModel):
+    """职位 Schema（响应模型）"""
+    id: str = Field(..., description="职位ID")
+    position_name: str = Field(..., description="职位名称", alias="positionName")
+    department_id: Optional[str] = Field(None, description="所属部门ID", alias="departmentId")
+    description: Optional[str] = Field(None, description="职位描述")
+    create_time: Optional[datetime] = Field(None, description="创建时间", alias="createTime")
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        json_encoders={
+            datetime: lambda v: v.strftime("%Y-%m-%d %H:%M:%S") if v else None
+        }
+    )

@@ -319,3 +319,56 @@ class CompanyService:
         
         # 根据当前用户角色判断可以设置的新角色
         return self._can_manage_role(current_role, new_role)
+
+
+    # ==================== 部门查询 ====================
+
+    async def get_departments(self, company_id: str) -> ResultEntity:
+        """
+        根据公司ID获取部门列表
+        
+        Args:
+            company_id: 企业ID
+            
+        Returns:
+            ResultEntity: 部门列表
+        """
+        try:
+            if not company_id:
+                return ResultUtil.fail(msg="企业ID不能为空", data=None)
+
+            # 检查企业是否存在
+            if not self.company_repository.check_company_exists(company_id):
+                return ResultUtil.fail(msg="企业不存在", data=None)
+
+            departments = self.company_repository.get_departments_by_company_id(company_id)
+            
+            return ResultUtil.success(data=departments, total=len(departments))
+
+        except Exception as e:
+            logger.error(f"获取部门列表失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"获取部门列表失败: {str(e)}", data=None)
+
+    # ==================== 职位查询 ====================
+
+    async def get_positions(self, department_id: str) -> ResultEntity:
+        """
+        根据部门ID获取职位列表
+        
+        Args:
+            department_id: 部门ID
+            
+        Returns:
+            ResultEntity: 职位列表
+        """
+        try:
+            if not department_id:
+                return ResultUtil.fail(msg="部门ID不能为空", data=None)
+
+            positions = self.company_repository.get_positions_by_department_id(department_id)
+            
+            return ResultUtil.success(data=positions, total=len(positions))
+
+        except Exception as e:
+            logger.error(f"获取职位列表失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"获取职位列表失败: {str(e)}", data=None)

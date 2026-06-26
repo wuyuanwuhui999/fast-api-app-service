@@ -91,7 +91,7 @@ async def websocket_chat(
             pass
 
 
-@router.post("/uploadDoc")
+@router.post("/uploadDoc/{tenantId}/{directoryId}")
 async def upload_doc(
     file: UploadFile,
     directoryId: str = "public",

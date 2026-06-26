@@ -577,3 +577,75 @@ class CompanyRepository:
             CompanyModel.status == 1
         ).first()
         return company is not None
+
+    # ==================== 部门相关 ====================
+
+    def get_departments_by_company_id(self, company_id: str) -> List[Dict[str, Any]]:
+        """
+        根据公司ID查询所有部门
+        
+        Args:
+            company_id: 企业ID
+            
+        Returns:
+            List[Dict]: 部门列表
+        """
+        try:
+            from company.models.company_department import CompanyDepartment
+            
+            departments = self.db.query(CompanyDepartment).filter(
+                CompanyDepartment.company_id == company_id
+            ).order_by(
+                CompanyDepartment.create_time.desc()
+            ).all()
+            
+            return [
+                {
+                    "id": dept.id,
+                    "company_id": dept.company_id,
+                    "department_name": dept.department_name,
+                    "description": dept.description,
+                    "create_time": dept.create_time.strftime("%Y-%m-%d %H:%M:%S") if dept.create_time else None
+                }
+                for dept in departments
+            ]
+            
+        except Exception as e:
+            logger.error(f"查询部门列表失败: {str(e)}", exc_info=True)
+            return []
+
+    # ==================== 职位相关 ====================
+
+    def get_positions_by_department_id(self, department_id: str) -> List[Dict[str, Any]]:
+        """
+        根据部门ID查询所有职位
+        
+        Args:
+            department_id: 部门ID
+            
+        Returns:
+            List[Dict]: 职位列表
+        """
+        try:
+            from company.models.company_position import CompanyPosition
+            
+            positions = self.db.query(CompanyPosition).filter(
+                CompanyPosition.department_id == department_id
+            ).order_by(
+                CompanyPosition.create_time.desc()
+            ).all()
+            
+            return [
+                {
+                    "id": pos.id,
+                    "position_name": pos.position_name,
+                    "department_id": pos.department_id,
+                    "description": pos.description,
+                    "create_time": pos.create_time.strftime("%Y-%m-%d %H:%M:%S") if pos.create_time else None
+                }
+                for pos in positions
+            ]
+            
+        except Exception as e:
+            logger.error(f"查询职位列表失败: {str(e)}", exc_info=True)
+            return []

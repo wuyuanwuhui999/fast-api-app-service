@@ -132,13 +132,7 @@ class TenantsService:
         db_tenant_user = self.tenants_repository.add_tenant_user(full_data)
 
         if db_tenant_user is not None:
-            return ResultUtil.success(data={
-                **db_tenant_user.model_dump(),
-                "username": user.username,
-                "email": user.email,
-                "avater": user.avater,
-                "user_account": user.user_account
-            })
+            return ResultUtil.success(data=1)
         else:
             return ResultUtil.fail(msg="该用户已存在", data=None)
 

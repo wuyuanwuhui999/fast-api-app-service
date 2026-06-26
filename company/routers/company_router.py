@@ -83,3 +83,20 @@ async def remove_company_user(
 ):
     """从企业移除用户（需要企业管理员权限）"""
     return await company_service.remove_company_user(request, current_user_id)
+
+@router.get("/getDepartments", response_model=ResultEntity)
+async def get_departments(
+    companyId: str = Query(..., description="企业ID"),
+    company_service: CompanyService = Depends()
+):
+    """根据企业ID获取部门列表"""
+    return await company_service.get_departments(companyId)
+
+
+@router.get("/getPositions", response_model=ResultEntity)
+async def get_positions(
+    departmentId: str = Query(..., description="部门ID"),
+    company_service: CompanyService = Depends()
+):
+    """根据部门ID获取职位列表"""
+    return await company_service.get_positions(departmentId)
