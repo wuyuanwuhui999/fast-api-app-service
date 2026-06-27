@@ -320,15 +320,21 @@ class CompanyService:
         # 根据当前用户角色判断可以设置的新角色
         return self._can_manage_role(current_role, new_role)
 
-
     # ==================== 部门查询 ====================
 
-    async def get_departments(self, company_id: str) -> ResultEntity:
+    async def get_departments(
+        self, 
+        company_id: str, 
+        current_user_id: str
+    ) -> ResultEntity:
         """
-        根据公司ID获取部门列表
+        根据公司ID获取部门列表（根据用户角色过滤）
+        
+        权限规则：用户在企业中的角色必须 <= 部门所需的角色
         
         Args:
             company_id: 企业ID
+            current_user_id: 当前登录用户ID
             
         Returns:
             ResultEntity: 部门列表
@@ -341,14 +347,24 @@ class CompanyService:
             if not self.company_repository.check_company_exists(company_id):
                 return ResultUtil.fail(msg="企业不存在", data=None)
 
-            departments = self.company_repository.get_departments_by_company_id(company_id)
+            # 检查用户是否在该企业中
+            user_role = self.company_repository.get_user_role_in_company(
+                company_id, current_user_id
+            )
+            if user_role < 0:
+                return ResultUtil.fail(msg="用户不在该企业中", data=None)
+
+            # 传入 current_user_id 参数
+            departments = self.company_repository.get_departments_by_company_id(
+                company_id, 
+                current_user_id  # 这里传入当前用户ID
+            )
             
             return ResultUtil.success(data=departments, total=len(departments))
 
         except Exception as e:
             logger.error(f"获取部门列表失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg=f"获取部门列表失败: {str(e)}", data=None)
-
     # ==================== 职位查询 ====================
 
     async def get_positions(self, department_id: str) -> ResultEntity:

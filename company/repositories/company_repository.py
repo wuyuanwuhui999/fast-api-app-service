@@ -620,7 +620,7 @@ class CompanyRepository:
                     CompanyUserModel.user_id == current_user_id,
                     CompanyUserModel.status == 1,
                     # 用户角色必须小于或等于部门所需的角色
-                    CompanyUserModel.role <= CompanyDepartment.role
+                    CompanyUserModel.role >= CompanyDepartment.role
                 )
                 .order_by(
                     CompanyDepartment.role.asc(),  # 按角色升序（权限要求低的在前）

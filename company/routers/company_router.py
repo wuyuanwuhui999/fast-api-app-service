@@ -87,10 +87,15 @@ async def remove_company_user(
 @router.get("/getDepartments", response_model=ResultEntity)
 async def get_departments(
     companyId: str = Query(..., description="企业ID"),
+    current_user_id: str = Depends(get_user_id_from_header),  # 从网关透传的Header获取
     company_service: CompanyService = Depends()
 ):
-    """根据企业ID获取部门列表"""
-    return await company_service.get_departments(companyId)
+    """
+    根据企业ID获取部门列表（根据用户角色过滤）
+    
+    权限规则：用户在企业中的角色必须 <= 部门所需的角色
+    """
+    return await company_service.get_departments(companyId, current_user_id)  # 传递 current_user_id
 
 
 @router.get("/getPositions", response_model=ResultEntity)
