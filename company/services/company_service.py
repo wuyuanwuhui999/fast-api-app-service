@@ -110,18 +110,18 @@ class CompanyService:
         """
         try:
             # 检查企业是否存在
-            if not self.company_repository.check_company_exists(request.company_id):
+            if not self.company_repository.check_company_exists(request.companyId):
                 return ResultUtil.fail(msg="企业不存在", data=None)
 
             # 权限检查
             current_user_role = self.company_repository.get_user_role_in_company(
-                request.company_id, current_user_id
+                request.companyId, current_user_id
             )
             if current_user_role < 1:
                 return ResultUtil.fail(msg="无权添加企业用户", data=None)
 
             # 检查目标用户是否存在
-            target_user = self.company_repository.get_user_by_id(request.user_id)
+            target_user = self.company_repository.get_user_by_id(request.userId)
             if not target_user:
                 return ResultUtil.fail(msg="目标用户不存在", data=None)
 
@@ -135,8 +135,8 @@ class CompanyService:
 
             # 添加用户到企业
             result = self.company_repository.add_company_user(
-                request.company_id,
-                request.user_id,
+                request.companyId,
+                request.userId,
                 request.role,
                 current_user_id
             )

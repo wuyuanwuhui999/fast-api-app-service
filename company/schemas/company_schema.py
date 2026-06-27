@@ -79,13 +79,12 @@ class CompanyUserDetailSchema(BaseModel):
         }
     )
 
-
 class AddCompanyUserSchema(BaseModel):
     """添加企业用户请求Schema"""
-    company_id: str = Field(..., description="企业ID")
-    user_id: str = Field(..., description="用户ID")
-    role: str = Field(default="0", description="角色：0-普通成员，1-管理员，2-人事，3-企业老板")
-    position_id: Optional[str] = Field(default=None, description="职位ID")
+    companyId: str = Field(..., description="企业ID")
+    userId: str = Field(..., description="用户ID")
+    role: int = Field(default=0, alias="role", description="角色：0-普通成员，1-管理员，2-超级管理员")
+    positionId: Optional[str] = Field(default=None, description="职位ID")
 
 
 class UpdateUserRoleSchema(BaseModel):
