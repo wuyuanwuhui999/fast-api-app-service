@@ -16,5 +16,5 @@ class CompanyDepartment(Base):
     company_id = Column(String(50), nullable=False, comment='所属企业ID')
     department_name = Column(String(50), nullable=False, comment='部门名称')
     description = Column(String(255), nullable=True, comment='部门描述')
-    role = Column(Integer, nullable=False, default=0, comment='查看部门所需的最低角色权限：0-普通成员，1-管理员，2-人事，3-企业老板')
+    role = Column(Integer, nullable=False, default=0, comment='查看部门所需的最低角色权限：0-普通成员，1-管理员，2-超级管理员')
     create_time = Column(DateTime, nullable=False, server_default=func.now(), comment='创建时间')
