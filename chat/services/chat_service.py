@@ -58,12 +58,12 @@ class ChatService:
         logger.info(f"[ChatService] user_id={user_id}")
         logger.info(f"[ChatService] chatId={chat_params.chatId}")
         logger.info(f"[ChatService] modelId={chat_params.modelId}")
-        logger.info(f"[ChatService] tenant_id={chat_params.tenant_id}")
+        logger.info(f"[ChatService] tenant_id={chat_params.tenantId}")
         logger.info(f"[ChatService] prompt={chat_params.prompt[:50] if chat_params.prompt else 'None'}...")
         
         chat_entity = ChatSchema(
             user_id=user_id,
-            tenant_id=chat_params.tenant_id,
+            tenant_id=chat_params.tenantId,
             files=None,
             chat_id=chat_params.chatId,
             prompt=chat_params.prompt,
@@ -80,7 +80,7 @@ class ChatService:
             # 从数据库获取模型配置（传入 tenant_id 作为 company_id 筛选条件）
             model_config = self.chat_repository.get_model_by_id(
                 chat_params.modelId, 
-                company_id=chat_params.tenant_id
+                company_id=chat_params.tenantId
             )
             if not model_config:
                 logger.error(f"[ChatService] 未找到模型配置: {chat_params.modelId}")
@@ -122,7 +122,7 @@ class ChatService:
                     chat_params.prompt,
                     user_id,
                     chat_params.directoryId,
-                    tenant_id=chat_params.tenant_id
+                    tenant_id=chat_params.tenantId
                 )
                 logger.info(f"[ChatService] 查询到相关文档：{context}")
 
