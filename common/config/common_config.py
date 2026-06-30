@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     nacos_namespace: str = ""
     nacos_username: str = "nacos"
     nacos_password: str = "nacos"
+
+    elasticsearch_host: str = "http://localhost:9200"
+    elasticsearch_index: str = "chat_vector_index"
+    embedding_model: str = "nomic-embed-text:latest"
     
     # 服务配置
     enable_nacos: bool = True  # 是否启用Nacos注册
