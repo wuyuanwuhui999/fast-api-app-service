@@ -3,7 +3,7 @@ import uuid
 import logging
 from datetime import datetime, timedelta
 from typing import List, Any, AsyncGenerator, Optional
-
+import json
 from fastapi import UploadFile, HTTPException, Depends
 from langchain_community.chat_models import ChatOpenAI
 from sqlalchemy.orm import Session
@@ -25,6 +25,9 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from io import BytesIO
 from chat.schemas.chat_schema import DirectorySchema
 
+# 新增：直接导入 Elasticsearch 客户端
+from elasticsearch import Elasticsearch
+
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
@@ -39,6 +42,13 @@ class ChatService:
             index_name="chat_vector_index",
             embedding=OllamaEmbeddings(model="nomic-embed-text:latest")
         )
+
+        # 新增：创建原生 Elasticsearch 客户端，用于执行自定义 DSL 查询
+        self.es_client = Elasticsearch(
+            hosts=["http://localhost:9200"],
+            request_timeout=30
+        )
+        self.embedding_model = OllamaEmbeddings(model="nomic-embed-text:latest")
 
         self.redis = redis.Redis.from_url(settings.redis_url)
         self.upload_dir = settings.UPLOAD_DIR
@@ -257,48 +267,254 @@ class ChatService:
             logger.error(f"后台保存聊天记录失败: {str(e)}", exc_info=True)
 
     async def build_context(self, query: str, user_id: str, directory_id: str, tenant_id: str = None) -> str:
-        """构建文档上下文"""
+        """
+        构建文档上下文 - 使用原生 Elasticsearch DSL 查询
+        
+        支持 Elasticsearch 7.x 和 8.x 版本
+        """
         try:
-            filters = {
-                "user_id": user_id,
-                "directory_id": directory_id,
-                "tenant_id": tenant_id
-            }
+            # 1. 获取 Elasticsearch 版本信息
+            info = self.es_client.info()
+            es_version = info.get('version', {}).get('number', '8.0.0')
+            logger.info(f"[ChatService] Elasticsearch 版本: {es_version}")
+            
+            # 解析主版本号
+            major_version = int(es_version.split('.')[0]) if es_version else 8
+            
+            # 2. 生成查询向量
+            logger.info(f"[ChatService] 生成查询向量: {query[:50]}...")
+            query_embedding = self.embedding_model.embed_query(query)
+            
+            if not query_embedding:
+                logger.error("[ChatService] 生成查询向量失败")
+                return ""
+            
+            logger.info(f"[ChatService] 查询向量维度: {len(query_embedding)}")
+            logger.info(f"[ChatService] 查询向量前5个值: {query_embedding[:5]}")
 
-            valid_filters = {k: v for k, v in filters.items() if v is not None and v != ""}
+            # 3. 构建过滤条件
+            must_conditions = []
+            
+            if user_id:
+                must_conditions.append({"term": {"metadata.user_id": user_id}})
+                logger.info(f"[ChatService] 添加用户过滤条件: user_id={user_id}")
+            
+            if directory_id and directory_id != "default":
+                must_conditions.append({"term": {"metadata.directory_id": directory_id}})
+                logger.info(f"[ChatService] 添加目录过滤条件: directory_id={directory_id}")
+            
+            if tenant_id:
+                must_conditions.append({"term": {"metadata.tenant_id": tenant_id}})
+                logger.info(f"[ChatService] 添加租户过滤条件: tenant_id={tenant_id}")
 
-            filter_query = [{"term": {f"metadata.{key}": value}} for key, value in
-                            valid_filters.items()] if valid_filters else []
+            # 4. 检查索引是否存在
+            index_name = "chat_vector_index"
+            
+            # 列出所有索引以便调试
+            all_indices = self.es_client.indices.get_alias(index="*")
+            logger.info(f"[ChatService] 所有索引: {list(all_indices.keys())}")
+            
+            if not self.es_client.indices.exists(index=index_name):
+                logger.warning(f"[ChatService] 索引 {index_name} 不存在")
+                return ""
+            
+            # 获取索引映射，确认向量字段名
+            mapping = self.es_client.indices.get_mapping(index=index_name)
+            logger.info(f"[ChatService] 索引映射: {mapping}")
+            
+            # 确定向量字段名（从映射中获取，默认为 "vector"）
+            vector_field = "vector"
+            text_field = "text"
+            try:
+                properties = mapping.get(index_name, {}).get('mappings', {}).get('properties', {})
+                logger.info(f"[ChatService] 索引字段: {list(properties.keys())}")
+                
+                # 查找 dense_vector 类型的字段
+                for field_name, field_config in properties.items():
+                    if field_config.get('type') == 'dense_vector':
+                        vector_field = field_name
+                        logger.info(f"[ChatService] 找到向量字段: {vector_field}")
+                        break
+                
+                # 查找 text 字段
+                if 'text' in properties:
+                    text_field = 'text'
+                elif 'content' in properties:
+                    text_field = 'content'
+                logger.info(f"[ChatService] 使用文本字段: {text_field}")
+                
+            except Exception as e:
+                logger.warning(f"[ChatService] 无法解析映射，使用默认字段: {str(e)}")
 
-            results = self.elasticsearch_store.similarity_search(
-                query,
-                filters=filter_query if filter_query else None
-            )
+            # ========== Elasticsearch 7.x 使用 script_score ==========
+            if major_version <= 7:
+                logger.info("[ChatService] 使用 Elasticsearch 7.x script_score 查询")
+                
+                # 构建查询
+                query_body = {
+                    "size": 5,
+                    "query": {
+                        "script_score": {
+                            "query": {
+                                "bool": {}
+                            },
+                            "script": {
+                                "source": f"cosineSimilarity(params.query_vector, '{vector_field}') + 1.0",
+                                "params": {
+                                    "query_vector": query_embedding
+                                }
+                            }
+                        }
+                    },
+                    "_source": [text_field, "metadata.filename", "metadata.page", 
+                                "metadata.user_id", "metadata.directory_id", 
+                                "metadata.tenant_id", "metadata.doc_id"]
+                }
+                
+                # 如果有过滤条件，添加到 bool 查询中
+                if must_conditions:
+                    query_body["query"]["script_score"]["query"]["bool"]["must"] = must_conditions
+                else:
+                    # 没有过滤条件时，匹配所有文档
+                    query_body["query"]["script_score"]["query"]["bool"]["must"] = [{"match_all": {}}]
+                
+                logger.info(f"[ChatService] 查询语句: {json.dumps(query_body, indent=2, default=str)}")
+                
+                response = self.es_client.search(
+                    index=index_name,
+                    body=query_body
+                )
+
+            # ========== Elasticsearch 8.x 使用 knn ==========
+            else:
+                logger.info("[ChatService] 使用 Elasticsearch 8.x knn 查询")
+                
+                # 构建 knn 查询
+                knn_query = {
+                    "field": vector_field,
+                    "query_vector": query_embedding,
+                    "k": 5,
+                    "num_candidates": 20
+                }
+                
+                # 如果有过滤条件，添加到 knn 查询中
+                if must_conditions:
+                    knn_query["filter"] = must_conditions
+                
+                query_body = {
+                    "knn": knn_query,
+                    "size": 5,
+                    "_source": [text_field, "metadata.filename", "metadata.page", 
+                                "metadata.user_id", "metadata.directory_id", 
+                                "metadata.tenant_id", "metadata.doc_id"]
+                }
+                
+                logger.info(f"[ChatService] 查询语句: {json.dumps(query_body, indent=2, default=str)}")
+                
+                response = self.es_client.search(
+                    index=index_name,
+                    body=query_body
+                )
+
+            # 5. 记录查询结果详情
+            total_hits = response.get('hits', {}).get('total', {})
+            if isinstance(total_hits, dict):
+                total_count = total_hits.get('value', 0)
+            else:
+                total_count = total_hits
+            
+            logger.info(f"[ChatService] 查询总命中数: {total_count}")
+            
+            hits = response.get('hits', {}).get('hits', [])
+            logger.info(f"[ChatService] 返回结果数: {len(hits)}")
+
+            # 6. 解析结果
+            results = []
+            for idx, hit in enumerate(hits):
+                source = hit.get("_source", {})
+                metadata = source.get("metadata", {})
+                score = hit.get("_score", 0)
+                
+                logger.info(f"[ChatService] 结果 #{idx+1}: score={score}, filename={metadata.get('filename', 'unknown')}")
+                
+                results.append(Document(
+                    page_content=source.get(text_field, ""),
+                    metadata={
+                        "filename": metadata.get("filename", "unknown"),
+                        "page": metadata.get("page", 0),
+                        "user_id": metadata.get("user_id", ""),
+                        "directory_id": metadata.get("directory_id", ""),
+                        "tenant_id": metadata.get("tenant_id", ""),
+                        "doc_id": metadata.get("doc_id", ""),
+                        "score": score
+                    }
+                ))
 
             if not results:
                 logger.info(f"[ChatService] 未找到相关文档")
                 return ""
 
+            # 7. 构建上下文文本
             context_parts = []
-            for doc in results:
+            for doc in results[:5]:
                 source_info = f"From {doc.metadata.get('filename', 'unknown')}"
-                if 'page' in doc.metadata:
+                if doc.metadata.get('page'):
                     source_info += f" (page {doc.metadata['page']})"
+                if doc.metadata.get('score'):
+                    source_info += f" [score: {doc.metadata['score']:.2f}]"
 
+                content_preview = doc.page_content[:100] + "..." if len(doc.page_content) > 100 else doc.page_content
+                logger.info(f"[ChatService] 文档内容预览: {content_preview}")
+                
                 context_parts.append(f"{source_info}:\n{doc.page_content}\n")
 
             context = "\n".join(context_parts)
 
+            # 限制上下文长度
             max_length = 3000
             if len(context) > max_length:
                 context = context[:max_length] + "... [truncated]"
 
-            logger.info(f"[ChatService] 找到 {len(results)} 个相关文档，上下文长度: {len(context)}")
+            logger.info(f"[ChatService] 上下文长度: {len(context)}")
             return context
 
         except Exception as e:
-            logger.error(f"Error building context from documents: {str(e)}", exc_info=True)
-            return ""
+            logger.error(f"构建文档上下文失败: {str(e)}", exc_info=True)
+            
+            # 降级方案：尝试使用 langchain_elasticsearch
+            try:
+                logger.info("[ChatService] 尝试使用 langchain_elasticsearch 降级方案...")
+                filters = {
+                    "user_id": user_id,
+                    "directory_id": directory_id,
+                    "tenant_id": tenant_id
+                }
+                valid_filters = {k: v for k, v in filters.items() if v is not None and v != ""}
+                filter_query = [{"term": {f"metadata.{key}": value}} for key, value in valid_filters.items()] if valid_filters else []
+
+                results = self.elasticsearch_store.similarity_search(
+                    query,
+                    filters=filter_query if filter_query else None
+                )
+                
+                if not results:
+                    return ""
+                
+                context_parts = []
+                for doc in results[:5]:
+                    source_info = f"From {doc.metadata.get('filename', 'unknown')}"
+                    if 'page' in doc.metadata:
+                        source_info += f" (page {doc.metadata['page']})"
+                    context_parts.append(f"{source_info}:\n{doc.page_content}\n")
+                
+                context = "\n".join(context_parts)
+                if len(context) > 3000:
+                    context = context[:3000] + "... [truncated]"
+                return context
+                
+            except Exception as fallback_error:
+                logger.error(f"降级方案也失败: {str(fallback_error)}")
+                return ""
 
     def process_text_content(
             self,

@@ -3,7 +3,7 @@ from PIL import Image, ImageDraw
 import math
 
 
-def create_image_collage(folder_path, output_path, columns=4, margin=10, corner_radius=10, background_color='#CCCCCC'):
+def create_image_collage(folder_path, output_path, columns=4, margin=10, corner_radius=10, background_color='#ffffff'):
     """
     将指定文件夹下的所有图片拼接成一张大图
 
@@ -119,7 +119,7 @@ def create_image_collage(folder_path, output_path, columns=4, margin=10, corner_
 # 使用示例
 if __name__ == "__main__":
     # 指定图片文件夹路径和输出路径
-    input_folder = "F:/uniapp/新建文件夹"  # 请替换为您的图片文件夹路径
+    input_folder = "/Users/wuwenqiang/Documents/linshi"  # 请替换为您的图片文件夹路径
     output_file = "collage_result.png"  # 输出文件名
 
     # 创建图片拼接
@@ -129,7 +129,7 @@ if __name__ == "__main__":
         columns=4,  # 4列
         margin=10,  # 10像素边距
         corner_radius=10,  # 10像素圆角
-        background_color='#CCCCCC'  # 灰色背景
+        background_color='#cccccc'  # 灰色背景
     )
 
     # 如果需要显示图片（可选）

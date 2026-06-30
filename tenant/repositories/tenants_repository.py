@@ -1,3 +1,4 @@
+# tenant/repositories/tenants_repository.py
 import uuid
 from datetime import datetime
 
@@ -22,18 +23,24 @@ class TenantsRepository:
             from sqlalchemy import or_
             
             # 构建查询条件
-            conditions = or_(
-                TenantUserModel.user_id == user_id,  # 用户直接所属的租户
-                TenantModel.code == user_id        # 公开租户
-            )
-            
+            # 查询用户直接所属的租户 或 公开租户（code == user_id）
             stmt = (
                 select(TenantModel, TenantUserModel.role)
                 .outerjoin(
                     TenantUserModel,
-                    TenantModel.id == TenantUserModel.tenant_id
+                    and_(
+                        TenantModel.id == TenantUserModel.tenant_id,
+                        TenantUserModel.user_id == user_id
+                    )
                 )
-                .where(conditions)
+                .where(
+                    or_(
+                        # 用户直接所属的租户（通过 tenant_user 关联）
+                        TenantUserModel.user_id == user_id,
+                        # 公开租户（code == user_id）
+                        TenantModel.code == user_id
+                    )
+                )
                 .distinct()
             )
             
@@ -44,8 +51,10 @@ class TenantsRepository:
             results = self.db.execute(stmt)
             
             result = []
-            for idx, (tenant, role) in enumerate(results):
+            for tenant, role in results:
                 tenant_schema = TenantSchema.model_validate(tenant)
+                # role: 从 tenant_user 表查询到的角色，如果没有关联则为 None
+                # 对于公开租户（code == user_id），如果没有在 tenant_user 表中，role 为 None
                 tenant_schema.role = role if role is not None else 0
                 result.append(tenant_schema)
 
