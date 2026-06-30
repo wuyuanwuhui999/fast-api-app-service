@@ -1,3 +1,4 @@
+# chat/schemas/chat_schema.py
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List
@@ -48,12 +49,13 @@ class ChatParamsEntity(BaseModel):
     """WebSocket消息参数 - 通过send方法传递"""
     prompt: str
     systemPrompt: Optional[str] = None
-    directoryId: str = "default"
+    docIds: Optional[List[str]] = None  # 新增：文档ID列表，前端字段名为 docIds
     chatId: str
     modelId: str
     showThink: bool = False
     type: Optional[str] = None
     language: Optional[str] = None
+    companyId:str
     tenantId: Optional[str] = None
 
 
@@ -97,7 +99,7 @@ class ChatModelSchema(BaseModel):
 
 class ChatDocSchema(BaseModel):
     id: str
-    directory_id: Optional[str] = None
+    doc_id: Optional[str] = None
     name: Optional[str] = None
     ext: Optional[str] = None
     user_id: Optional[str] = None

@@ -27,11 +27,13 @@ logger = logging.getLogger(__name__)
 # ============================================================
 WS_URL = "ws://127.0.0.1:4006/service/chat/ws/chat"
 USER_ID = "e991bfe7598e4ebeab3dd4af9b7d09b0"
-MODEL_ID = "99d65a143a5811f199fe79c369c29396"
+DOC_IDS = ["9a72ee044fc548d4af858155b2c8307b"]
+MODEL_ID = "34b62e2a978811f09e6f002b67a509e7"
+COMPANY_ID = "0d3cc1965bd811f18f407875e005753f"
 CHAT_ID = "8fc434f0747e11f18f407875e005753f"  # 不提供则自动生成
-DIRECTORY_ID = "f2005f9277d1455cb0e5c4247e17f9b8"
+DIRECTORY_ID = "e3361de7abe341778aa9e0ff0691aa25"
 TENANT_ID = "f96f89c075d611f0be3b002b67a509e7"
-PROMPT = "投保人需要满足哪些条件？"
+PROMPT = "保险单号"
 CHAT_TYPE = "document"  # document: 文档问答, normal: 普通聊天
 SHOW_THINK = False  # 是否显示思考过程
 SYSTEM_PROMPT = "你是一个专业的保险知识助手，请根据提供的文档内容回答问题。"
@@ -77,10 +79,11 @@ async def test_chat_websocket():
         message = {
             "prompt": PROMPT,
             "type": CHAT_TYPE,
-            "directoryId": DIRECTORY_ID,
+            "docIds": DOC_IDS,
             "chatId": chat_id,
             "modelId": MODEL_ID,
             "showThink": SHOW_THINK,
+            "companyId": COMPANY_ID,
             "tenantId": TENANT_ID
         }
         

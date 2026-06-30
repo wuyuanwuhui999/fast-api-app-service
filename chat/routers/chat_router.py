@@ -1,3 +1,4 @@
+# chat/routers/chat_router.py
 from fastapi import APIRouter, Depends, UploadFile, Header, HTTPException, WebSocket, WebSocketDisconnect, Query
 from chat.schemas.chat_schema import ChatParamsEntity, CreateDirectoryShema
 from chat.services.chat_service import ChatService
@@ -56,17 +57,22 @@ async def websocket_chat(
                 else:
                     chat_params_data = data
                 
+                # 提取 docIds 数组（前端字段名为 docIds）
+                doc_ids = chat_params_data.get("docIds", [])
+                if doc_ids and not isinstance(doc_ids, list):
+                    doc_ids = [doc_ids] if isinstance(doc_ids, str) else []
+                
                 chat_params = ChatParamsEntity(
                     prompt=chat_params_data.get("prompt", ""),
                     systemPrompt=chat_params_data.get("systemPrompt", None),
-                    directoryId=chat_params_data.get("directoryId", "default"),
+                    docIds=doc_ids,  # 传入文档ID列表
                     chatId=chat_params_data.get("chatId", ""),
-                    token="",
                     modelId=chat_params_data.get("modelId", ""),
                     showThink=chat_params_data.get("showThink", False),
                     type=chat_params_data.get("type", None),
-                    language=chat_params_data.get("language", None),
-                    tenant_id=chat_params_data.get("tenant_id", None)
+                    language= chat_params_data.get("language", None),
+                    companyId = chat_params_data.get("companyId", None),
+                    tenantId=chat_params_data.get("tenantId", None)
                 )
                 
                 async for response in chat_service.chat_with_websocket(user_id, chat_params):

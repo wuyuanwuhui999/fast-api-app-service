@@ -1,3 +1,4 @@
+# chat/services/chat_service.py
 import asyncio
 import uuid
 import logging
@@ -59,11 +60,13 @@ class ChatService:
         logger.info(f"[ChatService] chatId={chat_params.chatId}")
         logger.info(f"[ChatService] modelId={chat_params.modelId}")
         logger.info(f"[ChatService] tenant_id={chat_params.tenantId}")
+        logger.info(f"[ChatService] docIds={chat_params.docIds}")
         logger.info(f"[ChatService] prompt={chat_params.prompt[:50] if chat_params.prompt else 'None'}...")
         
         chat_entity = ChatSchema(
             user_id=user_id,
             tenant_id=chat_params.tenantId,
+            company_id = chat_params.companyId,
             files=None,
             chat_id=chat_params.chatId,
             prompt=chat_params.prompt,
@@ -80,7 +83,7 @@ class ChatService:
             # 从数据库获取模型配置（传入 tenant_id 作为 company_id 筛选条件）
             model_config = self.chat_repository.get_model_by_id(
                 chat_params.modelId, 
-                company_id=chat_params.tenantId
+                company_id=chat_params.companyId
             )
             if not model_config:
                 logger.error(f"[ChatService] 未找到模型配置: {chat_params.modelId}")
@@ -118,16 +121,17 @@ class ChatService:
 
             prompt = chat_params.prompt
             if chat_params.type == "document":
+                # 使用 docIds 数组调用 build_context
                 context = await self.build_context(
-                    chat_params.prompt,
-                    user_id,
-                    chat_params.directoryId,
+                    query=chat_params.prompt,
+                    user_id=user_id,
+                    doc_ids=chat_params.docIds,  # 传入文档ID列表
                     tenant_id=chat_params.tenantId
                 )
-                logger.info(f"[ChatService] 查询到相关文档：{context}")
+                logger.info(f"[ChatService] 查询到相关文档，长度: {len(context) if context else 0}")
 
                 if context:
-                    prompt = f"请参考内容: {context}\n\n回答问题: {chat_params.prompt}"
+                    prompt = f"请参考以下内容: {context}\n\n回答问题: {chat_params.prompt}"
                     logger.info(f"[ChatService] 已添加文档上下文，长度: {len(context)}")
                 else:
                     yield "对不起，没有查询到相关文档！"
@@ -256,12 +260,11 @@ class ChatService:
         except Exception as e:
             logger.error(f"后台保存聊天记录失败: {str(e)}", exc_info=True)
 
-    
     async def build_context(
         self,
         query: str,
         user_id: str,
-        directory_id: str,
+        doc_ids: Optional[List[str]] = None,  # 改为数组类型
         tenant_id: str = None
     ) -> str:
         """
@@ -270,7 +273,7 @@ class ChatService:
         Args:
             query: 查询文本
             user_id: 用户ID
-            directory_id: 目录ID
+            doc_ids: 文档ID列表（可选），如果为 None 或空列表，则查询所有文档
             tenant_id: 租户ID (可选)
         
         Returns:
@@ -278,26 +281,60 @@ class ChatService:
         """
         es_client = None
         try:
+            # 获取 Elasticsearch 连接地址并清理
+            es_host = settings.elasticsearch_host
+            if es_host:
+                es_host = es_host.strip()
+
+            logger.info(f"[build_context] Elasticsearch 连接地址: {es_host}")
+            logger.info(f"[build_context] 查询参数: user_id={user_id}, doc_ids={doc_ids}, tenant_id={tenant_id}")
+            logger.info(f"[build_context] 查询文本: {query[:50]}...")
+
             # 构建过滤条件
             must_conditions = [
-                {"term": {"metadata.user_id": user_id}},
-                {"term": {"metadata.directory_id": directory_id}}
+                {"term": {"metadata.user_id": user_id}}
             ]
-            
+
             # 如果提供了 tenant_id，添加到过滤条件
             if tenant_id:
                 must_conditions.append({"term": {"metadata.tenant_id": tenant_id}})
-                            
-            # 按需创建 Elasticsearch 客户端（使用配置）
+
+            # 处理文档ID列表
+            # 如果 doc_ids 不为空且是列表，使用 terms 查询（OR 条件）
+            if doc_ids and isinstance(doc_ids, list) and len(doc_ids) > 0:
+                # 过滤掉空值
+                valid_doc_ids = [doc_id for doc_id in doc_ids if doc_id and doc_id.strip()]
+                if valid_doc_ids:
+                    must_conditions.append({
+                        "terms": {"metadata.doc_id": valid_doc_ids}
+                    })
+                    logger.info(f"[build_context] 添加文档ID过滤: {valid_doc_ids}")
+                else:
+                    logger.info(f"[build_context] 文档ID列表为空，查询所有文档")
+            else:
+                logger.info(f"[build_context] 未提供文档ID，查询所有文档")
+
+            logger.info(f"[build_context] 最终过滤条件: {must_conditions}")
+
+            # 创建 Elasticsearch 客户端
             es_client = Elasticsearch(
-                hosts=[settings.elasticsearch_host],
-                request_timeout=10
+                hosts=[es_host],
+                request_timeout=30
             )
-            
-            # 按需创建 embedding 模型（使用配置）
+
+            # 测试连接
+            if not es_client.ping():
+                logger.error("[build_context] Elasticsearch 连接失败，无法 ping 通")
+                return ""
+
+            logger.info("[build_context] Elasticsearch 连接成功")
+
+            # 创建 embedding 模型
             embedding_model = OllamaEmbeddings(model=settings.embedding_model)
             query_embedding = embedding_model.embed_query(query)
-            
+
+            logger.info(f"[build_context] 向量维度: {len(query_embedding) if query_embedding else 0}")
+
             script_query = {
                 "size": 5,
                 "query": {
@@ -317,34 +354,46 @@ class ChatService:
                 },
                 "_source": ["text", "metadata.filename", "metadata.page"]
             }
-            
+
+            logger.info("[build_context] 执行 Elasticsearch 查询...")
             response = es_client.search(
                 index=settings.elasticsearch_index,
                 body=script_query
             )
+
             hits = response.get('hits', {}).get('hits', [])
-            
+            logger.info(f"[build_context] 查询到 {len(hits)} 条结果")
+
             if not hits:
-                logger.info(f"[ChatService] 未找到匹配文档: user_id={user_id}, directory_id={directory_id}")
-                return ""  # 没有匹配结果，返回空字符串
-            
+                logger.info("[build_context] 未找到匹配文档")
+                return ""
+
+            # 格式化输出
             output_lines = ["以下是一些相关的文档摘录，可能有助于回答您的问题:\n"]
             for idx, hit in enumerate(hits):
                 source = hit.get('_source', {})
                 filename = source.get('metadata', {}).get('filename', '未知文件')
                 text = source.get('text', '')
+                # 获取相似度分数
+                score = hit.get('_score', 0)
                 text_preview = text[:50] + '...' if len(text) > 50 else text
-                output_lines.append(f"第{idx+1}段, 文档来源：{filename}, 内容：{text_preview}\n\n")
-            
-            logger.info(f"[ChatService] 找到 {len(hits)} 个匹配文档")
+                output_lines.append(
+                    f"第{idx+1}段, 文档来源：{filename}, 相似度：{score:.4f}, 内容：{text_preview}\n\n"
+                )
+
+            logger.info(f"[build_context] 返回 {len(hits)} 个匹配文档")
             return "\n".join(output_lines)
-            
+
         except Exception as e:
             logger.error(f"Elasticsearch 查询失败: {str(e)}", exc_info=True)
             return ""  # 查询失败，返回空字符串
         finally:
             if es_client:
-                es_client.close()
+                try:
+                    es_client.close()
+                    logger.info("[build_context] Elasticsearch 连接已关闭")
+                except Exception as e:
+                    logger.warning(f"关闭 Elasticsearch 连接时出错: {str(e)}")
 
     def process_text_content(
             self,
@@ -352,7 +401,6 @@ class ChatService:
             filename: str,
             user_id: str,
             doc_id: str,
-            directory_id: str,
             tenant_id: str = None
     ):
         """处理文本内容并存储到向量数据库"""
@@ -379,7 +427,6 @@ class ChatService:
                         "page": i + 1,
                         "user_id": user_id,
                         "doc_id": doc_id,
-                        "directory_id": directory_id
                     }
                 ))
 
@@ -406,7 +453,6 @@ class ChatService:
             filename: str,
             user_id: str,
             doc_id: str,
-            directory_id: str,
             tenant_id: str
     ):
         """处理PDF文件"""
@@ -434,7 +480,6 @@ class ChatService:
                 filename,
                 user_id,
                 doc_id,
-                directory_id,
                 tenant_id
             )
 
@@ -450,7 +495,6 @@ class ChatService:
             filename: str,
             user_id: str,
             doc_id: str,
-            directory_id: str,
             tenant_id: str = None
     ):
         """处理TXT文件"""
@@ -461,7 +505,6 @@ class ChatService:
                 filename,
                 user_id,
                 doc_id,
-                directory_id,
                 tenant_id
             )
         except Exception as e:
@@ -507,9 +550,9 @@ class ChatService:
             content = await file.read()
 
             if ext.lower() == "pdf":
-                self.process_pdf(content, file.filename, user_id, doc_id, directory_id, tenant_id)
+                self.process_pdf(content, file.filename, user_id, doc_id, tenant_id)
             else:
-                self.process_txt(content, file.filename, user_id, doc_id, directory_id, tenant_id)
+                self.process_txt(content, file.filename, user_id, doc_id, tenant_id)
 
             file_path = os.path.join(self.upload_dir, file.filename)
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -521,7 +564,7 @@ class ChatService:
                 user_id=user_id,
                 name=file.filename,
                 ext=ext,
-                directory_id=directory_id,
+                doc_id=doc_id,
                 tenant_id=tenant_id
             )
             self.chat_repository.save_doc(doc)
