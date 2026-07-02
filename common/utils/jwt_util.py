@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import jwt
 
-# 直接从环境变量读取配置
+# 直接从环境变量读取配置，增加默认值
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
 
@@ -48,21 +48,22 @@ def create_access_token(
 
     to_encode.update({"exp": expire})
 
-    # 生成 token
+    # 生成 token - 显式指定算法
     encoded_jwt = jwt.encode(
         to_encode,
         SECRET_KEY,
-        algorithm=ALGORITHM
+        algorithm=ALGORITHM  # 使用 ALGORITHM 变量
     )
     return encoded_jwt
 
 
 def verify_token(token: str) -> Optional[Dict[str, Any]]:
+    """验证 token，使用与创建相同的算法"""
     try:
         payload = jwt.decode(
             token,
             SECRET_KEY,
-            algorithms=[ALGORITHM],
+            algorithms=[ALGORITHM],  # 使用与创建相同的算法列表
             leeway=timedelta(seconds=60)
         )
         return payload

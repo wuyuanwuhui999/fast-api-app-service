@@ -12,23 +12,21 @@ from langchain_ollama import OllamaLLM
 from langchain.prompts.chat import ChatPromptTemplate
 
 from common.config.common_database import get_db
-from common.config.common_config import get_settings
 from common.utils.result_util import ResultUtil
 from agent.repositories.agent_repository import AgentRepository
 from agent.schemas.agent_schema import AgentParamsEntity, ChatHistorySchema, ChatModelSchema, MusicSchema
-
+import os
 import redis
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
-
+REDIS_URL = os.getenv("REDIS_URL")
 
 class AgentService:
     """Agent服务业务逻辑层"""
 
     def __init__(self, db: Session = Depends(get_db)):
         self.agent_repository = AgentRepository(db)
-        self.redis = redis.Redis.from_url(settings.redis_url)
+        self.redis = redis.Redis.from_url(REDIS_URL)
         self.db = db
 
     def get_music_system_prompt(self, user_id: str) -> str:

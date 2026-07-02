@@ -1,4 +1,5 @@
 # user/services/auth_service.py
+import logging
 import os
 from datetime import timedelta
 from fastapi import Depends, HTTPException, status
@@ -16,6 +17,7 @@ ALGORITHM = os.getenv("ALGORITHM")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"))
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
@@ -37,6 +39,7 @@ class AuthService:
             data={"sub": user_data},
             expires_delta=access_token_expires
         )
+        logger.warning(f"[token]: token={access_token}")
         return ResultUtil.success(
             camel_data=user_data,
             token=access_token

@@ -1,3 +1,4 @@
+# gateway/middleware/auth_middleware.py
 import os
 import json
 import logging
@@ -11,9 +12,12 @@ from starlette.responses import Response, JSONResponse
 
 logger = logging.getLogger(__name__)
 
-# 直接从环境变量读取配置
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM")
+# 直接从环境变量读取配置，增加默认值
+SECRET_KEY = os.getenv("SECRET_KEY", "WCdTBej2ZRhIBXafQbALbAwpJ5A+v1PR4A4IN6+OhnM=")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+
+# 打印配置信息以便调试
+logger.info(f"[AuthMiddleware] 初始化: ALGORITHM={ALGORITHM}, SECRET_KEY存在={'是' if SECRET_KEY else '否'}")
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -73,38 +77,38 @@ class AuthMiddleware(BaseHTTPMiddleware):
         """判断是否为WebSocket升级请求"""
         # 检查Upgrade头
         upgrade = request.headers.get("upgrade", "").lower()
-        
+
         if upgrade == "websocket":
             logger.info(f"[AuthMiddleware] 检测到WebSocket升级请求")
             return True
-        
+
         # 检查路径是否为WebSocket端点
         path = request.url.path
         is_ws_path = path in self.WEBSOCKET_PATHS
         if is_ws_path:
             logger.info(f"[AuthMiddleware] 路径匹配WebSocket端点: {path}")
         return is_ws_path
-    
+
     async def _add_user_id_to_websocket_url(self, request: Request, user_id: str) -> Request:
         """将用户ID添加到WebSocket URL参数中"""
         original_url = str(request.url)
         logger.info(f"[AuthMiddleware] WebSocket原始URL: {original_url}")
-        
+
         # 解析URL
         from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
-        
+
         parsed = urlparse(original_url)
         query_params = parse_qs(parsed.query)
-        
+
         # 移除token参数（已验证过，不需要传递给下游）
         query_params.pop("token", None)
-        
+
         # 添加X-User-Id参数
         query_params["X-User-Id"] = [user_id]
-        
+
         # 重新构建查询字符串
         new_query = urlencode(query_params, doseq=True)
-        
+
         # 构建新URL
         new_url_parts = (
             parsed.scheme,
@@ -115,25 +119,25 @@ class AuthMiddleware(BaseHTTPMiddleware):
             parsed.fragment
         )
         new_url = urlunparse(new_url_parts)
-        
+
         logger.info(f"[AuthMiddleware] WebSocket修改后URL: {new_url}")
-        
+
         # 使用内部属性修改请求URL
         request._url = request.url.__class__(new_url)
-        
+
         return request
-    
+
     def should_skip_auth(self, path: str) -> bool:
         """判断是否需要跳过认证（精确匹配）"""
         return path in self.EXCLUDE_PATHS
-    
+
     def extract_token(self, request: Request, is_websocket: bool = False) -> Optional[str]:
         """从请求中提取token"""
-        
+
         # WebSocket请求：从URL参数获取
         if is_websocket:
             logger.info(f"[AuthMiddleware] WebSocket提取token")
-            
+
             # 从query_params获取
             token = request.query_params.get("token")
             if token:
@@ -142,7 +146,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 if token.startswith("Bearer "):
                     token = token[7:]
                 return token
-            
+
             # 尝试从原始URL解析
             raw_url = str(request.url)
             parsed = urlparse(raw_url)
@@ -154,24 +158,24 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     token = token[7:]
                 logger.info(f"[AuthMiddleware] 从parsed URL获取到token")
                 return token
-            
+
             logger.warning(f"[AuthMiddleware] WebSocket未找到token参数")
             return None
-        
+
         # HTTP请求：从Authorization头获取
         auth_header = request.headers.get("Authorization")
-        
+
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header[7:]
             logger.info(f"[AuthMiddleware] 从Authorization头获取到token")
             return token
-        
+
         # 从Cookie获取
         token = request.cookies.get("access_token")
         if token:
             logger.info(f"[AuthMiddleware] 从Cookie获取到token")
             return token
-        
+
         # 从查询参数获取（某些GET请求）
         token = request.query_params.get("token")
         if token:
@@ -179,7 +183,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             if token.startswith("Bearer "):
                 token = token[7:]
             return token
-        
+
         logger.warning(f"[AuthMiddleware] 未找到token")
         return None
 
@@ -187,11 +191,24 @@ class AuthMiddleware(BaseHTTPMiddleware):
         """验证token并返回用户信息"""
         try:
             logger.info(f"[AuthMiddleware] 开始验证token...")
+            logger.info(f"[AuthMiddleware] 使用的算法: {ALGORITHM}")
+
+            # 先获取未验证的header，查看token的算法
+            try:
+                unverified_header = jwt.get_unverified_header(token)
+                logger.info(f"[AuthMiddleware] Token header: {unverified_header}")
+            except Exception as e:
+                logger.warning(f"[AuthMiddleware] 获取token header失败: {str(e)}")
+
+            # 使用明确的算法列表进行解码
+            # 注意：这里使用 [ALGORITHM] 确保算法正确
+            algorithms = [ALGORITHM]
+            logger.info(f"[AuthMiddleware] 使用算法列表: {algorithms}")
 
             payload = jwt.decode(
                 token,
                 SECRET_KEY,
-                algorithms=[ALGORITHM],
+                algorithms=algorithms,
                 options={"verify_exp": True}
             )
             logger.info(f"[AuthMiddleware] token解码成功, payload keys: {list(payload.keys())}")
@@ -217,23 +234,29 @@ class AuthMiddleware(BaseHTTPMiddleware):
         except jwt.ExpiredSignatureError:
             logger.warning(f"[AuthMiddleware] Token已过期")
             return None
+        except jwt.InvalidAlgorithmError as e:
+            logger.error(f"[AuthMiddleware] 无效的算法错误: {str(e)}")
+            logger.error(f"[AuthMiddleware] 当前ALGORITHM={ALGORITHM}, token算法可能不匹配")
+            return None
         except jwt.InvalidTokenError as e:
             logger.warning(f"[AuthMiddleware] 无效的Token: {str(e)}")
+            # 尝试打印token前100个字符用于调试
+            logger.warning(f"[AuthMiddleware] token前100字符: {token[:100]}...")
             return None
         except Exception as e:
             logger.error(f"[AuthMiddleware] Token验证异常: {str(e)}", exc_info=True)
             return None
-    
+
     def _unauthorized_response(self, message: str, is_websocket: bool = False) -> Response:
         """返回未授权响应"""
         logger.warning(f"[AuthMiddleware] 返回未授权响应: message={message}, is_websocket={is_websocket}")
-        
+
         response_body = json.dumps({
             "status": "FAIL",
             "msg": message,
             "data": None
         })
-        
+
         # WebSocket请求返回HTTP 401，让客户端知道认证失败
         if is_websocket:
             return Response(
@@ -241,7 +264,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 media_type="application/json"
             )
-        
+
         return Response(
             content=response_body,
             status_code=status.HTTP_401_UNAUTHORIZED,

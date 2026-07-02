@@ -1,4 +1,5 @@
 # gateway/main.py - 重构 WebSocket 公共代理逻辑
+import os
 from fastapi import FastAPI, Request, HTTPException, status, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -8,15 +9,23 @@ import logging
 from contextlib import asynccontextmanager
 import json
 import asyncio
+from dotenv import load_dotenv
+from pathlib import Path
+
+# 加载 .env 文件（项目根目录）
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 from gateway.middleware.auth_middleware import AuthMiddleware
 from gateway.middleware.log_middleware import LogMiddleware
 from gateway.services.route_service import RouteService
 from common.utils.service_registry import service_registry
-from common.config.common_config import get_settings
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
+
+# 打印环境变量配置
+logger.info(f"[Gateway] SECRET_KEY存在: {'是' if os.getenv('SECRET_KEY') else '否'}")
+logger.info(f"[Gateway] ALGORITHM={os.getenv('ALGORITHM', 'HS256')}")
 
 
 @asynccontextmanager
@@ -54,11 +63,11 @@ async def health_check():
 async def extract_user_id_from_token(token: str, service_name: str) -> Optional[str]:
     """
     从token中提取用户ID
-    
+
     Args:
         token: JWT token字符串
         service_name: 服务名称，用于日志标识
-    
+
     Returns:
         用户ID，如果提取失败则返回None
     """
@@ -68,10 +77,10 @@ async def extract_user_id_from_token(token: str, service_name: str) -> Optional[
         if not payload:
             logger.warning(f"[{service_name}] 无效的token")
             return None
-        
+
         sub = payload.get("sub")
         user_id = None
-        
+
         if sub:
             if isinstance(sub, str):
                 try:
@@ -81,29 +90,29 @@ async def extract_user_id_from_token(token: str, service_name: str) -> Optional[
                     user_id = sub
             elif isinstance(sub, dict):
                 user_id = sub.get("id")
-        
+
         if not user_id:
             logger.warning(f"[{service_name}] 无法从token解析用户ID")
             return None
-        
+
         logger.info(f"[{service_name}] 用户认证成功: user_id={user_id}")
         return user_id
-        
+
     except Exception as e:
         logger.error(f"[{service_name}] token验证异常: {str(e)}")
         return None
 
 
 async def websocket_proxy(
-    websocket: WebSocket,
-    token: Optional[str],
-    service_name: str,
-    target_path: str,
-    gateway_name: str
+        websocket: WebSocket,
+        token: Optional[str],
+        service_name: str,
+        target_path: str,
+        gateway_name: str
 ) -> None:
     """
     通用的WebSocket代理方法
-    
+
     Args:
         websocket: 客户端的WebSocket连接
         token: JWT token字符串
@@ -118,26 +127,26 @@ async def websocket_proxy(
         return
     elif not token.startswith("Bearer "):
         await websocket.close(code=4001, reason="token格式错误，不是Bearer开头")
-        return None    
-    
+        return None
+
     token = token[7:]
 
     user_id = await extract_user_id_from_token(token, gateway_name)
     if not user_id:
         await websocket.close(code=4001, reason="Invalid token or cannot extract user id")
         return
-    
+
     # 2. 获取服务实例
     instance = await route_service.get_service_instance(service_name)
     if not instance:
         logger.error(f"[{gateway_name}] 服务不可用: {service_name}")
         await websocket.close(code=4003, reason=f"Service {service_name} unavailable")
         return
-    
+
     # 3. 构建目标URL
     target_url = f"ws://{instance['ip']}:{instance['port']}{target_path}?X-User-Id={user_id}"
     logger.info(f"[{gateway_name}] 目标WebSocket URL: {target_url}")
-    
+
     # 4. 接受客户端连接
     try:
         await websocket.accept()
@@ -145,18 +154,18 @@ async def websocket_proxy(
     except Exception as e:
         logger.error(f"[{gateway_name}] 接受连接失败: {str(e)}")
         return
-    
+
     # 5. 代理WebSocket通信
     import websockets as ws_lib
-    
+
     target_websocket = None
     forward_to_target_task = None
     forward_to_client_task = None
-    
+
     try:
         target_websocket = await ws_lib.connect(target_url)
         logger.info(f"[{gateway_name}] 已连接到目标WebSocket服务")
-        
+
         async def forward_to_target():
             """将客户端的消息转发到目标服务"""
             try:
@@ -175,7 +184,7 @@ async def websocket_proxy(
                 # 通知另一个任务结束
                 if forward_to_client_task and not forward_to_client_task.done():
                     forward_to_client_task.cancel()
-        
+
         async def forward_to_client():
             """将目标服务的消息转发到客户端"""
             try:
@@ -195,17 +204,17 @@ async def websocket_proxy(
                 # 通知另一个任务结束
                 if forward_to_target_task and not forward_to_target_task.done():
                     forward_to_target_task.cancel()
-        
+
         # 创建两个转发任务
         forward_to_target_task = asyncio.create_task(forward_to_target())
         forward_to_client_task = asyncio.create_task(forward_to_client())
-        
+
         # 等待任一任务完成（使用 wait 而不是 gather）
         done, pending = await asyncio.wait(
             [forward_to_target_task, forward_to_client_task],
             return_when=asyncio.FIRST_COMPLETED
         )
-        
+
         # 取消未完成的任务
         for task in pending:
             task.cancel()
@@ -213,9 +222,9 @@ async def websocket_proxy(
                 await task
             except asyncio.CancelledError:
                 pass
-        
+
         logger.info(f"[{gateway_name}] WebSocket代理结束")
-        
+
     except ws_lib.exceptions.WebSocketException as e:
         logger.error(f"[{gateway_name}] WebSocket连接错误: {str(e)}")
         try:
@@ -236,8 +245,8 @@ async def websocket_proxy(
 
 @app.websocket("/service/chat/ws/chat")
 async def websocket_gateway_chat(
-    websocket: WebSocket,
-    token: Optional[str] = None,
+        websocket: WebSocket,
+        token: Optional[str] = None,
 ):
     """
     Chat WebSocket网关 - 代理WebSocket连接到chat服务
@@ -254,8 +263,8 @@ async def websocket_gateway_chat(
 
 @app.websocket("/service/agent/ws/chat")
 async def websocket_gateway_agent(
-    websocket: WebSocket,
-    token: Optional[str] = None,
+        websocket: WebSocket,
+        token: Optional[str] = None,
 ):
     """
     Agent WebSocket网关 - 代理WebSocket连接到agent服务
@@ -278,27 +287,27 @@ async def gateway(request: Request, path: str):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"无法识别的服务路径: {path}"
         )
-    
+
     instance = await route_service.get_service_instance(service_name)
     if not instance:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"服务 {service_name} 暂时不可用"
         )
-    
+
     target_url = f"http://{instance['ip']}:{instance['port']}/{path}"
-    
+
     body = await request.body()
-    
+
     headers = dict(request.headers)
     headers.pop("host", None)
     headers["x-forwarded-host"] = request.headers.get("host", "")
     headers["x-forwarded-proto"] = request.url.scheme
     headers["x-forwarded-for"] = request.client.host if request.client else ""
-    
+
     if hasattr(request.state, "user_id") and request.state.user_id:
         headers["X-User-Id"] = request.state.user_id
-    
+
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
             response = await client.request(
@@ -308,13 +317,13 @@ async def gateway(request: Request, path: str):
                 content=body,
                 params=request.query_params
             )
-            
+
             return Response(
                 content=response.content,
                 status_code=response.status_code,
                 headers=dict(response.headers)
             )
-            
+
         except httpx.TimeoutException:
             raise HTTPException(
                 status_code=status.HTTP_504_GATEWAY_TIMEOUT,
@@ -338,5 +347,6 @@ def start_app():
 
 if __name__ == "__main__":
     import uvicorn
+
     start_app()
     uvicorn.run(app, host="0.0.0.0", port=4009)

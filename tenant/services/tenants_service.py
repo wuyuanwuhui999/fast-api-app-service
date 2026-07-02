@@ -1,26 +1,22 @@
 import uuid
 from datetime import datetime
 from typing import Optional  # <-- 新增这行导入
-
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
-
-from common.schemas.user_schema import UserSchema
 from tenant.repositories.tenants_repository import TenantsRepository
 from tenant.schemas.tenants_schema import TenantUpdateSchema, TenantCreateSchema, TenantUserSchema
 from common.config.common_database import get_db
-from common.config.common_config import get_settings
 import redis
 from fastapi.logger import logger
 from common.utils.result_util import ResultEntity, ResultUtil
+import os
 
-settings = get_settings()
-
+REDIS_URL = os.getenv("REDIS_URL")
 
 class TenantsService:
     def __init__(self, db: Session = Depends(get_db)):
         self.tenants_repository = TenantsRepository(db)
-        self.redis = redis.Redis.from_url(settings.redis_url)
+        self.redis = redis.Redis.from_url(REDIS_URL)
 
     async def get_tenant_list(self, user_id: str, company_id: str = None) -> ResultEntity:
         """获取用户所属的所有租户，支持按企业ID筛选"""
