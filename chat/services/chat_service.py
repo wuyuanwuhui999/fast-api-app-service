@@ -1,3 +1,4 @@
+# chat/services/chat_service.py
 import os
 import asyncio
 import uuid
@@ -23,13 +24,14 @@ from io import BytesIO
 from chat.schemas.chat_schema import DirectorySchema
 from langchain_chroma import Chroma
 
-# ========== 彻底禁用 ChromaDB 遥测 ==========
+# ========== 彻底禁用 ChromaDB 遥测（通过环境变量） ==========
 _os = os
 _os.environ["ANONYMIZED_TELEMETRY"] = "False"
 _os.environ["CHROMA_TELEMETRY_DISABLED"] = "true"
 _os.environ["DO_NOT_TRACK"] = "1"
 
 import warnings
+
 warnings.filterwarnings("ignore", message=".*telemetry.*")
 warnings.filterwarnings("ignore", message=".*capture.*")
 
@@ -59,20 +61,20 @@ class ChatService:
         self._vector_store = None
 
     def _get_chroma_client(self):
-        """获取或创建 Chroma 客户端"""
+        """获取或创建 Chroma 客户端（修复配置问题）"""
         if self._chroma_client is None:
             try:
                 import chromadb
                 from chromadb.config import Settings as ChromaSettings
 
+                # 新版 ChromaDB 配置：只保留允许的字段
                 chroma_settings = ChromaSettings(
                     anonymized_telemetry=False,
                     allow_reset=True,
-                    telemetry_enabled=False,
-                    persist_directory=None,
                 )
 
                 try:
+                    # 尝试 HTTP 连接
                     self._chroma_client = chromadb.HttpClient(
                         host=CHROMA_HOST,
                         port=CHROMA_PORT,
@@ -87,14 +89,7 @@ class ChatService:
                     persist_dir = os.path.join(os.path.dirname(__file__), "..", "..", "chroma_db")
                     os.makedirs(persist_dir, exist_ok=True)
 
-                    chroma_settings = ChromaSettings(
-                        anonymized_telemetry=False,
-                        allow_reset=True,
-                        telemetry_enabled=False,
-                        persist_directory=persist_dir,
-                        is_persistent=True,
-                    )
-
+                    # 持久化客户端配置
                     self._chroma_client = chromadb.PersistentClient(
                         path=persist_dir,
                         settings=chroma_settings
@@ -105,14 +100,18 @@ class ChatService:
                 logger.error(f"[ChatService] Chroma客户端初始化失败: {str(e)}")
                 try:
                     from chromadb.config import Settings as ChromaSettings
-                    self._chroma_client = chromadb.EphemeralClient(
+                    # 内存模式：使用临时目录
+                    import tempfile
+                    temp_dir = tempfile.mkdtemp(prefix="chroma_")
+
+                    self._chroma_client = chromadb.PersistentClient(
+                        path=temp_dir,
                         settings=ChromaSettings(
                             anonymized_telemetry=False,
                             allow_reset=True,
-                            telemetry_enabled=False,
                         )
                     )
-                    logger.info("[ChatService] Chroma EphemeralClient 初始化成功（内存模式）")
+                    logger.info(f"[ChatService] Chroma 临时持久化客户端初始化成功: {temp_dir}")
                 except Exception as e2:
                     logger.error(f"[ChatService] 所有Chroma客户端初始化方式都失败: {str(e2)}")
                     raise
@@ -174,11 +173,15 @@ class ChatService:
                 except Exception as e2:
                     try:
                         logger.info("[ChatService] 尝试使用内存模式...")
+                        import tempfile
+                        temp_dir = tempfile.mkdtemp(prefix="chroma_")
+
                         self._vector_store = Chroma(
                             collection_name=CHROMA_COLLECTION_NAME,
                             embedding_function=self._get_embedding_model(),
+                            persist_directory=temp_dir
                         )
-                        logger.info("[ChatService] 内存模式初始化成功")
+                        logger.info(f"[ChatService] 内存模式初始化成功: {temp_dir}")
                     except Exception as e3:
                         logger.error(f"[ChatService] 所有方式都失败: {str(e3)}")
                         raise
@@ -273,7 +276,7 @@ class ChatService:
                 logger.info(f"[ChatService] 查询到相关文档，长度: {len(context) if context else 0}")
 
                 if context:
-                    prompt = f"请参考以下内容: {context}\n\n回答问题: {chat_params.prompt}"
+                    prompt = f"请参考以下内容\n: {context}\n\n回答问题: {chat_params.prompt}"
                     logger.info(f"[ChatService] 已添加文档上下文，长度: {len(context)}")
                 else:
                     yield "对不起，没有查询到相关文档！"
@@ -403,6 +406,45 @@ class ChatService:
         except Exception as e:
             logger.error(f"后台保存聊天记录失败: {str(e)}", exc_info=True)
 
+    def _build_where_filter(self, user_id: str, tenant_id: Optional[str] = None, doc_ids: Optional[List[str]] = None):
+        """
+        构建 ChromaDB 查询过滤条件
+
+        ChromaDB 的 where 条件规则：
+        - 单个条件：{"field": "value"}
+        - 多个条件（AND）：{"$and": [{"field1": "value1"}, {"field2": "value2"}]}
+        - 多个条件（OR）：{"$or": [{"field1": "value1"}, {"field2": "value2"}]}
+
+        【重要】$and 和 $or 的值必须是包含至少两个表达式的列表
+        """
+        conditions = []
+
+        # 用户ID条件（必填）
+        conditions.append({"user_id": user_id})
+
+        # 租户ID条件（可选）
+        if tenant_id:
+            conditions.append({"tenant_id": tenant_id})
+
+        # 文档ID条件（可选）
+        if doc_ids and isinstance(doc_ids, list) and len(doc_ids) > 0:
+            valid_doc_ids = [doc_id for doc_id in doc_ids if doc_id and doc_id.strip()]
+            if valid_doc_ids:
+                if len(valid_doc_ids) == 1:
+                    conditions.append({"doc_id": valid_doc_ids[0]})
+                else:
+                    conditions.append({"doc_id": {"$in": valid_doc_ids}})
+
+        # 根据条件数量返回不同的格式
+        if len(conditions) == 0:
+            return None
+        elif len(conditions) == 1:
+            # 单个条件：直接返回字典
+            return conditions[0]
+        else:
+            # 多个条件：使用 $and（至少两个表达式）
+            return {"$and": conditions}
+
     async def build_context(
             self,
             query: str,
@@ -413,7 +455,7 @@ class ChatService:
         """
         执行 Chroma 向量相似度查询，返回字符串结果
 
-        修复了 ChromaDB 遥测兼容性问题
+        修复了 ChromaDB 过滤条件格式问题
         """
         try:
             logger.info(f"[build_context] 开始构建上下文，查询: {query[:50]}...")
@@ -425,38 +467,26 @@ class ChatService:
             # 获取 Chroma 向量存储
             vector_store = self._get_chroma_store()
 
-            # 构建过滤条件 - 使用 ChromaDB 支持的 $and 运算符格式
-            filter_conditions = {
-                "$and": [
-                    {"user_id": user_id}
-                ]
-            }
-
-            # 如果有 tenant_id，添加到过滤条件
-            if tenant_id:
-                filter_conditions["$and"].append({"tenant_id": tenant_id})
-
-            # 如果有 doc_ids，添加 $in 条件
-            if doc_ids and isinstance(doc_ids, list) and len(doc_ids) > 0:
-                valid_doc_ids = [doc_id for doc_id in doc_ids if doc_id and doc_id.strip()]
-                if valid_doc_ids:
-                    filter_conditions["$and"].append(
-                        {"doc_id": {"$in": valid_doc_ids}}
-                    )
-
+            # 构建过滤条件 - 使用正确的格式
+            filter_conditions = self._build_where_filter(user_id, tenant_id, doc_ids)
             logger.info(f"[build_context] 过滤条件: {filter_conditions}")
 
             # 执行相似度搜索
-            # 使用 try-except 处理可能的 ChromaDB 遥测错误
             try:
-                results = vector_store.similarity_search_with_score(
-                    query,
-                    k=5,
-                    filter=filter_conditions
-                )
+                if filter_conditions:
+                    results = vector_store.similarity_search_with_score(
+                        query,
+                        k=5,
+                        filter=filter_conditions
+                    )
+                else:
+                    results = vector_store.similarity_search_with_score(
+                        query,
+                        k=5
+                    )
             except Exception as e:
                 # 如果 filter 导致错误，尝试不带 filter 查询
-                if "filter" in str(e).lower() or "metadata" in str(e).lower():
+                if "filter" in str(e).lower() or "where" in str(e).lower() or "metadata" in str(e).lower():
                     logger.warning(f"[build_context] 带filter查询失败，尝试不带filter: {str(e)}")
                     results = vector_store.similarity_search_with_score(
                         query,
@@ -466,13 +496,18 @@ class ChatService:
                     filtered_results = []
                     for doc, score in results:
                         metadata = doc.metadata
-                        if metadata.get("user_id") == user_id:
-                            if tenant_id and metadata.get("tenant_id") != tenant_id:
+                        # 检查 user_id
+                        if metadata.get("user_id") != user_id:
+                            continue
+                        # 检查 tenant_id
+                        if tenant_id and metadata.get("tenant_id") != tenant_id:
+                            continue
+                        # 检查 doc_ids
+                        if doc_ids and len(doc_ids) > 0:
+                            doc_id = metadata.get("doc_id")
+                            if doc_id not in doc_ids:
                                 continue
-                            if doc_ids and len(doc_ids) > 0:
-                                if metadata.get("doc_id") not in doc_ids:
-                                    continue
-                            filtered_results.append((doc, score))
+                        filtered_results.append((doc, score))
                     results = filtered_results[:5]
                 else:
                     # 检查是否是遥测相关错误
@@ -490,13 +525,15 @@ class ChatService:
                         filtered_results = []
                         for doc, score in results:
                             metadata = doc.metadata
-                            if metadata.get("user_id") == user_id:
-                                if tenant_id and metadata.get("tenant_id") != tenant_id:
+                            if metadata.get("user_id") != user_id:
+                                continue
+                            if tenant_id and metadata.get("tenant_id") != tenant_id:
+                                continue
+                            if doc_ids and len(doc_ids) > 0:
+                                doc_id = metadata.get("doc_id")
+                                if doc_id not in doc_ids:
                                     continue
-                                if doc_ids and len(doc_ids) > 0:
-                                    if metadata.get("doc_id") not in doc_ids:
-                                        continue
-                                filtered_results.append((doc, score))
+                            filtered_results.append((doc, score))
                         results = filtered_results[:5]
                     else:
                         raise
@@ -518,7 +555,7 @@ class ChatService:
                     similarity_score = 1 / (1 + score)
                 text_preview = text[:50] + '...' if len(text) > 50 else text
                 output_lines.append(
-                    f"第{idx + 1}段, 文档来源：{filename}, 相似度：{similarity_score:.4f}, 内容：{text_preview}\n\n"
+                    f"第{idx + 1}段, 文档来源：{filename},  内容：{text_preview}\n\n"
                 )
 
             return "\n".join(output_lines)
