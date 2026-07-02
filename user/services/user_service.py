@@ -1,3 +1,8 @@
+# user/services/user_service.py
+import os
+import random
+import redis
+from datetime import timedelta
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -6,19 +11,17 @@ from user.repositories.user_repository import UserRepository
 from user.schemas.user_schema import UserCreate, UserUpdate, PasswordChange, ResetPasswordConfirm, MailRequest
 from common.config.common_database import get_db
 from common.utils.jwt_util import create_access_token
-from datetime import timedelta
-from common.config.common_config import get_settings
-import random
-import redis
 from common.utils.result_util import ResultEntity, ResultUtil
 
-settings = get_settings()
+# 直接从环境变量读取配置
+REDIS_URL = os.getenv("REDIS_URL")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"))
 
 
 class UserService:
     def __init__(self, db: Session = Depends(get_db)):
         self.user_repository = UserRepository(db)
-        self.redis = redis.Redis.from_url(settings.redis_url)
+        self.redis = redis.Redis.from_url(REDIS_URL)
 
     async def register_user(self, user: UserCreate) -> ResultEntity:
         if self.user_repository.get_user_by_user_account(user.user_account):
@@ -34,7 +37,7 @@ class UserService:
             )
 
         user_data = self.user_repository.create_user(user)
-        access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         user_data = UserSchema.model_validate(user_data).dict()
         access_token = create_access_token(
             data={"sub": user_data},

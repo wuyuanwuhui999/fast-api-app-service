@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 # ============================================================
 WS_URL = "ws://127.0.0.1:4006/service/chat/ws/chat"
 USER_ID = "e991bfe7598e4ebeab3dd4af9b7d09b0"
-DOC_IDS = ["c90cbc0ddba0424b969f05e4078ce4b3s"]
-MODEL_ID = "34b62e2a978811f09e6f002b67a509e7"
+DOC_IDS = ["8dfa053d61f84bd98819d47a5b6e7425"]
+MODEL_ID = "99d65a143a5811f199fe79c369c29396"
 COMPANY_ID = "0d3cc1965bd811f18f407875e005753f"
 CHAT_ID = uuid.uuid4().hex
 DIRECTORY_ID = "e3361de7abe341778aa9e0ff0691aa25"

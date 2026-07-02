@@ -1,4 +1,4 @@
-# gateway/middleware/auth_middleware.py
+import os
 import json
 import logging
 from typing import Optional, Set
@@ -9,19 +9,19 @@ from fastapi import Request, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response, JSONResponse
 
-from common.config.common_config import get_settings
-
 logger = logging.getLogger(__name__)
-settings = get_settings()
+
+# 直接从环境变量读取配置
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM")
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
     """网关认证中间件 - 验证token并提取用户信息"""
-    
+
     # 不需要认证的路径（精确匹配）
     EXCLUDE_PATHS: Set[str] = {
         "/health",
-        # 用户模块不需要认证的接口
         "/service/user/register",
         "/service/user/login",
         "/service/user/sendEmailVertifyCode",
@@ -29,55 +29,46 @@ class AuthMiddleware(BaseHTTPMiddleware):
         "/service/user/loginByEmail",
         "/service/user/vertifyUser",
     }
-    
+
     # WebSocket路径（需要特殊处理）
     WEBSOCKET_PATHS: Set[str] = {
         "/service/chat/ws/chat",
         "/service/agent/ws/chat",
     }
-    
+
     async def dispatch(self, request: Request, call_next):
         """处理请求"""
-        
-        # 判断是否为WebSocket升级请求
         is_websocket = self._is_websocket_request(request)
-        
-        # 检查是否需要跳过认证
         skip_auth = self.should_skip_auth(request.url.path)
-        
+
         if skip_auth:
             logger.info(f"[AuthMiddleware] 跳过认证: {request.url.path}")
             return await call_next(request)
-        
-        # 获取token
+
         token = self.extract_token(request, is_websocket)
-        
+
         if not token:
             logger.warning(f"[AuthMiddleware] 未提供认证令牌: path={request.url.path}")
             return self._unauthorized_response("未提供认证令牌", is_websocket)
-        
-        # 验证token并提取用户信息
+
         user_info = self.verify_token(token)
-        
+
         if not user_info:
             logger.warning(f"[AuthMiddleware] 无效的认证令牌: path={request.url.path}")
             return self._unauthorized_response("无效的认证令牌", is_websocket)
-        
-        # 将用户ID存储到request.state中
+
         user_id = user_info.get("id")
         if user_id:
             request.state.user_id = user_id
             request.state.user_info = user_info
             logger.info(f"[AuthMiddleware] 用户认证成功: user_id={user_id}")
-        
-        # 对于WebSocket请求，将用户ID添加到URL参数中
+
         if is_websocket:
             request = await self._add_user_id_to_websocket_url(request, user_id)
-        
-        # 继续处理请求
+
         response = await call_next(request)
         return response
-    
+
     def _is_websocket_request(self, request: Request) -> bool:
         """判断是否为WebSocket升级请求"""
         # 检查Upgrade头
@@ -191,25 +182,23 @@ class AuthMiddleware(BaseHTTPMiddleware):
         
         logger.warning(f"[AuthMiddleware] 未找到token")
         return None
-    
+
     def verify_token(self, token: str) -> Optional[dict]:
         """验证token并返回用户信息"""
         try:
             logger.info(f"[AuthMiddleware] 开始验证token...")
-            
+
             payload = jwt.decode(
                 token,
-                settings.secret_key,
-                algorithms=[settings.algorithm],
+                SECRET_KEY,
+                algorithms=[ALGORITHM],
                 options={"verify_exp": True}
             )
             logger.info(f"[AuthMiddleware] token解码成功, payload keys: {list(payload.keys())}")
-            
-            # 解析sub字段
+
             sub = payload.get("sub")
-            
+
             if sub:
-                # sub可能是JSON字符串
                 if isinstance(sub, str):
                     try:
                         user_info = json.loads(sub)
@@ -221,10 +210,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 elif isinstance(sub, dict):
                     logger.info(f"[AuthMiddleware] sub已经是dict, user_id={sub.get('id')}")
                     return sub
-            
+
             logger.warning(f"[AuthMiddleware] sub字段为空或无效")
             return None
-            
+
         except jwt.ExpiredSignatureError:
             logger.warning(f"[AuthMiddleware] Token已过期")
             return None

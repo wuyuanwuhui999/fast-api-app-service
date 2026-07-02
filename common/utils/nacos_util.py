@@ -1,4 +1,5 @@
-import asyncio
+# common/utils/nacos_util.py
+import os
 import logging
 from typing import Optional, Dict, Any
 
@@ -13,33 +14,30 @@ except ImportError:
     except ImportError:
         from nacos import NacosClient
 
-from common.config.common_config import get_settings
-
 logger = logging.getLogger(__name__)
 
 
 class NacosServiceRegistry:
     """Nacos服务注册与发现工具类"""
-    
+
     _instance = None
     _client: Optional[NacosClient] = None
-    
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-    
+
     def __init__(self):
         if self._client is None:
-            settings = get_settings()
-            self.nacos_host = getattr(settings, 'nacos_host', "127.0.0.1")
-            self.nacos_port = getattr(settings, 'nacos_port', 8848)
-            self.nacos_namespace = getattr(settings, 'nacos_namespace', "")
-            self.nacos_username = getattr(settings, 'nacos_username', "nacos")
-            self.nacos_password = getattr(settings, 'nacos_password', "nacos")
-            
+            # 直接从环境变量读取Nacos配置
+            self.nacos_host = os.getenv("NACOS_HOST")
+            self.nacos_port = int(os.getenv("NACOS_PORT"))
+            self.nacos_namespace = os.getenv("NACOS_NAMESPACE")
+            self.nacos_username = os.getenv("NACOS_USERNAME")
+            self.nacos_password = os.getenv("NACOS_PASSWORD")
+
             try:
-                # 改为：
                 self._client = NacosClient(
                     server_addresses=f"{self.nacos_host}:{self.nacos_port}",
                     namespace=self.nacos_namespace,
@@ -50,25 +48,25 @@ class NacosServiceRegistry:
             except Exception as e:
                 logger.error(f"Nacos客户端初始化失败: {str(e)}")
                 self._client = None
-    
+
     @property
     def client(self) -> Optional[NacosClient]:
         return self._client
-    
+
     def register_service(
-        self,
-        service_name: str,
-        ip: str,
-        port: int,
-        group: str = "DEFAULT_GROUP",
-        weight: float = 1.0,
-        metadata: Optional[Dict[str, str]] = None
+            self,
+            service_name: str,
+            ip: str,
+            port: int,
+            group: str = "DEFAULT_GROUP",
+            weight: float = 1.0,
+            metadata: Optional[Dict[str, str]] = None
     ) -> bool:
         """注册服务到Nacos"""
         if not self._client:
             logger.warning("Nacos客户端未初始化，跳过服务注册")
             return False
-        
+
         try:
             # 3.x 版本使用 add_naming_instance
             self._client.add_naming_instance(
@@ -100,18 +98,18 @@ class NacosServiceRegistry:
         except Exception as e:
             logger.error(f"服务注册失败: {service_name}@{ip}:{port}, 错误: {str(e)}")
             return False
-    
+
     def deregister_service(
-        self,
-        service_name: str,
-        ip: str,
-        port: int,
-        group: str = "DEFAULT_GROUP"
+            self,
+            service_name: str,
+            ip: str,
+            port: int,
+            group: str = "DEFAULT_GROUP"
     ) -> bool:
         """注销服务"""
         if not self._client:
             return False
-        
+
         try:
             self._client.remove_naming_instance(
                 service_name=service_name,
@@ -137,17 +135,17 @@ class NacosServiceRegistry:
         except Exception as e:
             logger.error(f"服务注销失败: {service_name}@{ip}:{port}, 错误: {str(e)}")
             return False
-    
+
     def get_service_instances(
-        self,
-        service_name: str,
-        group: str = "DEFAULT_GROUP",
-        healthy_only: bool = True
+            self,
+            service_name: str,
+            group: str = "DEFAULT_GROUP",
+            healthy_only: bool = True
     ) -> list:
         """获取服务实例列表"""
         if not self._client:
             return []
-        
+
         try:
             instances = self._client.list_naming_instance(
                 service_name=service_name,

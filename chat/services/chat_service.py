@@ -1,4 +1,4 @@
-# chat/services/chat_service.py
+import os
 import asyncio
 import uuid
 import logging
@@ -8,11 +8,9 @@ from fastapi import UploadFile, HTTPException, Depends
 from langchain_community.chat_models import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.orm import Session
-import os
 from chat.repositories.chat_repository import ChatRepository
 from chat.schemas.chat_schema import ChatDocSchema, ChatParamsEntity, ChatSchema, ChatModelSchema
 from chat.utils.chat_util import PromptUtil
-from chat.config.chat_config import settings
 from common.config.common_database import get_db
 from common.utils.result_util import ResultEntity, ResultUtil
 import redis
@@ -25,12 +23,26 @@ from io import BytesIO
 from chat.schemas.chat_schema import DirectorySchema
 from langchain_chroma import Chroma
 
-# 禁用 ChromaDB 遥测，避免 capture() 参数错误
-import os as _os
-
+# ========== 彻底禁用 ChromaDB 遥测 ==========
+_os = os
 _os.environ["ANONYMIZED_TELEMETRY"] = "False"
+_os.environ["CHROMA_TELEMETRY_DISABLED"] = "true"
+_os.environ["DO_NOT_TRACK"] = "1"
+
+import warnings
+warnings.filterwarnings("ignore", message=".*telemetry.*")
+warnings.filterwarnings("ignore", message=".*capture.*")
 
 logger = logging.getLogger(__name__)
+
+# 直接从环境变量读取配置
+REDIS_URL = os.getenv("REDIS_URL")
+UPLOAD_DIR = os.getenv("UPLOAD_DIR")
+CHROMA_HOST = os.getenv("CHROMA_HOST")
+CHROMA_PORT = int(os.getenv("CHROMA_PORT"))
+CHROMA_COLLECTION_NAME = os.getenv("CHROMA_COLLECTION_NAME")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
 
 
 class ChatService:
@@ -38,14 +50,13 @@ class ChatService:
             self,
             db: Session = Depends(get_db)
     ):
-        self.redis = redis.Redis.from_url(settings.REDIS_URL)
-        self.upload_dir = settings.UPLOAD_DIR
+        self.redis = redis.Redis.from_url(REDIS_URL)
+        self.upload_dir = UPLOAD_DIR
         self.chat_repository = ChatRepository(db)
         self.db = db
-        # 初始化 Chroma 客户端（延迟初始化）
         self._chroma_client = None
         self._embedding_model = None
-        self._vector_store = None  # 缓存 vector_store
+        self._vector_store = None
 
     def _get_chroma_client(self):
         """获取或创建 Chroma 客户端"""
@@ -54,85 +65,123 @@ class ChatService:
                 import chromadb
                 from chromadb.config import Settings as ChromaSettings
 
-                # 使用 HTTP 客户端连接到 Chroma 服务，禁用遥测
-                self._chroma_client = chromadb.HttpClient(
-                    host=settings.CHROMA_HOST,
-                    port=settings.CHROMA_PORT,
-                    settings=ChromaSettings(
-                        anonymized_telemetry=False,
-                        allow_reset=True
-                    )
+                chroma_settings = ChromaSettings(
+                    anonymized_telemetry=False,
+                    allow_reset=True,
+                    telemetry_enabled=False,
+                    persist_directory=None,
                 )
-                logger.info(f"[ChatService] Chroma客户端连接成功: {settings.CHROMA_HOST}:{settings.CHROMA_PORT}")
+
+                try:
+                    self._chroma_client = chromadb.HttpClient(
+                        host=CHROMA_HOST,
+                        port=CHROMA_PORT,
+                        settings=chroma_settings
+                    )
+                    self._chroma_client.heartbeat()
+                    logger.info(
+                        f"[ChatService] Chroma HTTP客户端连接成功: {CHROMA_HOST}:{CHROMA_PORT}"
+                    )
+                except Exception as e:
+                    logger.warning(f"[ChatService] HTTP客户端连接失败: {str(e)}，尝试使用持久化方式")
+                    persist_dir = os.path.join(os.path.dirname(__file__), "..", "..", "chroma_db")
+                    os.makedirs(persist_dir, exist_ok=True)
+
+                    chroma_settings = ChromaSettings(
+                        anonymized_telemetry=False,
+                        allow_reset=True,
+                        telemetry_enabled=False,
+                        persist_directory=persist_dir,
+                        is_persistent=True,
+                    )
+
+                    self._chroma_client = chromadb.PersistentClient(
+                        path=persist_dir,
+                        settings=chroma_settings
+                    )
+                    logger.info(f"[ChatService] Chroma持久化客户端初始化成功: {persist_dir}")
+
             except Exception as e:
-                logger.error(f"[ChatService] Chroma客户端连接失败: {str(e)}")
-                raise
+                logger.error(f"[ChatService] Chroma客户端初始化失败: {str(e)}")
+                try:
+                    from chromadb.config import Settings as ChromaSettings
+                    self._chroma_client = chromadb.EphemeralClient(
+                        settings=ChromaSettings(
+                            anonymized_telemetry=False,
+                            allow_reset=True,
+                            telemetry_enabled=False,
+                        )
+                    )
+                    logger.info("[ChatService] Chroma EphemeralClient 初始化成功（内存模式）")
+                except Exception as e2:
+                    logger.error(f"[ChatService] 所有Chroma客户端初始化方式都失败: {str(e2)}")
+                    raise
+
         return self._chroma_client
 
     def _get_embedding_model(self):
         """获取嵌入模型"""
         if self._embedding_model is None:
             self._embedding_model = OllamaEmbeddings(
-                model=settings.EMBEDDING_MODEL,
-                base_url=settings.OLLAMA_BASE_URL
+                model=EMBEDDING_MODEL,
+                base_url=OLLAMA_BASE_URL
             )
         return self._embedding_model
 
     def _get_chroma_store(self):
-        """
-        获取 Chroma 向量存储（带缓存）
-
-        使用单例模式避免重复创建，并正确配置 embedding_function
-        """
+        """获取 Chroma 向量存储（带缓存）"""
         if self._vector_store is None:
             try:
+                os.environ["ANONYMIZED_TELEMETRY"] = "False"
+                os.environ["CHROMA_TELEMETRY_DISABLED"] = "true"
+
                 client = self._get_chroma_client()
                 embedding = self._get_embedding_model()
 
-                collection_name = settings.CHROMA_COLLECTION_NAME
+                collection_name = CHROMA_COLLECTION_NAME
 
-                # 检查集合是否存在
                 try:
-                    # 尝试获取现有集合
                     collection = client.get_collection(collection_name)
                     logger.info(f"[ChatService] 使用已存在的集合: {collection_name}")
                 except Exception:
-                    # 集合不存在，创建新集合
                     collection = client.create_collection(
                         name=collection_name,
                         metadata={"hnsw:space": "cosine"}
                     )
                     logger.info(f"[ChatService] 创建新集合: {collection_name}")
 
-                # 创建 Chroma 向量存储
-                # 注意：必须传入 embedding_function 参数
                 self._vector_store = Chroma(
                     client=client,
                     collection_name=collection_name,
                     embedding_function=embedding,
-                    # 禁用遥测
                     collection_metadata={"hnsw:space": "cosine"}
                 )
                 logger.info(f"[ChatService] Chroma 向量存储初始化成功")
 
             except Exception as e:
                 logger.error(f"[ChatService] 获取Chroma存储失败: {str(e)}")
-                # 尝试使用本地持久化方式作为降级方案
                 try:
                     logger.info("[ChatService] 尝试使用本地持久化方式...")
-                    # 使用本地持久化目录
                     persist_directory = os.path.join(os.path.dirname(__file__), "..", "..", "chroma_db")
                     os.makedirs(persist_directory, exist_ok=True)
 
                     self._vector_store = Chroma(
-                        collection_name=settings.CHROMA_COLLECTION_NAME,
+                        collection_name=CHROMA_COLLECTION_NAME,
                         embedding_function=self._get_embedding_model(),
                         persist_directory=persist_directory
                     )
                     logger.info(f"[ChatService] 本地持久化方式初始化成功: {persist_directory}")
                 except Exception as e2:
-                    logger.error(f"[ChatService] 本地持久化方式也失败: {str(e2)}")
-                    raise
+                    try:
+                        logger.info("[ChatService] 尝试使用内存模式...")
+                        self._vector_store = Chroma(
+                            collection_name=CHROMA_COLLECTION_NAME,
+                            embedding_function=self._get_embedding_model(),
+                        )
+                        logger.info("[ChatService] 内存模式初始化成功")
+                    except Exception as e3:
+                        logger.error(f"[ChatService] 所有方式都失败: {str(e3)}")
+                        raise
 
         return self._vector_store
 
@@ -369,6 +418,10 @@ class ChatService:
         try:
             logger.info(f"[build_context] 开始构建上下文，查询: {query[:50]}...")
 
+            # 确保遥测已禁用
+            _os.environ["ANONYMIZED_TELEMETRY"] = "False"
+            _os.environ["CHROMA_TELEMETRY_DISABLED"] = "true"
+
             # 获取 Chroma 向量存储
             vector_store = self._get_chroma_store()
 
@@ -422,7 +475,31 @@ class ChatService:
                             filtered_results.append((doc, score))
                     results = filtered_results[:5]
                 else:
-                    raise
+                    # 检查是否是遥测相关错误
+                    if "telemetry" in str(e).lower() or "capture" in str(e).lower():
+                        logger.warning(f"[build_context] 遥测相关错误，尝试重新初始化并重试: {str(e)}")
+                        # 重置 vector_store 并重新尝试
+                        self._vector_store = None
+                        vector_store = self._get_chroma_store()
+                        # 不带 filter 重试
+                        results = vector_store.similarity_search_with_score(
+                            query,
+                            k=10
+                        )
+                        # 手动过滤
+                        filtered_results = []
+                        for doc, score in results:
+                            metadata = doc.metadata
+                            if metadata.get("user_id") == user_id:
+                                if tenant_id and metadata.get("tenant_id") != tenant_id:
+                                    continue
+                                if doc_ids and len(doc_ids) > 0:
+                                    if metadata.get("doc_id") not in doc_ids:
+                                        continue
+                                filtered_results.append((doc, score))
+                        results = filtered_results[:5]
+                    else:
+                        raise
 
             logger.info(f"[build_context] 查询到 {len(results)} 条结果")
 

@@ -1,39 +1,41 @@
 # common/utils/service_registry.py
+import os
 import atexit
 import signal
-import asyncio
+import logging
 from functools import wraps
 from typing import Optional
-import logging
 
 from common.utils.nacos_util import nacos_registry
-from common.config.common_config import get_settings
 
 logger = logging.getLogger(__name__)
+
+# 直接从环境变量读取配置
+ENABLE_NACOS = os.getenv("ENABLE_NACOS", "True").lower() == "true"
 
 
 class ServiceRegistry:
     """服务注册管理器"""
-    
+
     def __init__(self):
-        self.settings = get_settings()
         self.registered_services = []
-    
+
     def register(
-        self,
-        service_name: str,
-        port: int,
-        ip: str = "0.0.0.0",
-        group: str = "DEFAULT_GROUP",
-        weight: float = 1.0
+            self,
+            service_name: str,
+            port: int,
+            ip: str = "0.0.0.0",
+            group: str = "DEFAULT_GROUP",
+            weight: float = 1.0
     ):
         """注册服务装饰器"""
+
         def decorator(func):
             @wraps(func)
             def wrapper(*args, **kwargs):
                 # 执行原函数启动app
                 app = func(*args, **kwargs)
-                
+
                 # 获取实际IP（如果是0.0.0.0，使用localhost）
                 actual_ip = ip
                 if actual_ip == "0.0.0.0":
@@ -45,9 +47,9 @@ class ServiceRegistry:
                         s.close()
                     except:
                         actual_ip = "127.0.0.1"
-                
+
                 # 注册到Nacos
-                if self.settings.enable_nacos:
+                if ENABLE_NACOS:
                     success = nacos_registry.register_service(
                         service_name=service_name,
                         ip=actual_ip,
@@ -67,16 +69,18 @@ class ServiceRegistry:
                             "group": group
                         })
                         logger.info(f"服务 {service_name} 已注册到Nacos")
-                
+
                 # 注册退出时的注销
                 atexit.register(self._deregister_all)
                 signal.signal(signal.SIGTERM, self._signal_handler)
                 signal.signal(signal.SIGINT, self._signal_handler)
-                
+
                 return app
+
             return wrapper
+
         return decorator
-    
+
     def _deregister_all(self):
         """注销所有已注册的服务"""
         for service in self.registered_services:
@@ -86,7 +90,7 @@ class ServiceRegistry:
                 port=service["port"],
                 group=service["group"]
             )
-    
+
     def _signal_handler(self, signum, frame):
         """信号处理"""
         logger.info(f"收到信号 {signum}，正在注销服务...")

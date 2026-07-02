@@ -1,11 +1,13 @@
-from base64 import b64decode
-from datetime import datetime, timedelta
+# common/utils/jwt_util.py
+import os
 import json
-import jwt
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
-from common.config.common_config import get_settings
+import jwt
 
-settings = get_settings()
+# 直接从环境变量读取配置
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM")
 
 
 def custom_json_serializer(obj: Any) -> str:
@@ -49,18 +51,19 @@ def create_access_token(
     # 生成 token
     encoded_jwt = jwt.encode(
         to_encode,
-        settings.secret_key,
-        algorithm=settings.algorithm
+        SECRET_KEY,
+        algorithm=ALGORITHM
     )
     return encoded_jwt
+
 
 def verify_token(token: str) -> Optional[Dict[str, Any]]:
     try:
         payload = jwt.decode(
             token,
-            settings.secret_key,
-            algorithms=[settings.algorithm],
-            leeway=timedelta(seconds=60)  # Pass the timedelta object directly
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            leeway=timedelta(seconds=60)
         )
         return payload
     except jwt.PyJWTError as e:
