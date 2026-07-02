@@ -26,9 +26,9 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # 配置参数 - 直接修改这里
 # ============================================================
-WS_URL = "ws://127.0.0.1:3006/service/chat/ws/chat"
+WS_URL = "ws://127.0.0.1:4006/service/chat/ws/chat"
 USER_ID = "e991bfe7598e4ebeab3dd4af9b7d09b0"
-DOC_IDS = ["35e71b56a39d40df88a6433562e426c1"]
+DOC_IDS = ["c90cbc0ddba0424b969f05e4078ce4b3s"]
 MODEL_ID = "34b62e2a978811f09e6f002b67a509e7"
 COMPANY_ID = "0d3cc1965bd811f18f407875e005753f"
 CHAT_ID = uuid.uuid4().hex

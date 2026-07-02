@@ -4,33 +4,33 @@ import uuid
 import logging
 from datetime import datetime, timedelta
 from typing import List, Any, AsyncGenerator, Optional
-import json
 from fastapi import UploadFile, HTTPException, Depends
 from langchain_community.chat_models import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.orm import Session
 import os
 from chat.repositories.chat_repository import ChatRepository
 from chat.schemas.chat_schema import ChatDocSchema, ChatParamsEntity, ChatSchema, ChatModelSchema
 from chat.utils.chat_util import PromptUtil
-from common.config.common_config import get_settings
+from chat.config.chat_config import settings
 from common.config.common_database import get_db
 from common.utils.result_util import ResultEntity, ResultUtil
 import redis
 from pypdf import PdfReader
-from langchain_elasticsearch import ElasticsearchStore
-from langchain.prompts.chat import ChatPromptTemplate
 from langchain_ollama import OllamaEmbeddings
 from langchain_ollama import OllamaLLM
 from langchain_core.documents import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from io import BytesIO
 from chat.schemas.chat_schema import DirectorySchema
+from langchain_chroma import Chroma
 
-# 导入 Elasticsearch 客户端
-from elasticsearch import Elasticsearch
+# 禁用 ChromaDB 遥测，避免 capture() 参数错误
+import os as _os
+
+_os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
 
 
 class ChatService:
@@ -38,10 +38,103 @@ class ChatService:
             self,
             db: Session = Depends(get_db)
     ):
-        self.redis = redis.Redis.from_url(settings.redis_url)
+        self.redis = redis.Redis.from_url(settings.REDIS_URL)
         self.upload_dir = settings.UPLOAD_DIR
         self.chat_repository = ChatRepository(db)
         self.db = db
+        # 初始化 Chroma 客户端（延迟初始化）
+        self._chroma_client = None
+        self._embedding_model = None
+        self._vector_store = None  # 缓存 vector_store
+
+    def _get_chroma_client(self):
+        """获取或创建 Chroma 客户端"""
+        if self._chroma_client is None:
+            try:
+                import chromadb
+                from chromadb.config import Settings as ChromaSettings
+
+                # 使用 HTTP 客户端连接到 Chroma 服务，禁用遥测
+                self._chroma_client = chromadb.HttpClient(
+                    host=settings.CHROMA_HOST,
+                    port=settings.CHROMA_PORT,
+                    settings=ChromaSettings(
+                        anonymized_telemetry=False,
+                        allow_reset=True
+                    )
+                )
+                logger.info(f"[ChatService] Chroma客户端连接成功: {settings.CHROMA_HOST}:{settings.CHROMA_PORT}")
+            except Exception as e:
+                logger.error(f"[ChatService] Chroma客户端连接失败: {str(e)}")
+                raise
+        return self._chroma_client
+
+    def _get_embedding_model(self):
+        """获取嵌入模型"""
+        if self._embedding_model is None:
+            self._embedding_model = OllamaEmbeddings(
+                model=settings.EMBEDDING_MODEL,
+                base_url=settings.OLLAMA_BASE_URL
+            )
+        return self._embedding_model
+
+    def _get_chroma_store(self):
+        """
+        获取 Chroma 向量存储（带缓存）
+
+        使用单例模式避免重复创建，并正确配置 embedding_function
+        """
+        if self._vector_store is None:
+            try:
+                client = self._get_chroma_client()
+                embedding = self._get_embedding_model()
+
+                collection_name = settings.CHROMA_COLLECTION_NAME
+
+                # 检查集合是否存在
+                try:
+                    # 尝试获取现有集合
+                    collection = client.get_collection(collection_name)
+                    logger.info(f"[ChatService] 使用已存在的集合: {collection_name}")
+                except Exception:
+                    # 集合不存在，创建新集合
+                    collection = client.create_collection(
+                        name=collection_name,
+                        metadata={"hnsw:space": "cosine"}
+                    )
+                    logger.info(f"[ChatService] 创建新集合: {collection_name}")
+
+                # 创建 Chroma 向量存储
+                # 注意：必须传入 embedding_function 参数
+                self._vector_store = Chroma(
+                    client=client,
+                    collection_name=collection_name,
+                    embedding_function=embedding,
+                    # 禁用遥测
+                    collection_metadata={"hnsw:space": "cosine"}
+                )
+                logger.info(f"[ChatService] Chroma 向量存储初始化成功")
+
+            except Exception as e:
+                logger.error(f"[ChatService] 获取Chroma存储失败: {str(e)}")
+                # 尝试使用本地持久化方式作为降级方案
+                try:
+                    logger.info("[ChatService] 尝试使用本地持久化方式...")
+                    # 使用本地持久化目录
+                    persist_directory = os.path.join(os.path.dirname(__file__), "..", "..", "chroma_db")
+                    os.makedirs(persist_directory, exist_ok=True)
+
+                    self._vector_store = Chroma(
+                        collection_name=settings.CHROMA_COLLECTION_NAME,
+                        embedding_function=self._get_embedding_model(),
+                        persist_directory=persist_directory
+                    )
+                    logger.info(f"[ChatService] 本地持久化方式初始化成功: {persist_directory}")
+                except Exception as e2:
+                    logger.error(f"[ChatService] 本地持久化方式也失败: {str(e2)}")
+                    raise
+
+        return self._vector_store
 
     async def chat_with_websocket(
             self,
@@ -50,7 +143,7 @@ class ChatService:
     ) -> AsyncGenerator[str, None]:
         """
         WebSocket聊天处理
-        
+
         Args:
             user_id: 用户ID（由网关验证后传递）
             chat_params: 聊天参数
@@ -62,11 +155,10 @@ class ChatService:
         logger.info(f"[ChatService] tenant_id={chat_params.tenantId}")
         logger.info(f"[ChatService] docIds={chat_params.docIds}")
         logger.info(f"[ChatService] prompt={chat_params.prompt[:50] if chat_params.prompt else 'None'}...")
-        
+
         chat_entity = ChatSchema(
             user_id=user_id,
             tenant_id=chat_params.tenantId,
-            company_id = chat_params.companyId,
             files=None,
             chat_id=chat_params.chatId,
             prompt=chat_params.prompt,
@@ -76,13 +168,13 @@ class ChatService:
             think_content=None,
             response_content=None
         )
-        
+
         logger.info(f"[ChatService] chat_entity创建成功: model_id={chat_entity.model_id}")
 
         try:
             # 从数据库获取模型配置（传入 tenant_id 作为 company_id 筛选条件）
             model_config = self.chat_repository.get_model_by_id(
-                chat_params.modelId, 
+                chat_params.modelId,
                 company_id=chat_params.companyId
             )
             if not model_config:
@@ -91,7 +183,8 @@ class ChatService:
                 yield "[completed]"
                 return
 
-            logger.info(f"[ChatService] 获取到模型配置: id={model_config.id}, type={model_config.type}, model_name={model_config.model_name}")
+            logger.info(
+                f"[ChatService] 获取到模型配置: id={model_config.id}, type={model_config.type}, model_name={model_config.model_name}")
 
             chat_model = await self._create_chat_model(model_config, chat_params.showThink)
             if not chat_model:
@@ -181,9 +274,9 @@ class ChatService:
 
             logger.info(f"[ChatService] 聊天完成，准备保存记录")
             yield "[completed]"
-            
+
             asyncio.create_task(self.save_chat_history_async(chat_entity, full_response))
-            
+
         except Exception as e:
             logger.error(f"WebSocket chat error: {str(e)}", exc_info=True)
             yield f"Error occurred: {str(e)}"
@@ -253,7 +346,8 @@ class ChatService:
 
             result = await self.chat_repository.save_chat_history(chat_entity)
             if result:
-                logger.info(f"[ChatService] 聊天记录保存成功: user_id={chat_entity.user_id}, chat_id={chat_entity.chat_id}")
+                logger.info(
+                    f"[ChatService] 聊天记录保存成功: user_id={chat_entity.user_id}, chat_id={chat_entity.chat_id}")
             else:
                 logger.error("保存聊天记录返回False")
 
@@ -261,116 +355,109 @@ class ChatService:
             logger.error(f"后台保存聊天记录失败: {str(e)}", exc_info=True)
 
     async def build_context(
-        self,
-        query: str,
-        user_id: str,
-        doc_ids: Optional[List[str]] = None,
-        tenant_id: str = None
+            self,
+            query: str,
+            user_id: str,
+            doc_ids: Optional[List[str]] = None,
+            tenant_id: str = None
     ) -> str:
         """
-        执行 Elasticsearch 向量相似度查询，返回字符串结果
+        执行 Chroma 向量相似度查询，返回字符串结果
+
+        修复了 ChromaDB 遥测兼容性问题
         """
-        es_client = None
         try:
-            es_host = settings.elasticsearch_host
-            if es_host:
-                es_host = es_host.strip()
+            logger.info(f"[build_context] 开始构建上下文，查询: {query[:50]}...")
 
-            logger.info(f"[build_context] Elasticsearch 连接地址: {es_host}")
+            # 获取 Chroma 向量存储
+            vector_store = self._get_chroma_store()
 
-            # 构建过滤条件
-            must_conditions = [
-                {"term": {"metadata.user_id": user_id}}
-            ]
+            # 构建过滤条件 - 使用 ChromaDB 支持的 $and 运算符格式
+            filter_conditions = {
+                "$and": [
+                    {"user_id": user_id}
+                ]
+            }
 
+            # 如果有 tenant_id，添加到过滤条件
             if tenant_id:
-                must_conditions.append({"term": {"metadata.tenant_id": tenant_id}})
+                filter_conditions["$and"].append({"tenant_id": tenant_id})
 
+            # 如果有 doc_ids，添加 $in 条件
             if doc_ids and isinstance(doc_ids, list) and len(doc_ids) > 0:
                 valid_doc_ids = [doc_id for doc_id in doc_ids if doc_id and doc_id.strip()]
                 if valid_doc_ids:
-                    must_conditions.append({
-                        "terms": {"metadata.doc_id": valid_doc_ids}
-                    })
+                    filter_conditions["$and"].append(
+                        {"doc_id": {"$in": valid_doc_ids}}
+                    )
 
-            # 创建 Elasticsearch 客户端（支持 HTTPS 和认证）
-            es_client = Elasticsearch(
-                hosts=[es_host],
-                basic_auth=(settings.elasticsearch_username, settings.elasticsearch_password),
-                verify_certs=False,  # 开发环境跳过证书验证
-                request_timeout=30
-            )
+            logger.info(f"[build_context] 过滤条件: {filter_conditions}")
 
-            if not es_client.ping():
-                logger.error("[build_context] Elasticsearch 连接失败，无法 ping 通")
-                return ""
+            # 执行相似度搜索
+            # 使用 try-except 处理可能的 ChromaDB 遥测错误
+            try:
+                results = vector_store.similarity_search_with_score(
+                    query,
+                    k=5,
+                    filter=filter_conditions
+                )
+            except Exception as e:
+                # 如果 filter 导致错误，尝试不带 filter 查询
+                if "filter" in str(e).lower() or "metadata" in str(e).lower():
+                    logger.warning(f"[build_context] 带filter查询失败，尝试不带filter: {str(e)}")
+                    results = vector_store.similarity_search_with_score(
+                        query,
+                        k=10  # 增加数量以便后续过滤
+                    )
+                    # 手动过滤结果
+                    filtered_results = []
+                    for doc, score in results:
+                        metadata = doc.metadata
+                        if metadata.get("user_id") == user_id:
+                            if tenant_id and metadata.get("tenant_id") != tenant_id:
+                                continue
+                            if doc_ids and len(doc_ids) > 0:
+                                if metadata.get("doc_id") not in doc_ids:
+                                    continue
+                            filtered_results.append((doc, score))
+                    results = filtered_results[:5]
+                else:
+                    raise
 
-            logger.info("[build_context] Elasticsearch 连接成功")
+            logger.info(f"[build_context] 查询到 {len(results)} 条结果")
 
-            embedding_model = OllamaEmbeddings(model=settings.embedding_model)
-            query_embedding = embedding_model.embed_query(query)
-
-            script_query = {
-                "size": 5,
-                "query": {
-                    "script_score": {
-                        "query": {
-                            "bool": {
-                                "must": must_conditions
-                            }
-                        },
-                        "script": {
-                            "source": "cosineSimilarity(params.query_vector, 'vector') + 1.0",
-                            "params": {
-                                "query_vector": query_embedding
-                            }
-                        }
-                    }
-                },
-                "_source": ["text", "metadata.filename", "metadata.page"]
-            }
-
-            response = es_client.search(
-                index=settings.elasticsearch_index,
-                body=script_query
-            )
-
-            hits = response.get('hits', {}).get('hits', [])
-            logger.info(f"[build_context] 查询到 {len(hits)} 条结果")
-
-            if not hits:
+            if not results:
                 return ""
 
             output_lines = []
-            for idx, hit in enumerate(hits):
-                source = hit.get('_source', {})
-                filename = source.get('metadata', {}).get('filename', '未知文件')
-                text = source.get('text', '')
-                score = hit.get('_score', 0)
+            for idx, (doc, score) in enumerate(results):
+                metadata = doc.metadata
+                filename = metadata.get('filename', '未知文件')
+                text = doc.page_content
+                # 计算相似度分数
+                if score <= 1:
+                    similarity_score = 1 - score
+                else:
+                    similarity_score = 1 / (1 + score)
                 text_preview = text[:50] + '...' if len(text) > 50 else text
                 output_lines.append(
-                    f"第{idx+1}段, 文档来源：{filename}, 相似度：{score:.4f}, 内容：{text_preview}\n\n"
+                    f"第{idx + 1}段, 文档来源：{filename}, 相似度：{similarity_score:.4f}, 内容：{text_preview}\n\n"
                 )
 
             return "\n".join(output_lines)
 
         except Exception as e:
-            logger.error(f"Elasticsearch 查询失败: {str(e)}", exc_info=True)
+            logger.error(f"Chroma 查询失败: {str(e)}", exc_info=True)
+            # 返回空字符串而不是抛出异常，让调用方处理
             return ""
-        finally:
-            if es_client:
-                try:
-                    es_client.close()
-                except Exception as e:
-                    logger.warning(f"关闭 Elasticsearch 连接时出错: {str(e)}")
 
     def process_text_content(
-        self,
-        content: str,
-        filename: str,
-        user_id: str,
-        doc_id: str,
-        tenant_id: str = None
+            self,
+            content: str,
+            filename: str,
+            user_id: str,
+            doc_id: str,
+            tenant_id: str = None
     ):
         """处理文本内容并存储到向量数据库"""
         try:
@@ -399,26 +486,12 @@ class ChatService:
                     }
                 ))
 
-            # 创建 ElasticsearchStore（支持 HTTPS 和认证）
-            # 注意：verify_certs 需要通过 es_params 参数传递
-            # es_url 使用 https 协议，es_user/es_password 进行认证
-            elasticsearch_store = ElasticsearchStore(
-                es_url=settings.elasticsearch_host,
-                index_name=settings.elasticsearch_index,
-                embedding=OllamaEmbeddings(model=settings.embedding_model),
-                es_user=settings.elasticsearch_username,
-                es_password=settings.elasticsearch_password,
-                es_params={
-                    "verify_certs": False,  # 开发环境跳过证书验证
-                    "ssl_show_warn": False,  # 关闭 SSL 警告
-                }
-            )
+            # 获取 Chroma 向量存储
+            vector_store = self._get_chroma_store()
 
-            try:
-                elasticsearch_store.add_documents(documents)
-                logger.info(f"[ChatService] 文档已索引: {filename}, 共{len(texts)}个片段")
-            except Exception as e:
-                logger.warning(f"索引文档失败， {str(e)}")
+            # 添加文档到 Chroma
+            vector_store.add_documents(documents)
+            logger.info(f"[ChatService] 文档已索引: {filename}, 共{len(texts)}个片段")
 
         except Exception as e:
             logger.error(f"处理文本内容失败: {str(e)}", exc_info=True)
@@ -493,6 +566,16 @@ class ChatService:
         doc = self.chat_repository.get_doc_by_id(doc_id, user_id)
         if not doc:
             raise HTTPException(status_code=404, detail="文档不存在或无权删除")
+
+        # 从 Chroma 中删除文档
+        try:
+            vector_store = self._get_chroma_store()
+            # 根据 doc_id 删除
+            vector_store.delete(filter={"doc_id": doc_id})
+            logger.info(f"[ChatService] 从Chroma删除文档: {doc_id}")
+        except Exception as e:
+            logger.error(f"从Chroma删除文档失败: {str(e)}")
+            # 继续执行，不中断删除流程
 
         file_path = os.path.join(
             self.upload_dir,
@@ -620,7 +703,7 @@ class ChatService:
                 ChatDocDirectory.user_id == user_id,
                 ChatDocDirectory.directory == directory_name
             ).first()
-            
+
             return directories is not None
 
         except Exception as e:

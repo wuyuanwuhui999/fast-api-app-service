@@ -10,7 +10,7 @@ def upload_document(
     token: str,
     directory_id: str = "public",
     tenant_id: str = "personal",
-    gateway_url: str = "http://localhost:3006"
+    gateway_url: str = "http://localhost:4006"
 ):
     """
     调用上传文档接口
@@ -107,7 +107,7 @@ def main():
     TENANT_ID = "f96f89c075d611f0be3b002b67a509e7"
     
     # 网关地址（可选）
-    GATEWAY_URL = "http://localhost:3006"
+    GATEWAY_URL = "http://localhost:4006"
     
     # ====== 执行上传 ======
     

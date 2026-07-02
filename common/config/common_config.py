@@ -12,6 +12,7 @@ warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 logging.getLogger("elasticsearch").setLevel(logging.ERROR)
 warnings.filterwarnings("ignore", message=".*verify_certs=False.*")
 
+
 class Settings(BaseSettings):
     app_name: str = "Fast Api Service"
     secret_key: str = "WCdTBej2ZRhIBXafQbALbAwpJ5A+v1PR4A4IN6+OhnM="
@@ -27,8 +28,8 @@ class Settings(BaseSettings):
     mail_starttls: bool = False
     mail_ssl_tls: bool = True
     avater_path: str = "/static/user/avater/"
-    UPLOAD_DIR: str = "/Users/wuwenqiang/Documents/static/chat"
-    
+    UPLOAD_DIR: str = "G:/static/ai/"
+
     # Nacos配置
     nacos_host: str = "127.0.0.1"
     nacos_port: int = 8848
@@ -36,16 +37,15 @@ class Settings(BaseSettings):
     nacos_username: str = "nacos"
     nacos_password: str = "nacos"
 
-    # Elasticsearch配置（支持HTTPS和认证）
-    elasticsearch_host: str = "https://localhost:9200"
-    elasticsearch_username: str = "elastic"
-    elasticsearch_password: str = "ncv7eIkwKyhXadg0zuw0"
-    elasticsearch_index: str = "chat_vector_index"
+    # Chroma配置（替换Elasticsearch）
+    chroma_host: str = "localhost"
+    chroma_port: int = 8000
+    chroma_collection_name: str = "chat_documents"
     embedding_model: str = "nomic-embed-text:latest"
-    
+
     # 服务配置
     enable_nacos: bool = True
-    
+
     class Config:
         env_file = Path(__file__).parent.parent.parent / ".env"
 

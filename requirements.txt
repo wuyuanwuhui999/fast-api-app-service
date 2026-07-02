@@ -19,6 +19,7 @@ httpx==0.28.1
 sse-starlette==3.0.2
 langchain_ollama==0.3.6
 langchain_elasticsearch==0.3.2
+langchain_chroma==0.2.6
 PyPDF2==3.0.1
 pypdf==5.9.0
 pdfplumber==0.11.7
@@ -30,3 +31,4 @@ pymysql==1.1.2
 psycopg2-binary>=2.9.11
 nacos-sdk-python==2.0.1
 httpx==0.28.1
+chromadb==0.6.3
