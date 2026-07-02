@@ -31,8 +31,10 @@ from chat.services.chat_service import ChatService
 from elasticsearch import Elasticsearch
 
 # ============ 全局配置参数 ============
-ES_HOST = "http://localhost:9200"
+ES_HOST = "https://localhost:9200"
 INDEX_NAME = "chat_vector_index"
+ELASTICSEARCH_USERNAME="elastic"
+ELASTICSEARCH_PASSWORD="ncv7eIkwKyhXadg0zuw0"
 DEFAULT_SIZE = 5
 EMBEDDING_MODEL = "nomic-embed-text:latest"
 # ===================================
@@ -40,12 +42,12 @@ EMBEDDING_MODEL = "nomic-embed-text:latest"
 # ============ 直接设置的测试参数 ============
 TEST_USER_ID = "e991bfe7598e4ebeab3dd4af9b7d09b0"
 # 测试场景1：传入多个文档ID（OR查询）
-TEST_DOC_IDS = ["9a72ee044fc548d4af858155b2c8307b"]  # 可以改为多个ID
+TEST_DOC_IDS = ["35e71b56a39d40df88a6433562e426c1"]  # 可以改为多个ID
 # 测试场景2：传入空列表（查询所有文档）
 # TEST_DOC_IDS = []
 # 测试场景3：传入 None（查询所有文档）
 # TEST_DOC_IDS = None
-TEST_QUERY = "投保人"
+TEST_QUERY = "准考证号"
 TEST_TENANT_ID = None  # 可选，如果需要可以设置
 # =========================================
 
@@ -95,7 +97,9 @@ async def build_context(
         
         # 按需创建 Elasticsearch 客户端
         es_client = Elasticsearch(
-            hosts=["http://localhost:9200"],
+            hosts=[ES_HOST],
+            basic_auth=(ELASTICSEARCH_USERNAME, ELASTICSEARCH_PASSWORD),
+            verify_certs=False,  # 开发环境跳过证书验证
             request_timeout=10
         )
         

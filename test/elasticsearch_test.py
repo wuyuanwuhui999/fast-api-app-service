@@ -1,7 +1,12 @@
 from elasticsearch import Elasticsearch
 
 # 连接到 Elasticsearch
-es = Elasticsearch("http://localhost:9200")
+es = Elasticsearch(
+    hosts=["https://localhost:9200"],
+    basic_auth=("elastic", "ncv7eIkwKyhXadg0zuw0"),
+    verify_certs=False,  # 开发环境跳过证书验证
+    request_timeout=10
+)
 
 # 检查连接
 if not es.ping():
@@ -156,10 +161,10 @@ index_name = "chat_vector_index"
 # create_index(index_name)
 
 # 搜索所有文档
-search_documents(index_name)
-# search_documents(index_name,user_id="f71d6c016fa94cd29f9db53f71ec7b62")
+# search_documents(index_name)
+search_documents(index_name,user_id="e991bfe7598e4ebeab3dd4af9b7d09b0")
 
 # get_mappering(index_name)
 
 # 删除文档
-# delete_by_user_or_doc_id(index_name,user_id="f71d6c016fa94cd29f9db53f71ec7b62")
+# delete_by_user_or_doc_id(index_name,user_id="e991bfe7598e4ebeab3dd4af9b7d09b0")

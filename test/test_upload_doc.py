@@ -10,7 +10,7 @@ def upload_document(
     token: str,
     directory_id: str = "public",
     tenant_id: str = "personal",
-    gateway_url: str = "http://localhost:4009"
+    gateway_url: str = "http://localhost:3006"
 ):
     """
     调用上传文档接口
@@ -36,10 +36,10 @@ def upload_document(
     
     # 构建URL
     url = f"{gateway_url}/service/chat/uploadDoc/{tenant_id}/{directory_id}"
-    
+
     # 构建请求头
     headers = {
-        "Authorization": token if token.startswith("Bearer ") else f"Bearer {token}",
+        "X-User-Id": "e991bfe7598e4ebeab3dd4af9b7d09b0",
         "Accept": "application/json"
     }
     
@@ -98,7 +98,7 @@ def main():
     TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ7XCJ1c2VyX2FjY291bnRcIjogXCJcdTU0MzRcdTYwMjhcdTU0MzRcdTYwOTRcIiwgXCJlbWFpbFwiOiBcIjI3NTAxODcyM0BxcS5jb21cIiwgXCJ1c2VybmFtZVwiOiBcIlx1NTQzNFx1NjAyOFx1NTQzNFx1NjA5NFwiLCBcImlkXCI6IFwiZTk5MWJmZTc1OThlNGViZWFiM2RkNGFmOWI3ZDA5YjBcIiwgXCJjcmVhdGVfZGF0ZVwiOiBcIjIwMTktMDgtMTNUMDA6MDA6MDBcIiwgXCJ1cGRhdGVfZGF0ZVwiOiBcIjIwMjQtMDctMzFUMjM6MTU6MzBcIiwgXCJ0ZWxlcGhvbmVcIjogXCIxNTMwMjY4Njk0N1wiLCBcImF2YXRlclwiOiBcIi9zdGF0aWMvdXNlci9hdmF0ZXIvXHU1NDM0XHU2MDI4XHU1NDM0XHU2MDk0LmpwZ1wiLCBcImJpcnRoZGF5XCI6IFwiMTk5MC0xMC0xMFwiLCBcInNleFwiOiBcIjBcIiwgXCJyb2xlXCI6IFwiYWRtaW5cIiwgXCJzaWduXCI6IFwiXHU2NWUwXHU2MDI4XHVmZjBjXHU2NzA5XHU2MDk0XCIsIFwicmVnaW9uXCI6IG51bGwsIFwiZGlzYWJsZWRcIjogMCwgXCJwZXJtaXNzaW9uXCI6IDF9IiwiZXhwIjoxNzg1Mzg2NzAyfQ.IHT15WbRV8ebeTGYioiohjDUY_nViokJHehSxRd0OiM"
     
     # 文件路径（请修改为你要上传的文件路径）
-    FILE_PATH = "/Users/wuwenqiang/Downloads/保单_吴文强_商业险_粤B-6CJ89_10574003903210360091.pdf"  # 或 "./test.txt"
+    FILE_PATH = "/Users/wuwenqiang/Downloads/考生信息简表030721303493.pdf"  # 或 "./test.txt"
     
     # 目录ID（可选，默认为 "public"）
     DIRECTORY_ID = "e3361de7abe341778aa9e0ff0691aa25"
@@ -107,7 +107,7 @@ def main():
     TENANT_ID = "f96f89c075d611f0be3b002b67a509e7"
     
     # 网关地址（可选）
-    GATEWAY_URL = "http://localhost:4009"
+    GATEWAY_URL = "http://localhost:3006"
     
     # ====== 执行上传 ======
     

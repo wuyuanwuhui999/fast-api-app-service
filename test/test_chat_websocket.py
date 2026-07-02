@@ -12,6 +12,7 @@ import websockets
 import logging
 import uuid
 from datetime import datetime
+import uuid
 
 # 设置日志
 logging.basicConfig(
@@ -25,18 +26,18 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # 配置参数 - 直接修改这里
 # ============================================================
-WS_URL = "ws://127.0.0.1:4006/service/chat/ws/chat"
+WS_URL = "ws://127.0.0.1:3006/service/chat/ws/chat"
 USER_ID = "e991bfe7598e4ebeab3dd4af9b7d09b0"
-DOC_IDS = ["9a72ee044fc548d4af858155b2c8307b"]
+DOC_IDS = ["35e71b56a39d40df88a6433562e426c1"]
 MODEL_ID = "34b62e2a978811f09e6f002b67a509e7"
 COMPANY_ID = "0d3cc1965bd811f18f407875e005753f"
-CHAT_ID = "8fc434f0747e11f18f407875e005753f"  # 不提供则自动生成
+CHAT_ID = uuid.uuid4().hex
 DIRECTORY_ID = "e3361de7abe341778aa9e0ff0691aa25"
 TENANT_ID = "f96f89c075d611f0be3b002b67a509e7"
-PROMPT = "保险单号"
+PROMPT = "准考证号"
 CHAT_TYPE = "document"  # document: 文档问答, normal: 普通聊天
 SHOW_THINK = False  # 是否显示思考过程
-SYSTEM_PROMPT = "你是一个专业的保险知识助手，请根据提供的文档内容回答问题。"
+SYSTEM_PROMPT = "你是一个专业的考试助手，请根据提供的文档内容回答问题。"
 # ============================================================
 
 

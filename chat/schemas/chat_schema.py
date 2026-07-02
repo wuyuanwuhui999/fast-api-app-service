@@ -55,7 +55,7 @@ class ChatParamsEntity(BaseModel):
     showThink: bool = False
     type: Optional[str] = None
     language: Optional[str] = None
-    companyId:str
+    companyId: str
     tenantId: Optional[str] = None
 
 
@@ -83,14 +83,14 @@ class ChatModelSchema(BaseModel):
     api_key: Optional[str] = None
     model_name: str
     base_url: Optional[str] = None
-    company_id: Optional[str] = Field(None, alias="companyId")  # 新增字段，支持驼峰
+    company_id: Optional[str] = Field(None, alias="companyId")
     disabled: int = 0
     create_time: Optional[datetime] = None
     update_time: Optional[datetime] = None
 
     model_config = ConfigDict(
         from_attributes=True,
-        populate_by_name=True,  # 允许通过字段名或别名访问
+        populate_by_name=True,
         json_encoders={
             datetime: lambda v: v.strftime("%Y-%m-%d %H:%M:%S")
         }
@@ -98,7 +98,9 @@ class ChatModelSchema(BaseModel):
 
 
 class ChatDocSchema(BaseModel):
+    """文档Schema - 完整字段定义"""
     id: str
+    directory_id: Optional[str] = None  # 新增：目录ID字段
     doc_id: Optional[str] = None
     name: Optional[str] = None
     ext: Optional[str] = None
@@ -106,6 +108,13 @@ class ChatDocSchema(BaseModel):
     tenant_id: Optional[str] = None
     create_time: Optional[datetime] = None
     update_time: Optional[datetime] = None
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
+            datetime: lambda v: v.strftime("%Y-%m-%d %H:%M:%S") if v else None
+        }
+    )
 
 
 class CreateDirectoryShema(BaseModel):

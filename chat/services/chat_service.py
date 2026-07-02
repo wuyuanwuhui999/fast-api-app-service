@@ -264,76 +264,51 @@ class ChatService:
         self,
         query: str,
         user_id: str,
-        doc_ids: Optional[List[str]] = None,  # 改为数组类型
+        doc_ids: Optional[List[str]] = None,
         tenant_id: str = None
     ) -> str:
         """
         执行 Elasticsearch 向量相似度查询，返回字符串结果
-        
-        Args:
-            query: 查询文本
-            user_id: 用户ID
-            doc_ids: 文档ID列表（可选），如果为 None 或空列表，则查询所有文档
-            tenant_id: 租户ID (可选)
-        
-        Returns:
-            格式化的查询结果字符串，如果没有匹配结果则返回空字符串
         """
         es_client = None
         try:
-            # 获取 Elasticsearch 连接地址并清理
             es_host = settings.elasticsearch_host
             if es_host:
                 es_host = es_host.strip()
 
             logger.info(f"[build_context] Elasticsearch 连接地址: {es_host}")
-            logger.info(f"[build_context] 查询参数: user_id={user_id}, doc_ids={doc_ids}, tenant_id={tenant_id}")
-            logger.info(f"[build_context] 查询文本: {query[:50]}...")
 
             # 构建过滤条件
             must_conditions = [
                 {"term": {"metadata.user_id": user_id}}
             ]
 
-            # 如果提供了 tenant_id，添加到过滤条件
             if tenant_id:
                 must_conditions.append({"term": {"metadata.tenant_id": tenant_id}})
 
-            # 处理文档ID列表
-            # 如果 doc_ids 不为空且是列表，使用 terms 查询（OR 条件）
             if doc_ids and isinstance(doc_ids, list) and len(doc_ids) > 0:
-                # 过滤掉空值
                 valid_doc_ids = [doc_id for doc_id in doc_ids if doc_id and doc_id.strip()]
                 if valid_doc_ids:
                     must_conditions.append({
                         "terms": {"metadata.doc_id": valid_doc_ids}
                     })
-                    logger.info(f"[build_context] 添加文档ID过滤: {valid_doc_ids}")
-                else:
-                    logger.info(f"[build_context] 文档ID列表为空，查询所有文档")
-            else:
-                logger.info(f"[build_context] 未提供文档ID，查询所有文档")
 
-            logger.info(f"[build_context] 最终过滤条件: {must_conditions}")
-
-            # 创建 Elasticsearch 客户端
+            # 创建 Elasticsearch 客户端（支持 HTTPS 和认证）
             es_client = Elasticsearch(
                 hosts=[es_host],
+                basic_auth=(settings.elasticsearch_username, settings.elasticsearch_password),
+                verify_certs=False,  # 开发环境跳过证书验证
                 request_timeout=30
             )
 
-            # 测试连接
             if not es_client.ping():
                 logger.error("[build_context] Elasticsearch 连接失败，无法 ping 通")
                 return ""
 
             logger.info("[build_context] Elasticsearch 连接成功")
 
-            # 创建 embedding 模型
             embedding_model = OllamaEmbeddings(model=settings.embedding_model)
             query_embedding = embedding_model.embed_query(query)
-
-            logger.info(f"[build_context] 向量维度: {len(query_embedding) if query_embedding else 0}")
 
             script_query = {
                 "size": 5,
@@ -355,7 +330,6 @@ class ChatService:
                 "_source": ["text", "metadata.filename", "metadata.page"]
             }
 
-            logger.info("[build_context] 执行 Elasticsearch 查询...")
             response = es_client.search(
                 index=settings.elasticsearch_index,
                 body=script_query
@@ -365,43 +339,38 @@ class ChatService:
             logger.info(f"[build_context] 查询到 {len(hits)} 条结果")
 
             if not hits:
-                logger.info("[build_context] 未找到匹配文档")
                 return ""
 
-            # 格式化输出
-            output_lines = ["以下是一些相关的文档摘录，可能有助于回答您的问题:\n"]
+            output_lines = []
             for idx, hit in enumerate(hits):
                 source = hit.get('_source', {})
                 filename = source.get('metadata', {}).get('filename', '未知文件')
                 text = source.get('text', '')
-                # 获取相似度分数
                 score = hit.get('_score', 0)
                 text_preview = text[:50] + '...' if len(text) > 50 else text
                 output_lines.append(
                     f"第{idx+1}段, 文档来源：{filename}, 相似度：{score:.4f}, 内容：{text_preview}\n\n"
                 )
 
-            logger.info(f"[build_context] 返回 {len(hits)} 个匹配文档")
             return "\n".join(output_lines)
 
         except Exception as e:
             logger.error(f"Elasticsearch 查询失败: {str(e)}", exc_info=True)
-            return ""  # 查询失败，返回空字符串
+            return ""
         finally:
             if es_client:
                 try:
                     es_client.close()
-                    logger.info("[build_context] Elasticsearch 连接已关闭")
                 except Exception as e:
                     logger.warning(f"关闭 Elasticsearch 连接时出错: {str(e)}")
 
     def process_text_content(
-            self,
-            content: str,
-            filename: str,
-            user_id: str,
-            doc_id: str,
-            tenant_id: str = None
+        self,
+        content: str,
+        filename: str,
+        user_id: str,
+        doc_id: str,
+        tenant_id: str = None
     ):
         """处理文本内容并存储到向量数据库"""
         try:
@@ -430,11 +399,19 @@ class ChatService:
                     }
                 ))
 
-            # 按需创建 ElasticsearchStore（使用配置）
+            # 创建 ElasticsearchStore（支持 HTTPS 和认证）
+            # 注意：verify_certs 需要通过 es_params 参数传递
+            # es_url 使用 https 协议，es_user/es_password 进行认证
             elasticsearch_store = ElasticsearchStore(
                 es_url=settings.elasticsearch_host,
                 index_name=settings.elasticsearch_index,
-                embedding=OllamaEmbeddings(model=settings.embedding_model)
+                embedding=OllamaEmbeddings(model=settings.embedding_model),
+                es_user=settings.elasticsearch_username,
+                es_password=settings.elasticsearch_password,
+                es_params={
+                    "verify_certs": False,  # 开发环境跳过证书验证
+                    "ssl_show_warn": False,  # 关闭 SSL 警告
+                }
             )
 
             try:
@@ -559,12 +536,14 @@ class ChatService:
             with open(file_path, "wb") as f:
                 f.write(content)
 
+            # 创建文档记录 - 包含 directory_id
             doc = ChatDocSchema(
                 id=doc_id,
+                directory_id=directory_id,  # 新增：传入目录ID
+                doc_id=doc_id,
                 user_id=user_id,
                 name=file.filename,
                 ext=ext,
-                doc_id=doc_id,
                 tenant_id=tenant_id
             )
             self.chat_repository.save_doc(doc)
