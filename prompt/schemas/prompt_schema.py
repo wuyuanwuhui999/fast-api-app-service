@@ -1,3 +1,4 @@
+# prompt/schemas/prompt_schema.py
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
@@ -29,14 +30,30 @@ class UpdatePromptSchema(BaseModel):
     """更新提示词请求 Schema"""
     id: str = Field(..., description="提示词ID")
     prompt: str = Field(..., description="提示词内容", min_length=1, max_length=255)
-    tenant_id: str = Field(..., description="租户ID")
-    
+    tenantId: str = Field(..., description="租户ID")
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "id": "abc123def456",
                 "prompt": "你是一个专业的AI助手，请用专业、友善的语气回答问题。",
                 "tenant_id": "f96f89c075d611f0be3b002b67a509e7"
+            }
+        }
+    )
+
+
+class InsertPromptSchema(BaseModel):
+    """插入提示词请求 Schema"""
+    prompt: str = Field(..., description="提示词内容", min_length=1, max_length=255)
+    tenantId: str = Field(..., alias="tenantId", description="租户ID")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
+            "example": {
+                "prompt": "你是一个专业的AI助手，请用专业、友善的语气回答问题。",
+                "tenantId": "f96f89c075d611f0be3b002b67a509e7"
             }
         }
     )
