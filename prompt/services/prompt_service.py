@@ -15,13 +15,22 @@ class PromptService:
     def __init__(self, db: Session = Depends(get_db)):
         self.repository = PromptRepository(db)
 
-    async def get_prompt(self, tenant_id: str, current_user_id: str) -> ResultEntity:
+    async def get_prompt(
+            self,
+            tenant_id: str,
+            current_user_id: str,
+            prompt_id: Optional[str] = None
+    ) -> ResultEntity:
         """
-        根据租户ID查询提示词记录，如果不存在则创建默认提示词
+        查询提示词记录
+
+        当 prompt_id 不为空时：根据ID精确查询单条提示词（同时校验租户和用户权限）
+        当 prompt_id 为空时：根据租户ID查询，如果不存在则创建默认提示词
 
         Args:
             tenant_id: 租户ID
             current_user_id: 当前登录用户ID
+            prompt_id: 提示词ID（可选）
 
         Returns:
             ResultEntity: 提示词记录
@@ -31,7 +40,28 @@ class PromptService:
             if not tenant_id:
                 return ResultUtil.fail(msg="租户ID不能为空", data=None)
 
-            # 查询提示词
+            # 如果传入了 prompt_id，根据ID精确查询
+            if prompt_id:
+                # 验证 prompt_id 不能为空字符串
+                if not prompt_id.strip():
+                    return ResultUtil.fail(msg="提示词ID不能为空", data=None)
+
+                # 查询指定ID的提示词（校验租户和用户权限）
+                prompt = await self.repository.get_prompt_by_id(
+                    prompt_id=prompt_id,
+                    tenant_id=tenant_id,
+                    user_id=current_user_id
+                )
+
+                if not prompt:
+                    return ResultUtil.fail(
+                        msg="提示词不存在或无权访问",
+                        data=None
+                    )
+
+                return ResultUtil.success(data=prompt)
+
+            # 没有传入 prompt_id，根据 tenant_id 查询或创建默认提示词
             prompt = await self.repository.get_prompt_by_tenant(tenant_id)
 
             # 如果没有查到数据，则创建默认提示词
@@ -54,33 +84,47 @@ class PromptService:
             self,
             tenant_id: str,
             current_user_id: str,
-            keyword: Optional[str] = None
+            keyword: Optional[str] = None,
+            page_num: int = 1,
+            page_size: int = 10
     ) -> ResultEntity:
         """
-        获取当前租户下当前用户的所有提示词列表
+        分页获取当前租户下当前用户的所有提示词列表
         支持按关键词模糊搜索提示词内容
 
         Args:
             tenant_id: 租户ID
             current_user_id: 当前登录用户ID
             keyword: 搜索关键词（可选），对 prompt 字段进行模糊匹配
+            page_num: 页码，从1开始
+            page_size: 每页数量
 
         Returns:
-            ResultEntity: 提示词列表
+            ResultEntity: 提示词列表（包含分页信息）
         """
         try:
             # 验证租户ID
             if not tenant_id:
                 return ResultUtil.fail(msg="租户ID不能为空", data=None)
 
+            # 验证分页参数
+            if page_num < 1:
+                page_num = 1
+            if page_size < 1:
+                page_size = 10
+            if page_size > 100:
+                page_size = 100
+
             # 查询提示词列表
-            prompt_list = await self.repository.get_prompt_list_by_tenant(
-                tenant_id,
-                current_user_id,
-                keyword
+            prompt_list, total = await self.repository.get_prompt_list_by_tenant(
+                tenant_id=tenant_id,
+                user_id=current_user_id,
+                keyword=keyword,
+                page=page_num,
+                page_size=page_size
             )
 
-            return ResultUtil.success(data=prompt_list, total=len(prompt_list))
+            return ResultUtil.success(data=prompt_list, total=total)
 
         except Exception as e:
             logger.error(f"获取提示词列表失败: {str(e)}", exc_info=True)

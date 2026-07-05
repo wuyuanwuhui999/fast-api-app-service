@@ -1,9 +1,9 @@
 # prompt/repositories/prompt_repository.py
 import uuid
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, text, desc
+from sqlalchemy import and_, or_, text, desc, func
 from fastapi.logger import logger
 
 from common.utils.result_util import ResultEntity
@@ -38,21 +38,57 @@ class PromptRepository:
             logger.error(f"查询提示词失败: {str(e)}", exc_info=True)
             return None
 
-    async def get_prompt_by_id(self, prompt_id: str, tenant_id: str) -> Optional[PromptSchema]:
+    async def get_prompt_by_id(
+            self,
+            prompt_id: str,
+            tenant_id: str,
+            user_id: Optional[str] = None
+    ) -> Optional[PromptSchema]:
         """
         根据ID和租户ID查询提示词记录（用于权限验证）
 
         Args:
             prompt_id: 提示词ID
             tenant_id: 租户ID
+            user_id: 用户ID（可选），用于权限校验
+
+        Returns:
+            Optional[PromptSchema]: 提示词记录
+        """
+        try:
+            query = self.db.query(PromptModel).filter(
+                PromptModel.id == prompt_id,
+                PromptModel.tenant_id == tenant_id
+            )
+
+            # 如果传入了 user_id，校验用户权限
+            if user_id:
+                query = query.filter(PromptModel.user_id == user_id)
+
+            prompt = query.first()
+
+            if prompt:
+                return PromptSchema.model_validate(prompt)
+            return None
+
+        except Exception as e:
+            logger.error(f"根据ID查询提示词失败: {str(e)}", exc_info=True)
+            return None
+
+    async def get_prompt_by_id_only(self, prompt_id: str) -> Optional[PromptSchema]:
+        """
+        仅根据ID查询提示词记录（不校验租户和用户）
+        用于查询单条提示词详情
+
+        Args:
+            prompt_id: 提示词ID
 
         Returns:
             Optional[PromptSchema]: 提示词记录
         """
         try:
             prompt = self.db.query(PromptModel).filter(
-                PromptModel.id == prompt_id,
-                PromptModel.tenant_id == tenant_id
+                PromptModel.id == prompt_id
             ).first()
 
             if prompt:
@@ -67,19 +103,23 @@ class PromptRepository:
             self,
             tenant_id: str,
             user_id: str,
-            keyword: Optional[str] = None
-    ) -> List[PromptSchema]:
+            keyword: Optional[str] = None,
+            page: int = 1,
+            page_size: int = 10
+    ) -> Tuple[List[PromptSchema], int]:
         """
-        根据租户ID查询所有提示词列表（按更新时间倒序）
+        根据租户ID分页查询提示词列表（按更新时间倒序）
         支持按关键词模糊搜索提示词内容
 
         Args:
             tenant_id: 租户ID
             user_id: 当前用户ID（用于权限验证）
             keyword: 搜索关键词（可选），对 prompt 字段进行模糊匹配
+            page: 页码，从1开始
+            page_size: 每页数量
 
         Returns:
-            List[PromptSchema]: 提示词列表
+            Tuple[List[PromptSchema], int]: (提示词列表, 总记录数)
         """
         try:
             # 构建基础查询
@@ -93,14 +133,18 @@ class PromptRepository:
                 search_pattern = f"%{keyword.strip()}%"
                 query = query.filter(PromptModel.prompt.like(search_pattern))
 
-            # 按更新时间倒序排列
-            prompts = query.order_by(desc(PromptModel.update_time)).all()
+            # 查询总数
+            total = query.count()
 
-            return [PromptSchema.model_validate(prompt) for prompt in prompts]
+            # 分页查询
+            offset = (page - 1) * page_size
+            prompts = query.order_by(desc(PromptModel.update_time)).offset(offset).limit(page_size).all()
+
+            return [PromptSchema.model_validate(prompt) for prompt in prompts], total
 
         except Exception as e:
             logger.error(f"查询提示词列表失败: {str(e)}", exc_info=True)
-            return []
+            return [], 0
 
     async def insert_prompt(
             self,
