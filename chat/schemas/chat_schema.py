@@ -1,4 +1,3 @@
-# chat/schemas/chat_schema.py
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List
@@ -49,7 +48,7 @@ class ChatParamsEntity(BaseModel):
     """WebSocket消息参数 - 通过send方法传递"""
     prompt: str
     systemPrompt: Optional[str] = None
-    docIds: Optional[List[str]] = None  # 新增：文档ID列表，前端字段名为 docIds
+    docIds: Optional[List[str]] = None
     chatId: str
     modelId: str
     showThink: bool = False
@@ -84,6 +83,7 @@ class ChatModelSchema(BaseModel):
     model_name: str
     base_url: Optional[str] = None
     company_id: Optional[str] = Field(None, alias="companyId")
+    created_by: Optional[str] = Field(None, alias="createdBy")  # 新增字段
     disabled: int = 0
     create_time: Optional[datetime] = None
     update_time: Optional[datetime] = None
@@ -100,7 +100,7 @@ class ChatModelSchema(BaseModel):
 class ChatDocSchema(BaseModel):
     """文档Schema - 完整字段定义"""
     id: str
-    directory_id: Optional[str] = None  # 新增：目录ID字段
+    directory_id: Optional[str] = None
     doc_id: Optional[str] = None
     name: Optional[str] = None
     ext: Optional[str] = None
@@ -120,3 +120,51 @@ class ChatDocSchema(BaseModel):
 class CreateDirectoryShema(BaseModel):
     directory: str
     tenantId: str
+
+
+# ==================== 新增模型管理 Schema ====================
+
+class AddModelSchema(BaseModel):
+    """添加模型请求Schema"""
+    modelName: str = Field(..., description="模型名称")
+    type: str = Field(..., description="模型类型：ollama/deepseek/tongyi")
+    companyId: str = Field(..., description="企业ID")
+    apiKey: Optional[str] = Field(None, description="API密钥（在线模型需要）")
+    baseUrl: str = Field(..., description="API基础URL")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
+            "example": {
+                "modelName": "deepseek-chat",
+                "type": "deepseek",
+                "companyId": "abc123def456",
+                "apiKey": "sk-xxx",
+                "baseUrl": "https://api.deepseek.com/v1"
+            }
+        }
+    )
+
+
+class UpdateModelSchema(BaseModel):
+    """更新模型请求Schema"""
+    id: str = Field(..., description="模型ID")
+    modelName: str = Field(..., description="模型名称")
+    type: str = Field(..., description="模型类型：ollama/deepseek/tongyi")
+    companyId: str = Field(..., description="企业ID")
+    apiKey: Optional[str] = Field(None, description="API密钥（在线模型需要）")
+    baseUrl: str = Field(..., description="API基础URL")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
+            "example": {
+                "id": "model_123456",
+                "modelName": "deepseek-chat",
+                "type": "deepseek",
+                "companyId": "abc123def456",
+                "apiKey": "sk-xxx",
+                "baseUrl": "https://api.deepseek.com/v1"
+            }
+        }
+    )

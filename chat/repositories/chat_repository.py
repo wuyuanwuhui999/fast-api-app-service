@@ -14,14 +14,22 @@ class ChatRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_model_list(self, company_id: Optional[str] = None) -> List[ChatModelSchema]:
-        """获取模型列表，支持按企业ID筛选"""
+    def get_model_list(self, company_id: Optional[str] = None, keyword: Optional[str] = None) -> List[ChatModelSchema]:
+        """获取模型列表，支持按企业ID筛选和关键词模糊搜索"""
         query = self.db.query(ChatModel).filter(ChatModel.disabled == 0)
-        
+
         # 如果提供了 company_id，则按企业ID筛选
         if company_id:
             query = query.filter(ChatModel.company_id == company_id)
-        
+
+        # 如果提供了 keyword，按模型名称模糊搜索
+        if keyword and keyword.strip():
+            search_pattern = f"%{keyword.strip()}%"
+            query = query.filter(ChatModel.model_name.like(search_pattern))
+
+        # 按创建时间降序
+        query = query.order_by(ChatModel.create_time.desc())
+
         model_list = query.all()
         return [ChatModelSchema.model_validate(model).model_dump(by_alias=True) for model in model_list]
 
@@ -32,11 +40,11 @@ class ChatRepository:
                 ChatModel.id == model_id,
                 ChatModel.disabled == 0
             )
-            
+
             # 如果提供了 company_id，则按企业ID筛选
             if company_id:
                 query = query.filter(ChatModel.company_id == company_id)
-            
+
             model = query.first()
             if model:
                 return ChatModelSchema.model_validate(model)
@@ -44,6 +52,141 @@ class ChatRepository:
         except Exception as e:
             logger.error(f"获取模型配置失败: {str(e)}")
             return None
+
+    def get_model_by_id_only(self, model_id: str) -> Optional[ChatModel]:
+        """仅根据ID获取模型（不校验company_id），用于权限验证"""
+        try:
+            return self.db.query(ChatModel).filter(
+                ChatModel.id == model_id,
+                ChatModel.disabled == 0
+            ).first()
+        except Exception as e:
+            logger.error(f"获取模型失败: {str(e)}")
+            return None
+
+    def add_model(
+            self,
+            model_name: str,
+            model_type: str,
+            company_id: str,
+            base_url: str,
+            created_by: str,
+            api_key: Optional[str] = None
+    ) -> Optional[ChatModelSchema]:
+        """添加新模型"""
+        try:
+            import uuid
+
+            db_model = ChatModel(
+                id=str(uuid.uuid4()).replace("-", ""),
+                model_name=model_name,
+                type=model_type,
+                company_id=company_id,
+                base_url=base_url,
+                api_key=api_key,
+                created_by=created_by,
+                disabled=0,
+                create_time=datetime.now(),
+                update_time=datetime.now()
+            )
+
+            self.db.add(db_model)
+            self.db.commit()
+            self.db.refresh(db_model)
+
+            return ChatModelSchema.model_validate(db_model)
+
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"添加模型失败: {str(e)}", exc_info=True)
+            return None
+
+    def update_model(
+            self,
+            model_id: str,
+            model_name: str,
+            model_type: str,
+            company_id: str,
+            base_url: str,
+            api_key: Optional[str] = None
+    ) -> Optional[ChatModelSchema]:
+        """更新模型"""
+        try:
+            db_model = self.db.query(ChatModel).filter(
+                ChatModel.id == model_id,
+                ChatModel.disabled == 0
+            ).first()
+
+            if not db_model:
+                return None
+
+            db_model.model_name = model_name
+            db_model.type = model_type
+            db_model.company_id = company_id
+            db_model.base_url = base_url
+            db_model.api_key = api_key
+            db_model.update_time = datetime.now()
+
+            self.db.commit()
+            self.db.refresh(db_model)
+
+            return ChatModelSchema.model_validate(db_model)
+
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"更新模型失败: {str(e)}", exc_info=True)
+            return None
+
+    def delete_model(self, model_id: str) -> bool:
+        """删除模型（软删除）"""
+        try:
+            db_model = self.db.query(ChatModel).filter(
+                ChatModel.id == model_id,
+                ChatModel.disabled == 0
+            ).first()
+
+            if not db_model:
+                return False
+
+            db_model.disabled = 1
+            db_model.update_time = datetime.now()
+
+            self.db.commit()
+            return True
+
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"删除模型失败: {str(e)}", exc_info=True)
+            return False
+
+    def check_user_is_admin(self, company_id: str, user_id: str) -> bool:
+        """
+        检查用户是否在指定企业内且角色 > 0（管理员及以上）
+        使用原生SQL查询 company_user 表
+        """
+        try:
+            from sqlalchemy import text
+
+            sql = """
+                  SELECT COUNT(*)
+                  FROM company_user
+                  WHERE company_id = :company_id
+                    AND user_id = :user_id
+                    AND status = 1
+                    AND CAST(role AS UNSIGNED) > 0 \
+                  """
+
+            result = self.db.execute(
+                text(sql),
+                {"company_id": company_id, "user_id": user_id}
+            )
+
+            count = result.scalar()
+            return count > 0
+
+        except Exception as e:
+            logger.error(f"检查用户管理员权限失败: {str(e)}", exc_info=True)
+            return False
 
     async def save_chat_history(self, chat_data: ChatSchema) -> bool:
         """保存聊天记录到数据库"""
@@ -77,13 +220,13 @@ class ChatRepository:
             return False
 
     def get_chat_history(self, user_id: str, start: int, size: int) -> List[ChatSchema]:
-        chat_history_list = self.db.query(ChatHistory)\
+        chat_history_list = self.db.query(ChatHistory) \
             .filter(ChatHistory.user_id == user_id) \
             .order_by(ChatHistory.create_time.desc()) \
             .offset(start) \
-            .limit(size)\
+            .limit(size) \
             .all()
-        
+
         return [
             ChatSchema(
                 id=chat.id,
@@ -228,7 +371,8 @@ class ChatRepository:
                 user_id=db_directory.user_id,
                 directory=db_directory.directory,
                 tenant_id=db_directory.tenant_id,
-                create_time=db_directory.create_time.strftime("%Y-%m-%d %H:%M:%S") if db_directory.create_time else None,
+                create_time=db_directory.create_time.strftime(
+                    "%Y-%m-%d %H:%M:%S") if db_directory.create_time else None,
                 update_time=db_directory.update_time.strftime("%Y-%m-%d %H:%M:%S") if db_directory.update_time else None
             )
 

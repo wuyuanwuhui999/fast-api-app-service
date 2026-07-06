@@ -73,7 +73,8 @@ class ChatModel(Base):
     api_key = Column(String(255), nullable=True, comment='在线大模型的api_key,ollama本地大模型则为空')
     model_name = Column(String(255), nullable=True, comment='模型名称')
     base_url = Column(String(500), nullable=True, comment='API基础URL')
-    company_id = Column(String(32), nullable=True, comment='企业ID')  # 新增字段
+    company_id = Column(String(32), nullable=True, comment='企业ID')
+    created_by = Column(String(32), nullable=True, comment='创建人ID')  # 新增字段
     disabled = Column(Integer, default=0, comment='是否禁用：0启用，1禁用')
     create_time = Column(DateTime, nullable=True, comment='创建时间')
     update_time = Column(DateTime, nullable=True, comment='更新时间')

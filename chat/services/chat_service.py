@@ -1,4 +1,3 @@
-# chat/services/chat_service.py
 import os
 import asyncio
 import uuid
@@ -11,6 +10,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.orm import Session
 from chat.repositories.chat_repository import ChatRepository
 from chat.schemas.chat_schema import ChatDocSchema, ChatParamsEntity, ChatSchema, ChatModelSchema
+from chat.schemas.chat_schema import AddModelSchema, UpdateModelSchema  # 新增导入
 from chat.utils.chat_util import PromptUtil
 from common.config.common_database import get_db
 from common.utils.result_util import ResultEntity, ResultUtil
@@ -270,7 +270,7 @@ class ChatService:
                 context = await self.build_context(
                     query=chat_params.prompt,
                     user_id=user_id,
-                    doc_ids=chat_params.docIds,  # 传入文档ID列表
+                    doc_ids=chat_params.docIds,
                     tenant_id=chat_params.tenantId
                 )
                 logger.info(f"[ChatService] 查询到相关文档，长度: {len(context) if context else 0}")
@@ -334,10 +334,139 @@ class ChatService:
             yield f"Error occurred: {str(e)}"
             yield "[completed]"
 
-    async def get_model_list(self, company_id: Optional[str] = None) -> ResultEntity:
-        """获取模型列表，支持按企业ID筛选"""
-        model_list = self.chat_repository.get_model_list(company_id)
+    # ==================== 模型管理方法 ====================
+
+    async def get_model_list(self, company_id: Optional[str] = None, keyword: Optional[str] = None) -> ResultEntity:
+        """获取模型列表，支持按企业ID筛选和关键词模糊搜索"""
+        model_list = self.chat_repository.get_model_list(company_id, keyword)
         return ResultUtil.success(data=model_list)
+
+    async def add_model(self, model_data: AddModelSchema, current_user_id: str) -> ResultEntity:
+        """
+        添加模型
+        需要当前用户在企业中为管理员（role > 0）
+        """
+        try:
+            # 验证必填字段
+            if not model_data.modelName or not model_data.modelName.strip():
+                return ResultUtil.fail(msg="模型名称不能为空", data=None)
+
+            if not model_data.type or not model_data.type.strip():
+                return ResultUtil.fail(msg="模型类型不能为空", data=None)
+
+            if not model_data.companyId:
+                return ResultUtil.fail(msg="企业ID不能为空", data=None)
+
+            if not model_data.baseUrl or not model_data.baseUrl.strip():
+                return ResultUtil.fail(msg="API基础URL不能为空", data=None)
+
+            # 检查用户是否为管理员（role > 0）
+            if not self.chat_repository.check_user_is_admin(model_data.companyId, current_user_id):
+                return ResultUtil.fail(msg="无权限操作，需要企业管理员权限", data=None)
+
+            # 添加模型
+            result = self.chat_repository.add_model(
+                model_name=model_data.modelName.strip(),
+                model_type=model_data.type.strip(),
+                company_id=model_data.companyId,
+                base_url=model_data.baseUrl.strip(),
+                created_by=current_user_id,
+                api_key=model_data.apiKey
+            )
+
+            if not result:
+                return ResultUtil.fail(msg="添加模型失败", data=None)
+
+            return ResultUtil.success(data=result, msg="模型添加成功")
+
+        except Exception as e:
+            logger.error(f"添加模型失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"添加模型失败: {str(e)}", data=None)
+
+    async def update_model(self, model_data: UpdateModelSchema, current_user_id: str) -> ResultEntity:
+        """
+        更新模型
+        需要当前用户在企业中为管理员（role > 0）
+        """
+        try:
+            # 验证必填字段
+            if not model_data.id:
+                return ResultUtil.fail(msg="模型ID不能为空", data=None)
+
+            if not model_data.modelName or not model_data.modelName.strip():
+                return ResultUtil.fail(msg="模型名称不能为空", data=None)
+
+            if not model_data.type or not model_data.type.strip():
+                return ResultUtil.fail(msg="模型类型不能为空", data=None)
+
+            if not model_data.companyId:
+                return ResultUtil.fail(msg="企业ID不能为空", data=None)
+
+            if not model_data.baseUrl or not model_data.baseUrl.strip():
+                return ResultUtil.fail(msg="API基础URL不能为空", data=None)
+
+            # 检查模型是否存在
+            existing_model = self.chat_repository.get_model_by_id_only(model_data.id)
+            if not existing_model:
+                return ResultUtil.fail(msg="模型不存在", data=None)
+
+            # 检查用户是否为管理员（role > 0）
+            if not self.chat_repository.check_user_is_admin(model_data.companyId, current_user_id):
+                return ResultUtil.fail(msg="无权限操作，需要企业管理员权限", data=None)
+
+            # 更新模型
+            result = self.chat_repository.update_model(
+                model_id=model_data.id,
+                model_name=model_data.modelName.strip(),
+                model_type=model_data.type.strip(),
+                company_id=model_data.companyId,
+                base_url=model_data.baseUrl.strip(),
+                api_key=model_data.apiKey
+            )
+
+            if not result:
+                return ResultUtil.fail(msg="更新模型失败", data=None)
+
+            return ResultUtil.success(data=result, msg="模型更新成功")
+
+        except Exception as e:
+            logger.error(f"更新模型失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"更新模型失败: {str(e)}", data=None)
+
+    async def delete_model(self, model_id: str, company_id: str, current_user_id: str) -> ResultEntity:
+        """
+        删除模型（软删除）
+        需要当前用户在企业中为管理员（role > 0）
+        """
+        try:
+            if not model_id:
+                return ResultUtil.fail(msg="模型ID不能为空", data=None)
+
+            if not company_id:
+                return ResultUtil.fail(msg="企业ID不能为空", data=None)
+
+            # 检查模型是否存在
+            existing_model = self.chat_repository.get_model_by_id_only(model_id)
+            if not existing_model:
+                return ResultUtil.fail(msg="模型不存在", data=None)
+
+            # 检查用户是否为管理员（role > 0）
+            if not self.chat_repository.check_user_is_admin(company_id, current_user_id):
+                return ResultUtil.fail(msg="无权限操作，需要企业管理员权限", data=None)
+
+            # 删除模型
+            success = self.chat_repository.delete_model(model_id)
+
+            if not success:
+                return ResultUtil.fail(msg="删除模型失败", data=None)
+
+            return ResultUtil.success(data=1, msg="模型删除成功")
+
+        except Exception as e:
+            logger.error(f"删除模型失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"删除模型失败: {str(e)}", data=None)
+
+    # ==================== 原有的其他方法 ====================
 
     async def _create_chat_model(self, model_config: ChatModelSchema, show_think: bool) -> Any:
         """根据模型配置创建对应的聊天模型实例"""
@@ -736,7 +865,7 @@ class ChatService:
             # 创建文档记录 - 包含 directory_id
             doc = ChatDocSchema(
                 id=doc_id,
-                directory_id=directory_id,  # 新增：传入目录ID
+                directory_id=directory_id,
                 doc_id=doc_id,
                 user_id=user_id,
                 name=file.filename,
