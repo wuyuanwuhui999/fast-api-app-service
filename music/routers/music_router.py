@@ -125,3 +125,36 @@ async def get_music_author_list_by_category_id(
         page_num=pageNum,
         page_size=pageSize
     )
+
+# music/routers/music_router.py (追加部分)
+
+@router.get("/getMusicListByAuthorId", response_model=ResultEntity)
+async def get_music_list_by_author_id(
+        authorId: int = Query(..., description="歌手ID（对应 music 表的 author_id）"),
+        pageNum: int = Query(1, ge=1, description="页码，从1开始"),
+        pageSize: int = Query(10, ge=1, le=100, description="每页数量，最大100"),
+        current_user_id: str = Depends(get_user_id_from_header),
+        music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    根据歌手ID分页获取音乐列表
+
+    查询该歌手下的所有歌曲，
+    并查询当前用户对每首歌曲的点赞状态（is_like）
+
+    Args:
+        authorId: 歌手ID
+        pageNum: 页码，从1开始
+        pageSize: 每页数量，最大100
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 分页音乐列表（包含 isLike 字段）
+    """
+    return await music_service.get_music_list_by_author_id(
+        author_id=authorId,
+        user_id=current_user_id,
+        page_num=pageNum,
+        page_size=pageSize
+    )

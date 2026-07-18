@@ -340,3 +340,109 @@ class MusicRepository:
         except Exception as e:
             logger.error(f"根据分类ID查询歌手列表失败: {str(e)}", exc_info=True)
             return [], 0
+
+    def get_music_list_by_author_id(
+            self,
+            author_id: int,
+            user_id: str,
+            page_num: int = 1,
+            page_size: int = 10
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """
+        根据歌手ID分页查询音乐列表，并获取当前用户的点赞状态
+
+        Args:
+            author_id: 歌手ID（对应 music 表的 author_id 字段）
+            user_id: 当前用户ID
+            page_num: 页码，从1开始
+            page_size: 每页数量
+
+        Returns:
+            Tuple[List[Dict[str, Any]], int]: (音乐列表, 总记录数)
+        """
+        try:
+            from music.models.music_model import MusicModel, MusicLikeModel
+            from sqlalchemy import func, desc
+
+            offset = (page_num - 1) * page_size
+
+            # ==================== 查询总数 ====================
+            total_stmt = (
+                self.db.query(func.count(MusicModel.id))
+                .filter(
+                    MusicModel.author_id == author_id,
+                    MusicModel.is_publish == 1
+                )
+            )
+            total = total_stmt.scalar() or 0
+
+            if total == 0:
+                return [], 0
+
+            # ==================== 查询音乐列表 ====================
+            # 主查询：查询音乐列表，并 LEFT JOIN 点赞表
+            results = (
+                self.db.query(
+                    MusicModel,
+                    func.if_(MusicLikeModel.id.isnot(None), 1, 0).label('is_like')
+                )
+                .outerjoin(
+                    MusicLikeModel,
+                    (MusicModel.id == MusicLikeModel.music_id) &
+                    (MusicLikeModel.user_id == user_id)
+                )
+                .filter(
+                    MusicModel.author_id == author_id,
+                    MusicModel.is_publish == 1
+                )
+                .order_by(
+                    func.coalesce(MusicModel.is_hot, 0).desc(),
+                    MusicModel.create_time.desc()
+                )
+                .offset(offset)
+                .limit(page_size)
+                .all()
+            )
+
+            # 构建返回数据
+            music_list = []
+            for music_obj, is_like in results:
+                music_dict = {
+                    "id": music_obj.id,
+                    "album_id": music_obj.album_id,
+                    "song_name": music_obj.song_name,
+                    "author_name": music_obj.author_name,
+                    "author_id": music_obj.author_id,
+                    "album_name": music_obj.album_name,
+                    "version": music_obj.version,
+                    "language": music_obj.language,
+                    "publish_date": music_obj.publish_date,
+                    "wide_audio_id": music_obj.wide_audio_id,
+                    "is_publish": music_obj.is_publish,
+                    "big_pack_id": music_obj.big_pack_id,
+                    "final_id": music_obj.final_id,
+                    "audio_id": music_obj.audio_id,
+                    "similar_audio_id": music_obj.similar_audio_id,
+                    "is_hot": music_obj.is_hot,
+                    "album_audio_id": music_obj.album_audio_id,
+                    "audio_group_id": music_obj.audio_group_id,
+                    "cover": music_obj.cover,
+                    "play_url": music_obj.play_url,
+                    "local_play_url": music_obj.local_play_url,
+                    "source_name": music_obj.source_name,
+                    "source_url": music_obj.source_url,
+                    "create_time": music_obj.create_time,
+                    "update_time": music_obj.update_time,
+                    "label": music_obj.label,
+                    "lyrics": music_obj.lyrics,
+                    "permission": music_obj.permission,
+                    "is_like": is_like,  # 点赞状态：1-已点赞，0-未点赞
+                    "times": 0  # 播放次数，暂未实现
+                }
+                music_list.append(music_dict)
+
+            return music_list, total
+
+        except Exception as e:
+            logger.error(f"根据歌手ID查询音乐列表失败: {str(e)}", exc_info=True)
+            return [], 0
