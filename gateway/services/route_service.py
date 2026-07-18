@@ -17,7 +17,8 @@ class RouteService:
         "tenant": "tenant-service",
         "prompt": "prompt-service",
         "agent": "agent-service",
-        "company": "company-service",  # 新增
+        "company": "company-service",
+        "music": "music-service",  # 新增
     }
 
     # 服务实例缓存
@@ -27,7 +28,8 @@ class RouteService:
         "tenant-service": {"ip": "127.0.0.1", "port": 4007, "healthy": True, "weight": 1.0},
         "prompt-service": {"ip": "127.0.0.1", "port": 4008, "healthy": True, "weight": 1.0},
         "agent-service": {"ip": "127.0.0.1", "port": 4010, "healthy": True, "weight": 1.0},
-        "company-service": {"ip": "127.0.0.1", "port": 4011, "healthy": True, "weight": 1.0},  # 新增
+        "company-service": {"ip": "127.0.0.1", "port": 4011, "healthy": True, "weight": 1.0},
+        "music-service": {"ip": "127.0.0.1", "port": 4002, "healthy": True, "weight": 1.0},  # 新增
     }
     
     def __init__(self):

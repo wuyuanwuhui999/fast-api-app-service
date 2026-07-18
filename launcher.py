@@ -11,7 +11,9 @@ from datetime import datetime
 
 class ServiceManager:
     def __init__(self):
-        
+
+        # launcher.py - 修改 __init__ 方法中的 services 列表
+
         self.services = [
             {"name": "Gateway Service", "port": 4009, "module": "gateway.main", "color": "\033[96m"},
             {"name": "User Service", "port": 4005, "module": "user.main", "color": "\033[92m"},
@@ -19,7 +21,8 @@ class ServiceManager:
             {"name": "Tenant Service", "port": 4007, "module": "tenant.main", "color": "\033[93m"},
             {"name": "Prompt Service", "port": 4008, "module": "prompt.main", "color": "\033[95m"},
             {"name": "Agent Service", "port": 4010, "module": "agent.main", "color": "\033[96m"},
-            {"name": "Company Service", "port": 4011, "module": "company.main", "color": "\033[92m"},  # 新增
+            {"name": "Company Service", "port": 4011, "module": "company.main", "color": "\033[92m"},
+            {"name": "Music Service", "port": 4002, "module": "music.main", "color": "\033[94m"},  # 新增
         ]
         
         self.processes = []

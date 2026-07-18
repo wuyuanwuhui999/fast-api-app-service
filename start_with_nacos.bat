@@ -23,6 +23,9 @@ timeout /t 2 /nobreak > nul
 start "Agent Service" cmd /c "python -m uvicorn agent.main:app --reload --port 4010 --host 0.0.0.0"  :: 新增
 timeout /t 2 /nobreak > nul
 
+start "Music Service" cmd /c "python -m uvicorn music.main:app --reload --port 4002 --host 0.0.0.0"
+timeout /t 2 /nobreak > nul
+
 start "Gateway Service" cmd /c "python -m uvicorn gateway.main:app --reload --port 4009 --host 0.0.0.0"
 
 echo.
@@ -34,6 +37,7 @@ echo Chat:       http://localhost:4006
 echo Tenant:     http://localhost:4007
 echo Prompt:     http://localhost:4008
 echo Agent:      http://localhost:4010
+echo Music:      http://localhost:4002
 echo ========================================
 echo.
 echo Nacos控制台: http://localhost:8848/nacos
