@@ -81,3 +81,29 @@ class MusicListResponse(BaseModel):
             datetime: lambda v: v.strftime("%Y-%m-%d %H:%M:%S") if v else None
         }
     )
+
+class MusicAuthorSchema(BaseModel):
+    """歌手Schema（响应模型）"""
+    id: int = Field(..., description="主键")
+    author_id: Optional[int] = Field(None, description="歌手ID", alias="authorId")
+    author_name: Optional[str] = Field(None, description="歌手名称", alias="authorName")
+    category_id: Optional[int] = Field(None, description="分类ID", alias="categoryId")
+    is_publish: Optional[int] = Field(None, description="是否发布", alias="isPublish")
+    avatar: Optional[str] = Field(None, description="头像")
+    type: Optional[int] = Field(None, description="类型")
+    country: Optional[str] = Field(None, description="国家")
+    birthday: Optional[str] = Field(None, description="生日")
+    identity: Optional[int] = Field(None, description="身份")
+    rank: Optional[int] = Field(None, description="歌手排名")
+    create_time: Optional[datetime] = Field(None, description="创建时间", alias="createTime")
+    update_time: Optional[datetime] = Field(None, description="修改时间", alias="updateTime")
+    total: int = Field(default=0, description="该歌手的歌曲总数")
+    is_like: int = Field(default=0, description="是否点赞：1-已点赞，0-未点赞", alias="isLike")
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        json_encoders={
+            datetime: lambda v: v.strftime("%Y-%m-%d %H:%M:%S") if v else None
+        }
+    )

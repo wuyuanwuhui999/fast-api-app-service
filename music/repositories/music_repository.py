@@ -1,12 +1,6 @@
-# music/repositories/music_repository.py
 from typing import List, Optional, Dict, Any, Tuple
 from sqlalchemy.orm import Session
-from sqlalchemy import text, desc
 from fastapi.logger import logger
-
-from music.models.music_model import MusicModel, MusicLikeModel
-from music.schemas.music_schema import MusicSchema
-
 
 class MusicRepository:
     """音乐数据访问层"""
@@ -236,4 +230,113 @@ class MusicRepository:
 
         except Exception as e:
             logger.error(f"根据分类ID查询音乐列表失败: {str(e)}", exc_info=True)
+            return [], 0
+
+    def get_author_list_by_category_id(
+            self,
+            category_id: int,
+            user_id: str,
+            page_num: int = 1,
+            page_size: int = 10
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """
+        根据分类ID分页查询歌手列表，并获取每个歌手的歌曲数量和当前用户的点赞状态
+
+        Args:
+            category_id: 分类ID
+            user_id: 当前用户ID
+            page_num: 页码，从1开始
+            page_size: 每页数量
+
+        Returns:
+            Tuple[List[Dict[str, Any]], int]: (歌手列表, 总记录数)
+        """
+        try:
+            from music.models.music_author import MusicAuthorModel
+            from music.models.music_author_like import MusicAuthorLikeModel
+            from music.models.music_model import MusicModel
+            from sqlalchemy import func, desc
+
+            offset = (page_num - 1) * page_size
+
+            # ==================== 查询总数 ====================
+            total_stmt = (
+                self.db.query(func.count(MusicAuthorModel.id))
+                .filter(
+                    MusicAuthorModel.category_id == category_id,
+                    MusicAuthorModel.is_publish == 1
+                )
+            )
+            total = total_stmt.scalar() or 0
+
+            if total == 0:
+                return [], 0
+
+            # ==================== 子查询：统计每个歌手的歌曲数量 ====================
+            # 按 author_id 分组统计 music 表中的歌曲数量
+            music_count_subquery = (
+                self.db.query(
+                    MusicModel.author_id,
+                    func.count(MusicModel.id).label('song_count')
+                )
+                .filter(MusicModel.is_publish == 1)
+                .group_by(MusicModel.author_id)
+                .subquery()
+            )
+
+            # ==================== 主查询：歌手列表 + 歌曲数量 + 点赞状态 ====================
+            results = (
+                self.db.query(
+                    MusicAuthorModel,
+                    func.coalesce(music_count_subquery.c.song_count, 0).label('total'),
+                    func.if_(MusicAuthorLikeModel.id.isnot(None), 1, 0).label('is_like')
+                )
+                .outerjoin(
+                    music_count_subquery,
+                    MusicAuthorModel.author_id == music_count_subquery.c.author_id
+                )
+                .outerjoin(
+                    MusicAuthorLikeModel,
+                    (MusicAuthorModel.id == MusicAuthorLikeModel.author_id) &
+                    (MusicAuthorLikeModel.user_id == user_id)
+                )
+                .filter(
+                    MusicAuthorModel.category_id == category_id,
+                    MusicAuthorModel.is_publish == 1
+                )
+                .order_by(
+                    func.coalesce(MusicAuthorModel.rank, 0).desc(),
+                    MusicAuthorModel.author_name.asc()
+                )
+                .offset(offset)
+                .limit(page_size)
+                .all()
+            )
+
+            # 构建返回数据
+            author_list = []
+            for author_obj, total_songs, is_like in results:
+                author_dict = {
+                    "id": author_obj.id,
+                    "author_id": author_obj.author_id,
+                    "author_name": author_obj.author_name,
+                    "category_id": author_obj.category_id,
+                    "is_publish": author_obj.is_publish,
+                    "avatar": author_obj.avatar,
+                    "type": author_obj.type,
+                    "country": author_obj.country,
+                    "birthday": author_obj.birthday,
+                    "identity": author_obj.identity,
+                    "rank": author_obj.rank,
+                    "create_time": author_obj.create_time,
+                    "update_time": author_obj.update_time,
+                    "total": total_songs,  # 歌曲数量
+                    "is_like": is_like  # 点赞状态：1-已点赞，0-未点赞
+                }
+                author_list.append(author_dict)
+
+            return author_list, total
+
+        except Exception as e:
+            logger.error(f"根据分类ID查询歌手列表失败: {str(e)}", exc_info=True)
             return [], 0
