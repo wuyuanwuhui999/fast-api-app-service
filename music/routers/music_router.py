@@ -19,30 +19,24 @@ def get_user_id_from_header(x_user_id: str = Header(None, alias="X-User-Id")):
     return x_user_id
 
 
-@router.get("/keywordMusic", response_model=ResultEntity)
-async def get_recommend_music(
-        page_num: int = Query(1, ge=1, description="页码，从1开始"),
-        page_size: int = Query(10, ge=1, le=100, description="每页数量，最大100"),
+@router.get("/getKeywordMusic", response_model=ResultEntity)
+async def get_keyword_music(
         current_user_id: str = Depends(get_user_id_from_header),
         music_service: MusicService = Depends()
 ) -> ResultEntity:
     """
-    获取推荐音乐列表
+    获取搜索框中推荐的一首音乐（热门优先）
 
-    按 is_hot 降序排序，支持分页
+    按 is_hot 降序取第一条音乐数据，用于搜索框推荐展示
     关联查询当前用户的点赞状态（is_like字段）
 
     Args:
-        page_num: 页码，从1开始
-        page_size: 每页数量，最大100
         current_user_id: 当前登录用户ID（由网关透传）
         music_service: 音乐服务实例
 
     Returns:
-        ResultEntity: 音乐列表（包含 is_like 字段）
+        ResultEntity: 单首音乐数据（包含 is_like 字段），如果无数据则返回失败
     """
-    return await music_service.get_recommend_music(
-        user_id=current_user_id,
-        page_num=page_num,
-        page_size=page_size
+    return await music_service.get_keyword_music(
+        user_id=current_user_id
     )
