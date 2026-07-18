@@ -40,3 +40,24 @@ async def get_keyword_music(
     return await music_service.get_keyword_music(
         user_id=current_user_id
     )
+
+# music/routers/music_router.py (追加部分)
+
+
+@router.get("/getMusicClassify", response_model=ResultEntity)
+async def get_music_classify(
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    获取音乐分类列表
+
+    按 classify_rank 降序排列，只返回 disabled=0 且 permission >= 0 的记录
+
+    Args:
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 分类列表
+    """
+    return await music_service.get_music_classify()

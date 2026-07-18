@@ -49,3 +49,22 @@ class MusicQueryParams(BaseModel):
     """音乐查询参数"""
     page_num: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=1, le=100, description="每页数量")
+
+class MusicClassifySchema(BaseModel):
+    """音乐分类响应Schema（驼峰命名）"""
+    id: int = Field(..., description="主键")
+    classify_name: Optional[str] = Field(None, description="标签", alias="classifyName")
+    permission: Optional[int] = Field(None, description="权限")
+    classify_rank: Optional[int] = Field(None, description="分类排序，数值越大越靠前", alias="classifyRank")
+    cover: Optional[str] = Field(None, description="图标")
+    disabled: Optional[int] = Field(None, description="是否启用")
+    create_time: Optional[datetime] = Field(None, description="创建时间", alias="createTime")
+    update_time: Optional[datetime] = Field(None, description="更新时间", alias="updateTime")
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        json_encoders={
+            datetime: lambda v: v.strftime("%Y-%m-%d %H:%M:%S") if v else None
+        }
+    )

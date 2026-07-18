@@ -10,12 +10,12 @@ def md5_encrypt(text):
     return md5.hexdigest()
 
 
-def test_get_keyword_music():
+def test_get_music_classify():
     """
-    测试获取推荐音乐接口
+    测试获取音乐分类接口
     流程：
     1. 调用登录接口获取 token
-    2. 使用 token 调用 getKeywordMusic 接口
+    2. 使用 token 调用 getMusicClassify 接口
     """
 
     # ==================== 配置参数 ====================
@@ -70,45 +70,53 @@ def test_get_keyword_music():
         print(f"\n❌ 登录请求失败: {e}")
         return
 
-    # ==================== 第二步：调用 getKeywordMusic 接口 ====================
+    # ==================== 第二步：调用 getMusicClassify 接口 ====================
     print("\n" + "=" * 60)
-    print("第二步：调用 getKeywordMusic 获取推荐音乐")
+    print("第二步：调用 getMusicClassify 获取音乐分类")
     print("=" * 60)
 
-    music_url = f"{base_url}/service/music/getKeywordMusic"
+    classify_url = f"{base_url}/service/music/getMusicClassify"
 
     # 构建请求头，携带 Bearer Token
-    music_headers = {
+    classify_headers = {
         'Content-Type': 'application/json',
         'Authorization': f'Bearer {token}'
     }
 
     try:
-        music_response = requests.get(music_url, headers=music_headers)
-        music_response.raise_for_status()
+        classify_response = requests.get(classify_url, headers=classify_headers)
+        classify_response.raise_for_status()
 
-        music_result = music_response.json()
-        print(f"\n推荐音乐接口响应:")
-        print(json.dumps(music_result, ensure_ascii=False, indent=2))
+        classify_result = classify_response.json()
+        print(f"\n音乐分类接口响应:")
+        print(json.dumps(classify_result, ensure_ascii=False, indent=2))
 
         # 检查接口是否成功
-        if music_result.get("status") == "SUCCESS":
-            music_data = music_result.get("data")
-            if music_data:
-                print("\n✅ 获取推荐音乐成功！")
-                print(f"   - 歌曲名: {music_data.get('songName', 'N/A')}")
-                print(f"   - 作者: {music_data.get('authorName', 'N/A')}")
-                print(f"   - 专辑: {music_data.get('albumName', 'N/A')}")
-                print(f"   - 是否热门: {'是' if music_data.get('isHot') else '否'}")
-                print(f"   - 是否点赞: {'是' if music_data.get('isLike') else '否'}")
+        if classify_result.get("status") == "SUCCESS":
+            classify_data = classify_result.get("data", [])
+            total = classify_result.get("total", 0)
+
+            if classify_data and len(classify_data) > 0:
+                print(f"\n✅ 获取音乐分类成功！共 {total} 条记录")
+                print("\n分类列表：")
+                print("-" * 60)
+                for idx, item in enumerate(classify_data, 1):
+                    print(f"{idx}. {item.get('classifyName', 'N/A')}")
+                    print(f"   - ID: {item.get('id', 'N/A')}")
+                    print(f"   - 排序权重: {item.get('classifyRank', 'N/A')}")
+                    print(f"   - 权限: {item.get('permission', 'N/A')}")
+                    print(f"   - 图标: {item.get('cover', 'N/A')}")
+                    print(f"   - 状态: {'启用' if item.get('disabled') == 0 else '禁用'}")
+                    print("-" * 60)
             else:
-                print("\n⚠️ 接口返回成功，但 data 为空（暂无推荐音乐）")
+                print("\n⚠️ 接口返回成功，但 data 为空（暂无分类数据）")
+                print(f"   total: {total}")
         else:
-            print(f"\n❌ 获取推荐音乐失败: {music_result.get('msg', '未知错误')}")
+            print(f"\n❌ 获取音乐分类失败: {classify_result.get('msg', '未知错误')}")
 
     except requests.exceptions.RequestException as e:
-        print(f"\n❌ 获取推荐音乐请求失败: {e}")
+        print(f"\n❌ 获取音乐分类请求失败: {e}")
 
 
 if __name__ == "__main__":
-    test_get_keyword_music()
+    test_get_music_classify()

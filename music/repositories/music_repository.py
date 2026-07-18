@@ -91,3 +91,42 @@ class MusicRepository:
         except Exception as e:
             logger.error(f"获取推荐音乐失败: {str(e)}", exc_info=True)
             return None
+
+    def get_music_classify_list(self) -> List[Dict[str, Any]]:
+        """
+        获取音乐分类列表
+        按 classify_rank 降序排列
+
+        Returns:
+            List[Dict[str, Any]]: 分类列表
+        """
+        try:
+            from music.models.music_classify_relation import MusicClassifyRelationModel
+
+            results = (
+                self.db.query(MusicClassifyRelationModel)
+                .filter(
+                    MusicClassifyRelationModel.disabled == 0,
+                    MusicClassifyRelationModel.permission >= 0
+                )
+                .order_by(MusicClassifyRelationModel.classify_rank.desc())
+                .all()
+            )
+
+            return [
+                {
+                    "id": item.id,
+                    "classify_name": item.classify_name,
+                    "permission": item.permission,
+                    "classify_rank": item.classify_rank,
+                    "cover": item.cover,
+                    "disabled": item.disabled,
+                    "create_time": item.create_time,
+                    "update_time": item.update_time
+                }
+                for item in results
+            ]
+
+        except Exception as e:
+            logger.error(f"获取音乐分类列表失败: {str(e)}", exc_info=True)
+            return []

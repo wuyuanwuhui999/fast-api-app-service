@@ -44,3 +44,23 @@ class MusicService:
         except Exception as e:
             logger.error(f"获取推荐音乐失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg=f"获取推荐音乐失败: {str(e)}", data=None)
+
+    async def get_music_classify(self) -> ResultEntity:
+        """
+        获取音乐分类列表
+        按 classify_rank 降序排列
+
+        Returns:
+            ResultEntity: 分类列表
+        """
+        try:
+            classify_list = self.music_repository.get_music_classify_list()
+
+            if not classify_list:
+                return ResultUtil.success(data=[], total=0, msg="暂无分类数据")
+
+            return ResultUtil.success(data=classify_list, total=len(classify_list))
+
+        except Exception as e:
+            logger.error(f"获取音乐分类失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"获取音乐分类失败: {str(e)}", data=None)
