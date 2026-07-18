@@ -2,6 +2,7 @@
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
+from typing import List  # 在文件顶部添加此导入
 
 
 class MusicSchema(BaseModel):
@@ -64,6 +65,18 @@ class MusicClassifySchema(BaseModel):
     model_config = ConfigDict(
         from_attributes=True,
         populate_by_name=True,
+        json_encoders={
+            datetime: lambda v: v.strftime("%Y-%m-%d %H:%M:%S") if v else None
+        }
+    )
+
+class MusicListResponse(BaseModel):
+    """音乐分页列表响应Schema"""
+    list: List[MusicSchema] = Field(default=[], description="音乐列表")
+    total: int = Field(default=0, description="总记录数")
+
+    model_config = ConfigDict(
+        from_attributes=True,
         json_encoders={
             datetime: lambda v: v.strftime("%Y-%m-%d %H:%M:%S") if v else None
         }

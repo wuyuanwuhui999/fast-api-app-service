@@ -61,3 +61,35 @@ async def get_music_classify(
         ResultEntity: 分类列表
     """
     return await music_service.get_music_classify()
+
+@router.get("/getMusicListByClassifyId", response_model=ResultEntity)
+async def get_music_list_by_classify_id(
+        classifyId: int = Query(..., description="分类ID"),
+        pageNum: int = Query(1, ge=1, description="页码，从1开始"),
+        pageSize: int = Query(10, ge=1, le=100, description="每页数量，最大100"),
+        current_user_id: str = Depends(get_user_id_from_header),
+        music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    根据分类ID分页获取音乐列表
+
+    从分类关联表 music_classify 中查询该分类下的所有音乐ID，
+    关联 music 表获取音乐详情，
+    并查询当前用户对每首音乐的点赞状态（is_like）
+
+    Args:
+        classifyId: 分类ID
+        pageNum: 页码，从1开始
+        pageSize: 每页数量，最大100
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 分页音乐列表（包含 isLike 字段）
+    """
+    return await music_service.get_music_list_by_classify_id(
+        classify_id=classifyId,
+        user_id=current_user_id,
+        page_num=pageNum,
+        page_size=pageSize
+    )

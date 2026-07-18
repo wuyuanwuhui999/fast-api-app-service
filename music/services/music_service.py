@@ -64,3 +64,50 @@ class MusicService:
         except Exception as e:
             logger.error(f"获取音乐分类失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg=f"获取音乐分类失败: {str(e)}", data=None)
+
+    async def get_music_list_by_classify_id(
+            self,
+            classify_id: int,
+            user_id: str,
+            page_num: int = 1,
+            page_size: int = 10
+    ) -> ResultEntity:
+        """
+        根据分类ID分页查询音乐列表
+
+        Args:
+            classify_id: 分类ID
+            user_id: 当前用户ID
+            page_num: 页码，从1开始
+            page_size: 每页数量
+
+        Returns:
+            ResultEntity: 音乐列表（含点赞状态）
+        """
+        try:
+            # 参数校验
+            if classify_id is None or classify_id <= 0:
+                return ResultUtil.fail(msg="分类ID不能为空", data=None)
+
+            if page_num < 1:
+                page_num = 1
+
+            if page_size < 1:
+                page_size = 10
+            if page_size > 100:
+                page_size = 100
+
+            # 查询音乐列表
+            music_list, total = self.music_repository.get_music_list_by_classify_id(
+                classify_id=classify_id,
+                user_id=user_id,
+                page_num=page_num,
+                page_size=page_size
+            )
+
+            # 使用 ResultUtil 返回数据（自动转换驼峰）
+            return ResultUtil.success(data=music_list, total=total)
+
+        except Exception as e:
+            logger.error(f"获取分类音乐列表失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"获取分类音乐列表失败: {str(e)}", data=None)
