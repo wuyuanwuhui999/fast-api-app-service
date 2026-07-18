@@ -349,20 +349,20 @@ class ChatService:
         try:
             # 验证必填字段
             if not model_data.modelName or not model_data.modelName.strip():
-                return ResultUtil.fail(msg="模型名称不能为空", data=None)
+                return ResultUtil.fail(data=0, msg="模型名称不能为空")
 
             if not model_data.type or not model_data.type.strip():
-                return ResultUtil.fail(msg="模型类型不能为空", data=None)
+                return ResultUtil.fail(data=0, msg="模型类型不能为空")
 
             if not model_data.companyId:
-                return ResultUtil.fail(msg="企业ID不能为空", data=None)
+                return ResultUtil.fail(data=0, msg="企业ID不能为空")
 
             if not model_data.baseUrl or not model_data.baseUrl.strip():
-                return ResultUtil.fail(msg="API基础URL不能为空", data=None)
+                return ResultUtil.fail(data=0, msg="API基础URL不能为空")
 
             # 检查用户是否为管理员（role > 0）
             if not self.chat_repository.check_user_is_admin(model_data.companyId, current_user_id):
-                return ResultUtil.fail(msg="无权限操作，需要企业管理员权限", data=None)
+                return ResultUtil.fail(data=0, msg="无权限操作，需要企业管理员权限")
 
             # 添加模型
             result = self.chat_repository.add_model(
@@ -375,13 +375,13 @@ class ChatService:
             )
 
             if not result:
-                return ResultUtil.fail(msg="添加模型失败", data=None)
+                return ResultUtil.fail(data=0, msg="添加模型失败")
 
-            return ResultUtil.success(data=result, msg="模型添加成功")
+            return ResultUtil.success(data=1, msg="模型添加成功")
 
         except Exception as e:
             logger.error(f"添加模型失败: {str(e)}", exc_info=True)
-            return ResultUtil.fail(msg=f"添加模型失败: {str(e)}", data=None)
+            return ResultUtil.fail(data=0, msg=f"添加模型失败: {str(e)}")
 
     async def update_model(self, model_data: UpdateModelSchema, current_user_id: str) -> ResultEntity:
         """
@@ -391,28 +391,28 @@ class ChatService:
         try:
             # 验证必填字段
             if not model_data.id:
-                return ResultUtil.fail(msg="模型ID不能为空", data=None)
+                return ResultUtil.fail(data=0, msg="模型ID不能为空")
 
             if not model_data.modelName or not model_data.modelName.strip():
-                return ResultUtil.fail(msg="模型名称不能为空", data=None)
+                return ResultUtil.fail(data=0, msg="模型名称不能为空")
 
             if not model_data.type or not model_data.type.strip():
-                return ResultUtil.fail(msg="模型类型不能为空", data=None)
+                return ResultUtil.fail(data=0, msg="模型类型不能为空")
 
             if not model_data.companyId:
-                return ResultUtil.fail(msg="企业ID不能为空", data=None)
+                return ResultUtil.fail(data=0, msg="企业ID不能为空")
 
             if not model_data.baseUrl or not model_data.baseUrl.strip():
-                return ResultUtil.fail(msg="API基础URL不能为空", data=None)
+                return ResultUtil.fail(data=0, msg="API基础URL不能为空")
 
             # 检查模型是否存在
             existing_model = self.chat_repository.get_model_by_id_only(model_data.id)
             if not existing_model:
-                return ResultUtil.fail(msg="模型不存在", data=None)
+                return ResultUtil.fail(data=0, msg="模型不存在")
 
             # 检查用户是否为管理员（role > 0）
             if not self.chat_repository.check_user_is_admin(model_data.companyId, current_user_id):
-                return ResultUtil.fail(msg="无权限操作，需要企业管理员权限", data=None)
+                return ResultUtil.fail(data=0, msg="无权限操作，需要企业管理员权限")
 
             # 更新模型
             result = self.chat_repository.update_model(
@@ -425,13 +425,13 @@ class ChatService:
             )
 
             if not result:
-                return ResultUtil.fail(msg="更新模型失败", data=None)
+                return ResultUtil.fail(data=0, msg="更新模型失败")
 
-            return ResultUtil.success(data=result, msg="模型更新成功")
+            return ResultUtil.success(data=1, msg="模型更新成功")
 
         except Exception as e:
             logger.error(f"更新模型失败: {str(e)}", exc_info=True)
-            return ResultUtil.fail(msg=f"更新模型失败: {str(e)}", data=None)
+            return ResultUtil.fail(data=0, msg=f"更新模型失败: {str(e)}")
 
     async def delete_model(self, model_id: str, company_id: str, current_user_id: str) -> ResultEntity:
         """
@@ -440,33 +440,31 @@ class ChatService:
         """
         try:
             if not model_id:
-                return ResultUtil.fail(msg="模型ID不能为空", data=None)
+                return ResultUtil.fail(data=0, msg="模型ID不能为空")
 
             if not company_id:
-                return ResultUtil.fail(msg="企业ID不能为空", data=None)
+                return ResultUtil.fail(data=0, msg="企业ID不能为空")
 
             # 检查模型是否存在
             existing_model = self.chat_repository.get_model_by_id_only(model_id)
             if not existing_model:
-                return ResultUtil.fail(msg="模型不存在", data=None)
+                return ResultUtil.fail(data=0, msg="模型不存在")
 
             # 检查用户是否为管理员（role > 0）
             if not self.chat_repository.check_user_is_admin(company_id, current_user_id):
-                return ResultUtil.fail(msg="无权限操作，需要企业管理员权限", data=None)
+                return ResultUtil.fail(data=0, msg="无权限操作，需要企业管理员权限")
 
             # 删除模型
             success = self.chat_repository.delete_model(model_id)
 
             if not success:
-                return ResultUtil.fail(msg="删除模型失败", data=None)
+                return ResultUtil.fail(data=0, msg="删除模型失败")
 
             return ResultUtil.success(data=1, msg="模型删除成功")
 
         except Exception as e:
             logger.error(f"删除模型失败: {str(e)}", exc_info=True)
-            return ResultUtil.fail(msg=f"删除模型失败: {str(e)}", data=None)
-
-    # ==================== 原有的其他方法 ====================
+            return ResultUtil.fail(data=0, msg=f"删除模型失败: {str(e)}")
 
     async def _create_chat_model(self, model_config: ChatModelSchema, show_think: bool) -> Any:
         """根据模型配置创建对应的聊天模型实例"""
