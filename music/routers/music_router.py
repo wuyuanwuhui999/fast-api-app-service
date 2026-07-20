@@ -1,5 +1,5 @@
 # music/routers/music_router.py
-from fastapi import APIRouter, Depends, Query, Header, HTTPException
+from fastapi import APIRouter, Depends, Query, Header, HTTPException, Path
 from typing import Optional
 
 from common.utils.result_util import ResultEntity
@@ -157,4 +157,83 @@ async def get_music_list_by_author_id(
         user_id=current_user_id,
         page_num=pageNum,
         page_size=pageSize
+    )
+
+@router.get("/getFavoriteAuthor", response_model=ResultEntity)
+async def get_favorite_author(
+    current_user_id: str = Depends(get_user_id_from_header),
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    获取当前用户喜欢的歌手列表
+
+    根据当前登录用户ID查询歌手收藏表（music_author_like），
+    再根据 author_id 关联查询歌手表（music_authors）获取歌手详情
+
+    返回数据包含：
+    - 歌手基本信息（id, author_id, author_name, category_id, avatar, type, country, birthday, identity, rank）
+    - 不进行分页，返回所有收藏的歌手
+
+    Args:
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 歌手列表（data为数组，total为总数）
+    """
+    return await music_service.get_favorite_authors(
+        user_id=current_user_id
+    )
+
+@router.post("/insertFavoriteAuthor/{authorId}", response_model=ResultEntity)
+async def insert_favorite_author(
+    authorId: int = Path(..., description="歌手ID（关联 music_authors 表的 author_id 字段）"),
+    current_user_id: str = Depends(get_user_id_from_header),
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    添加喜欢的歌手
+
+    将当前用户与指定歌手建立喜欢关联，记录到 music_author_like 表中
+
+    Args:
+        authorId: 歌手ID
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 操作结果
+            - 成功: data=1, msg="添加喜欢歌手成功"
+            - 失败: data=None, msg="错误信息"
+    """
+    return await music_service.insert_favorite_author(
+        user_id=current_user_id,
+        author_id=authorId
+    )
+
+
+@router.delete("/deleteFavoriteAuthor/{authorId}", response_model=ResultEntity)
+async def delete_favorite_author(
+    authorId: int = Path(..., description="歌手ID（关联 music_authors 表的 author_id 字段）"),
+    current_user_id: str = Depends(get_user_id_from_header),
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    取消喜欢的歌手
+
+    删除当前用户与指定歌手的喜欢关联
+
+    Args:
+        authorId: 歌手ID
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 操作结果
+            - 成功: data=1, msg="取消喜欢歌手成功"
+            - 失败: data=None, msg="错误信息"
+    """
+    return await music_service.delete_favorite_author(
+        user_id=current_user_id,
+        author_id=authorId
     )

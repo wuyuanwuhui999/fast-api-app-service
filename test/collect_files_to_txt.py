@@ -65,7 +65,7 @@ if __name__ == "__main__":
 
     source_directory = "/Users/wuwenqiang/Documents/code/java/springboot3-app-service/"
     output_txt = "springboot源代码.txt"
-    excluded_files = ["README.md", ".gitignore", "gitee-push.bat","github-push.bat","github-push.bat", "gitee-push.bat",".DS_Store",".gitattributes",".gitignore","err.txt","mvnw","mvnw.cmd","提示词.md","提示词.txt","play.sql","user.sql","README.md","start-all.sh"]
+    excluded_files = ["README.md",".gitignore", "gitee-push.bat","github-push.bat","github-push.bat", "gitee-push.bat",".DS_Store",".gitattributes",".gitignore","err.txt","mvnw","mvnw.cmd","提示词.md","提示词.txt","play.sql","user.sql","README.md","start-all.sh"]
     excluded_dirs = [".git", "__pycache__", "node_modules", "res", '.qtcreator', 'build',"chat.xcodeproj",".mvn","test","target",".idea"]
     collect_files_to_txt(
         source_dir=source_directory,

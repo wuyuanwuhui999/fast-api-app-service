@@ -446,3 +446,217 @@ class MusicRepository:
         except Exception as e:
             logger.error(f"根据歌手ID查询音乐列表失败: {str(e)}", exc_info=True)
             return [], 0
+
+    def get_favorite_authors_by_user_id(
+            self,
+            user_id: str
+    ) -> List[Dict[str, Any]]:
+        """
+        根据用户ID获取用户喜欢的歌手列表
+
+        查询逻辑：
+        1. 从 music_author_like 表查询用户收藏的歌手ID列表
+        2. 根据 author_id 关联查询 music_authors 表获取歌手详情
+
+        Args:
+            user_id: 当前用户ID
+
+        Returns:
+            List[Dict[str, Any]]: 歌手列表（包含歌手详情）
+        """
+        try:
+            from music.models.music_author import MusicAuthorModel
+            from music.models.music_author_like import MusicAuthorLikeModel
+            from sqlalchemy import desc
+
+            # 使用 INNER JOIN 查询用户收藏的歌手
+            results = (
+                self.db.query(MusicAuthorModel)
+                .join(
+                    MusicAuthorLikeModel,
+                    MusicAuthorModel.author_id == MusicAuthorLikeModel.author_id
+                )
+                .filter(
+                    MusicAuthorLikeModel.user_id == user_id,
+                    MusicAuthorModel.is_publish == 1
+                )
+                .order_by(
+                    MusicAuthorLikeModel.create_time.desc()
+                )
+                .all()
+            )
+
+            # 构建返回数据
+            author_list = []
+            for author_obj in results:
+                author_dict = {
+                    "id": author_obj.id,
+                    "author_id": author_obj.author_id,
+                    "author_name": author_obj.author_name,
+                    "category_id": author_obj.category_id,
+                    "is_publish": author_obj.is_publish,
+                    "avatar": author_obj.avatar,
+                    "type": author_obj.type,
+                    "country": author_obj.country,
+                    "birthday": author_obj.birthday,
+                    "identity": author_obj.identity,
+                    "rank": author_obj.rank,
+                    "create_time": author_obj.create_time,
+                    "update_time": author_obj.update_time
+                }
+                author_list.append(author_dict)
+
+            return author_list
+
+        except Exception as e:
+            logger.error(f"获取用户喜欢的歌手列表失败: {str(e)}", exc_info=True)
+            return []
+
+    def insert_favorite_author(
+            self,
+            user_id: str,
+            author_id: int
+    ) -> bool:
+        """
+        添加喜欢的歌手
+
+        检查是否已存在，如果不存在则插入新记录
+
+        Args:
+            user_id: 当前用户ID
+            author_id: 歌手ID（关联 music_authors 表的 author_id 字段）
+
+        Returns:
+            bool: 是否添加成功（True=成功，False=失败或已存在）
+        """
+        try:
+            from music.models.music_author_like import MusicAuthorLikeModel
+            from datetime import datetime
+
+            # 检查是否已存在
+            existing = self.db.query(MusicAuthorLikeModel).filter(
+                MusicAuthorLikeModel.user_id == user_id,
+                MusicAuthorLikeModel.author_id == author_id
+            ).first()
+
+            if existing:
+                logger.info(f"用户 {user_id} 已喜欢歌手 {author_id}，无需重复添加")
+                return False
+
+            # 检查歌手是否存在
+            from music.models.music_author import MusicAuthorModel
+            author = self.db.query(MusicAuthorModel).filter(
+                MusicAuthorModel.author_id == author_id,
+                MusicAuthorModel.is_publish == 1
+            ).first()
+
+            if not author:
+                logger.warning(f"歌手不存在: author_id={author_id}")
+                return False
+
+            # 插入新记录
+            new_like = MusicAuthorLikeModel(
+                author_id=author_id,
+                user_id=user_id,
+                create_time=datetime.now()
+            )
+
+            self.db.add(new_like)
+            self.db.commit()
+
+            logger.info(f"用户 {user_id} 添加喜欢的歌手成功: author_id={author_id}")
+            return True
+
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"添加喜欢的歌手失败: {str(e)}", exc_info=True)
+            return False
+
+    def delete_favorite_author(
+            self,
+            user_id: str,
+            author_id: int
+    ) -> bool:
+        """
+        删除喜欢的歌手
+
+        Args:
+            user_id: 当前用户ID
+            author_id: 歌手ID（关联 music_authors 表的 author_id 字段）
+
+        Returns:
+            bool: 是否删除成功（True=成功，False=失败或不存在）
+        """
+        try:
+            from music.models.music_author_like import MusicAuthorLikeModel
+
+            # 查询记录
+            existing = self.db.query(MusicAuthorLikeModel).filter(
+                MusicAuthorLikeModel.user_id == user_id,
+                MusicAuthorLikeModel.author_id == author_id
+            ).first()
+
+            if not existing:
+                logger.info(f"用户 {user_id} 未喜欢歌手 {author_id}，无需删除")
+                return False
+
+            # 删除记录
+            self.db.delete(existing)
+            self.db.commit()
+
+            logger.info(f"用户 {user_id} 删除喜欢的歌手成功: author_id={author_id}")
+            return True
+
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"删除喜欢的歌手失败: {str(e)}", exc_info=True)
+            return False
+
+    def check_author_exists(self, author_id: int) -> bool:
+        """
+        检查歌手是否存在且已发布
+
+        Args:
+            author_id: 歌手ID
+
+        Returns:
+            bool: 是否存在
+        """
+        try:
+            from music.models.music_author import MusicAuthorModel
+
+            author = self.db.query(MusicAuthorModel).filter(
+                MusicAuthorModel.author_id == author_id,
+                MusicAuthorModel.is_publish == 1
+            ).first()
+
+            return author is not None
+
+        except Exception as e:
+            logger.error(f"检查歌手是否存在失败: {str(e)}", exc_info=True)
+            return False
+
+    def check_favorite_exists(self, user_id: str, author_id: int) -> bool:
+        """
+        检查用户是否已喜欢该歌手
+
+        Args:
+            user_id: 用户ID
+            author_id: 歌手ID
+
+        Returns:
+            bool: 是否已喜欢
+        """
+        try:
+            from music.models.music_author_like import MusicAuthorLikeModel
+
+            existing = self.db.query(MusicAuthorLikeModel).filter(
+                MusicAuthorLikeModel.user_id == user_id,
+                MusicAuthorLikeModel.author_id == author_id
+            ).first()
+
+            return existing is not None
+
+        except Exception as e:
+            logger.error(f"检查喜欢状态失败: {str(e)}", exc_info=True)
+            return False
