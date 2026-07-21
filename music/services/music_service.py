@@ -7,6 +7,7 @@ from fastapi.logger import logger
 from common.config.common_database import get_db
 from common.utils.result_util import ResultEntity, ResultUtil
 from music.repositories.music_repository import MusicRepository
+from music.schemas.music_record_schema import InsertMusicRecordSchema
 from music.schemas.music_schema import MusicQueryParams
 
 
@@ -375,3 +376,52 @@ class MusicService:
         except Exception as e:
             logger.error(f"获取音乐播放记录失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg=f"获取音乐播放记录失败: {str(e)}", data=None)
+
+    async def insert_music_record(
+        self,
+        user_id: str,
+        record_data: InsertMusicRecordSchema
+    ) -> ResultEntity:
+        """
+        添加音乐播放记录
+
+        Args:
+            user_id: 当前用户ID
+            record_data: 播放记录请求数据
+
+        Returns:
+            ResultEntity: 新增记录ID
+        """
+        try:
+            # 参数校验
+            if not user_id:
+                return ResultUtil.fail(msg="用户ID不能为空", data=None)
+
+            if not record_data.musicId or record_data.musicId <= 0:
+                return ResultUtil.fail(msg="音乐ID不能为空", data=None)
+
+            # 检查音乐是否存在
+            if not self.music_repository.check_music_exists(record_data.musicId):
+                return ResultUtil.fail(msg=f"音乐不存在: musicId={record_data.musicId}", data=None)
+
+            # 插入播放记录
+            result = self.music_repository.insert_music_record(
+                music_id=record_data.musicId,
+                user_id=user_id,
+                platform=record_data.platform,
+                version=record_data.version,
+                device=record_data.device
+            )
+
+            if not result:
+                return ResultUtil.fail(msg="插入播放记录失败", data=None)
+
+            return ResultUtil.success(
+                data=result.id,
+                msg="播放记录添加成功"
+            )
+
+        except Exception as e:
+            logger.error(f"添加音乐播放记录失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"添加播放记录失败: {str(e)}", data=None)
+

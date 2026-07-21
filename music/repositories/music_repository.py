@@ -7,6 +7,7 @@ from fastapi.logger import logger
 
 from music.models.music_model import MusicModel
 from music.models.music_record import MusicRecordModel
+from music.schemas.music_record_schema import MusicRecordResponseSchema
 
 
 class MusicRepository:
@@ -847,3 +848,62 @@ class MusicRepository:
             "lyrics": music_obj.lyrics,
             "permission": music_obj.permission,
         }
+    def insert_music_record(
+        self,
+        music_id: int,
+        user_id: str,
+        platform: Optional[str] = None,
+        version: Optional[str] = None,
+        device: Optional[str] = None
+    ) -> Optional[MusicRecordResponseSchema]:
+        """
+        插入音乐播放记录
+
+        Args:
+            music_id: 音乐ID
+            user_id: 用户ID
+            platform: 播放平台（可选）
+            version: App版本号（可选）
+            device: 设备型号（可选）
+
+        Returns:
+            Optional[MusicRecordResponseSchema]: 创建的记录，失败返回None
+        """
+        try:
+            from music.models.music_record import MusicRecordModel
+
+            db_record = MusicRecordModel(
+                music_id=music_id,
+                user_id=user_id,
+                platform=platform,
+                version=version,
+                device=device
+            )
+
+            self.db.add(db_record)
+            self.db.commit()
+            self.db.refresh(db_record)
+
+            return MusicRecordResponseSchema.model_validate(db_record)
+
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"插入音乐播放记录失败: {str(e)}", exc_info=True)
+            return None
+
+    def check_music_exists(self, music_id: int) -> bool:
+        """检查音乐是否存在"""
+        try:
+            from music.models.music_model import MusicModel
+
+            music = self.db.query(MusicModel).filter(
+                MusicModel.id == music_id,
+                MusicModel.is_publish == 1
+            ).first()
+
+            return music is not None
+
+        except Exception as e:
+            logger.error(f"检查音乐是否存在失败: {str(e)}", exc_info=True)
+            return False
+

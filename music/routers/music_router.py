@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query, Header, HTTPException, Path
 from typing import Optional
 
 from common.utils.result_util import ResultEntity
+from music.schemas.music_record_schema import InsertMusicRecordSchema
 from music.services.music_service import MusicService
 
 router = APIRouter(
@@ -277,4 +278,28 @@ async def get_music_record(
         end_date=endDate,
         page_num=pageNum,
         page_size=pageSize
+    )
+
+@router.post("/insertMusicRecord", response_model=ResultEntity)
+async def insert_music_record(
+    record_data: InsertMusicRecordSchema,
+    current_user_id: str = Depends(get_user_id_from_header),
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    添加音乐播放记录
+
+    用户播放音乐时，记录一条播放历史到 music_record 表
+
+    Args:
+        record_data: 播放记录请求参数（musicId, platform, version, device）
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 新增记录的ID
+    """
+    return await music_service.insert_music_record(
+        user_id=current_user_id,
+        record_data=record_data
     )
