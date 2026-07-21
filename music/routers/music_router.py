@@ -303,3 +303,54 @@ async def insert_music_record(
         user_id=current_user_id,
         record_data=record_data
     )
+
+@router.post("/insertMusicLike/{id}", response_model=ResultEntity)
+async def insert_music_like(
+    id: int = Path(..., description="音乐ID"),
+    current_user_id: str = Depends(get_user_id_from_header),
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    添加音乐红心收藏
+
+    用户收藏一首音乐，数据写入 music_like 表
+    如果已收藏，返回提示信息
+
+    Args:
+        id: 音乐ID（路径参数）
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 新增记录ID
+    """
+    return await music_service.insert_music_like(
+        user_id=current_user_id,
+        music_id=id
+    )
+
+@router.delete("/deleteMusicLike/{id}", response_model=ResultEntity)
+async def delete_music_like(
+    id: int = Path(..., description="音乐ID"),
+    current_user_id: str = Depends(get_user_id_from_header),
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    取消音乐红心收藏
+
+    取消用户对某首音乐的收藏
+
+    Args:
+        id: 音乐ID（路径参数）
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 操作结果
+    """
+    return await music_service.delete_music_like(
+        user_id=current_user_id,
+        music_id=id
+    )
+
+

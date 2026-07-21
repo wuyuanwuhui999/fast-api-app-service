@@ -425,3 +425,96 @@ class MusicService:
             logger.error(f"添加音乐播放记录失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg=f"添加播放记录失败: {str(e)}", data=None)
 
+    async def insert_music_like(
+        self,
+        user_id: str,
+        music_id: int
+    ) -> ResultEntity:
+        """
+        添加音乐红心收藏
+
+        Args:
+            user_id: 当前用户ID
+            music_id: 音乐ID
+
+        Returns:
+            ResultEntity: 新增记录ID
+        """
+        try:
+            # 参数校验
+            if not user_id:
+                return ResultUtil.fail(msg="用户ID不能为空", data=None)
+
+            if not music_id or music_id <= 0:
+                return ResultUtil.fail(msg="音乐ID不能为空", data=None)
+
+            # 检查音乐是否存在
+            if not self.music_repository.check_music_exists(music_id):
+                return ResultUtil.fail(msg=f"音乐不存在: musicId={music_id}", data=None)
+
+            # 添加收藏
+            result = self.music_repository.insert_music_like(
+                music_id=music_id,
+                user_id=user_id
+            )
+
+            if result is None:
+                return ResultUtil.fail(msg="添加收藏失败", data=None)
+
+            if result == 0:
+                return ResultUtil.fail(msg="您已收藏过该音乐", data=None)
+
+            return ResultUtil.success(
+                data=result,
+                msg="收藏成功"
+            )
+
+        except Exception as e:
+            logger.error(f"添加音乐收藏失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"添加收藏失败: {str(e)}", data=None)
+
+    async def delete_music_like(
+        self,
+        user_id: str,
+        music_id: int
+    ) -> ResultEntity:
+        """
+        取消音乐红心收藏
+
+        Args:
+            user_id: 当前用户ID
+            music_id: 音乐ID
+
+        Returns:
+            ResultEntity: 操作结果
+        """
+        try:
+            # 参数校验
+            if not user_id:
+                return ResultUtil.fail(msg="用户ID不能为空", data=None)
+
+            if not music_id or music_id <= 0:
+                return ResultUtil.fail(msg="音乐ID不能为空", data=None)
+
+            # 检查是否已收藏
+            if not self.music_repository.check_music_like_exists(music_id, user_id):
+                return ResultUtil.fail(msg="您尚未收藏该音乐", data=None)
+
+            # 取消收藏
+            success = self.music_repository.delete_music_like(
+                music_id=music_id,
+                user_id=user_id
+            )
+
+            if not success:
+                return ResultUtil.fail(msg="取消收藏失败", data=None)
+
+            return ResultUtil.success(
+                data=1,
+                msg="取消收藏成功"
+            )
+
+        except Exception as e:
+            logger.error(f"取消音乐收藏失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"取消收藏失败: {str(e)}", data=None)
+

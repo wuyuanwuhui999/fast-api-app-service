@@ -907,3 +907,106 @@ class MusicRepository:
             logger.error(f"检查音乐是否存在失败: {str(e)}", exc_info=True)
             return False
 
+    def insert_music_like(
+        self,
+        music_id: int,
+        user_id: str
+    ) -> Optional[int]:
+        """
+        添加音乐红心收藏
+
+        如果已存在收藏记录，则不重复插入
+
+        Args:
+            music_id: 音乐ID
+            user_id: 用户ID
+
+        Returns:
+            Optional[int]: 新增记录ID，如果已存在则返回0，失败返回None
+        """
+        try:
+            from music.models.music_model import MusicLikeModel
+
+            # 检查是否已收藏
+            existing = self.db.query(MusicLikeModel).filter(
+                MusicLikeModel.music_id == music_id,
+                MusicLikeModel.user_id == user_id
+            ).first()
+
+            if existing:
+                logger.info(f"用户 {user_id} 已收藏音乐 {music_id}，无需重复添加")
+                return 0  # 已存在
+
+            # 插入新记录
+            db_like = MusicLikeModel(
+                music_id=music_id,
+                user_id=user_id
+            )
+
+            self.db.add(db_like)
+            self.db.commit()
+            self.db.refresh(db_like)
+
+            logger.info(f"用户 {user_id} 收藏音乐 {music_id} 成功，记录ID: {db_like.id}")
+            return db_like.id
+
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"添加音乐收藏失败: {str(e)}", exc_info=True)
+            return None
+
+    def check_music_like_exists(self, music_id: int, user_id: str) -> bool:
+        """检查用户是否已收藏该音乐"""
+        try:
+            from music.models.music_model import MusicLikeModel
+
+            existing = self.db.query(MusicLikeModel).filter(
+                MusicLikeModel.music_id == music_id,
+                MusicLikeModel.user_id == user_id
+            ).first()
+
+            return existing is not None
+
+        except Exception as e:
+            logger.error(f"检查音乐收藏状态失败: {str(e)}", exc_info=True)
+            return False
+
+    def delete_music_like(
+        self,
+        music_id: int,
+        user_id: str
+    ) -> bool:
+        """
+        取消音乐红心收藏
+
+        Args:
+            music_id: 音乐ID
+            user_id: 用户ID
+
+        Returns:
+            bool: 是否删除成功
+        """
+        try:
+            from music.models.music_model import MusicLikeModel
+
+            # 查询记录
+            existing = self.db.query(MusicLikeModel).filter(
+                MusicLikeModel.music_id == music_id,
+                MusicLikeModel.user_id == user_id
+            ).first()
+
+            if not existing:
+                logger.info(f"用户 {user_id} 未收藏音乐 {music_id}，无需取消")
+                return False
+
+            # 删除记录
+            self.db.delete(existing)
+            self.db.commit()
+
+            logger.info(f"用户 {user_id} 取消收藏音乐 {music_id} 成功")
+            return True
+
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"取消音乐收藏失败: {str(e)}", exc_info=True)
+            return False
