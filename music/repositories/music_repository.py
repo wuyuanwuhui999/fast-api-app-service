@@ -1,6 +1,13 @@
+from datetime import datetime
 from typing import List, Optional, Dict, Any, Tuple
-from sqlalchemy.orm import Session
+
+from sqlalchemy import func, and_, desc, select
+from sqlalchemy.orm import Session, aliased
 from fastapi.logger import logger
+
+from music.models.music_model import MusicModel
+from music.models.music_record import MusicRecordModel
+
 
 class MusicRepository:
     """音乐数据访问层"""
@@ -660,3 +667,183 @@ class MusicRepository:
         except Exception as e:
             logger.error(f"检查喜欢状态失败: {str(e)}", exc_info=True)
             return False
+
+    def get_music_record_with_times(
+        self,
+        user_id: str,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        page_num: int = 1,
+        page_size: int = 20
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """
+        获取用户播放记录，按音乐去重，返回最新播放记录和播放总次数
+
+        使用 SQLAlchemy ORM 实现：
+        1. 子查询1: 按 user_id 和 (可选) 时间范围过滤播放记录
+        2. 子查询2: 按 music_id 分组，取 MAX(create_time) 作为最新播放时间
+        3. 关联音乐表获取音乐详情
+        4. 关联统计子查询获取每首音乐的播放总次数
+
+        Args:
+            user_id: 用户ID
+            start_date: 开始时间（可选）
+            end_date: 结束时间（可选）
+            page_num: 页码，从1开始
+            page_size: 每页数量
+
+        Returns:
+            Tuple[List[Dict[str, Any]], int]: (音乐列表, 总记录数)
+        """
+        try:
+            # ============================================================
+            # 第1步：构建基础查询（过滤用户和时间范围）
+            # ============================================================
+            base_query = self.db.query(MusicRecordModel).filter(
+                MusicRecordModel.user_id == user_id
+            )
+
+            if start_date:
+                base_query = base_query.filter(MusicRecordModel.create_time >= start_date)
+            if end_date:
+                base_query = base_query.filter(MusicRecordModel.create_time <= end_date)
+
+            # ============================================================
+            # 第2步：子查询 - 获取每首音乐的最新播放时间
+            # ============================================================
+            # 使用 subquery 构建：SELECT music_id, MAX(create_time) AS max_date
+            # FROM music_record WHERE user_id = :user_id ... GROUP BY music_id
+            latest_subq = (
+                base_query
+                .with_entities(
+                    MusicRecordModel.music_id,
+                    func.max(MusicRecordModel.create_time).label("max_date")
+                )
+                .group_by(MusicRecordModel.music_id)
+                .subquery("latest")
+            )
+
+            # ============================================================
+            # 第3步：子查询 - 获取最新播放记录的完整信息
+            # ============================================================
+            # 将 base_query 作为子查询，内连接 latest_subq 获取最新记录
+            # 使用 aliased 来引用 MusicRecordModel 作为不同的表别名
+            RecordAlias = aliased(MusicRecordModel)
+
+            # 构建最新记录的子查询
+            # SELECT RecordAlias.*
+            # FROM music_record AS RecordAlias
+            # INNER JOIN latest ON RecordAlias.music_id = latest.music_id
+            #   AND RecordAlias.create_time = latest.max_date
+            # ORDER BY RecordAlias.create_time DESC
+            latest_records_subq = (
+                self.db.query(RecordAlias)
+                .join(
+                    latest_subq,
+                    and_(
+                        RecordAlias.music_id == latest_subq.c.music_id,
+                        RecordAlias.create_time == latest_subq.c.max_date
+                    )
+                )
+                .order_by(desc(RecordAlias.create_time))
+                .subquery("latest_records")
+            )
+
+            # ============================================================
+            # 第4步：子查询 - 统计每首音乐的播放总次数
+            # ============================================================
+            # SELECT COUNT(music_id) AS times, music_id
+            # FROM music_record WHERE user_id = :user_id ...
+            # GROUP BY music_id
+            count_subq = (
+                base_query
+                .with_entities(
+                    MusicRecordModel.music_id,
+                    func.count(MusicRecordModel.music_id).label("times")
+                )
+                .group_by(MusicRecordModel.music_id)
+                .subquery("counts")
+            )
+
+            # ============================================================
+            # 第5步：主查询 - 关联音乐表和统计表
+            # ============================================================
+            # SELECT music.*, counts.times
+            # FROM latest_records AS lr
+            # INNER JOIN music ON lr.music_id = music.id
+            # INNER JOIN counts ON lr.music_id = counts.music_id
+            # ORDER BY lr.create_time DESC
+            # LIMIT ... OFFSET ...
+            stmt = (
+                select(
+                    MusicModel,
+                    func.coalesce(count_subq.c.times, 0).label("times")
+                )
+                .select_from(latest_records_subq)
+                .join(MusicModel, latest_records_subq.c.music_id == MusicModel.id)
+                .join(count_subq, latest_records_subq.c.music_id == count_subq.c.music_id)
+                .order_by(desc(latest_records_subq.c.create_time))
+            )
+
+            # ============================================================
+            # 第6步：查询总数
+            # ============================================================
+            total_stmt = select(func.count()).select_from(latest_records_subq)
+            total = self.db.execute(total_stmt).scalar() or 0
+
+            # ============================================================
+            # 第7步：分页查询
+            # ============================================================
+            offset = (page_num - 1) * page_size
+            stmt = stmt.offset(offset).limit(page_size)
+
+            results = self.db.execute(stmt).all()
+
+            # ============================================================
+            # 第8步：构建返回数据
+            # ============================================================
+            music_list = []
+            for music_obj, times in results:
+                # 使用已有的音乐模型转字典方法
+                music_dict = self._music_to_dict(music_obj)
+                music_dict["times"] = int(times) if times else 0
+                music_list.append(music_dict)
+
+            return music_list, total
+
+        except Exception as e:
+            logger.error(f"获取音乐播放记录失败: {str(e)}", exc_info=True)
+            return [], 0
+
+    def _music_to_dict(self, music_obj) -> Dict[str, Any]:
+        """将 MusicModel 对象转换为字典（保留原始字段名，后续由 ResultUtil 转换驼峰）"""
+        return {
+            "id": music_obj.id,
+            "album_id": music_obj.album_id,
+            "song_name": music_obj.song_name,
+            "author_name": music_obj.author_name,
+            "author_id": music_obj.author_id,
+            "album_name": music_obj.album_name,
+            "version": music_obj.version,
+            "language": music_obj.language,
+            "publish_date": music_obj.publish_date,
+            "wide_audio_id": music_obj.wide_audio_id,
+            "is_publish": music_obj.is_publish,
+            "big_pack_id": music_obj.big_pack_id,
+            "final_id": music_obj.final_id,
+            "audio_id": music_obj.audio_id,
+            "similar_audio_id": music_obj.similar_audio_id,
+            "is_hot": music_obj.is_hot,
+            "album_audio_id": music_obj.album_audio_id,
+            "audio_group_id": music_obj.audio_group_id,
+            "cover": music_obj.cover,
+            "play_url": music_obj.play_url,
+            "local_play_url": music_obj.local_play_url,
+            "source_name": music_obj.source_name,
+            "source_url": music_obj.source_url,
+            "create_time": music_obj.create_time,
+            "update_time": music_obj.update_time,
+            "label": music_obj.label,
+            "lyrics": music_obj.lyrics,
+            "permission": music_obj.permission,
+        }

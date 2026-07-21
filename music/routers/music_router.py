@@ -1,4 +1,6 @@
 # music/routers/music_router.py
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Query, Header, HTTPException, Path
 from typing import Optional
 
@@ -236,4 +238,43 @@ async def delete_favorite_author(
     return await music_service.delete_favorite_author(
         user_id=current_user_id,
         author_id=authorId
+    )
+
+@router.get("/getMusicRecord", response_model=ResultEntity)
+async def get_music_record(
+    startDate: Optional[datetime] = Query(None, description="开始时间，格式yyyy-MM-dd HH:mm:ss"),
+    endDate: Optional[datetime] = Query(None, description="结束时间，格式yyyy-MM-dd HH:mm:ss"),
+    pageNum: int = Query(1, ge=1, description="页码，从1开始"),
+    pageSize: int = Query(20, ge=1, le=500, description="每页数量，最大500"),
+    current_user_id: str = Depends(get_user_id_from_header),
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    获取当前用户的音乐播放历史
+
+    按音乐去重，返回每首音乐的最新播放记录和播放总次数
+
+    核心逻辑：
+    1. 获取用户指定时间范围内的所有播放记录
+    2. 按 music_id 分组，每组取最新的一条记录（MAX(create_time)）
+    3. 关联 music 表，获取音乐的完整信息
+    4. 统计每首音乐在指定时间范围内的播放总次数（times字段）
+
+    Args:
+        startDate: 开始时间（可选）
+        endDate: 结束时间（可选）
+        pageNum: 页码，从1开始
+        pageSize: 每页数量，最大500
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 播放记录列表（包含 times 播放总次数字段）
+    """
+    return await music_service.get_music_record(
+        user_id=current_user_id,
+        start_date=startDate,
+        end_date=endDate,
+        page_num=pageNum,
+        page_size=pageSize
     )

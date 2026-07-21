@@ -1,4 +1,4 @@
-# music/services/music_service.py
+from datetime import datetime
 from typing import Optional, Dict, Any
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -319,3 +319,59 @@ class MusicService:
         except Exception as e:
             logger.error(f"删除喜欢的歌手失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg=f"删除喜欢的歌手失败: {str(e)}", data=None)
+
+    async def get_music_record(
+        self,
+        user_id: str,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        page_num: int = 1,
+        page_size: int = 20
+    ) -> ResultEntity:
+        """
+        获取用户音乐播放记录
+
+        按音乐去重，返回每首音乐的最新播放记录和播放总次数
+
+        Args:
+            user_id: 当前用户ID
+            start_date: 开始时间（可选）
+            end_date: 结束时间（可选）
+            page_num: 页码，从1开始
+            page_size: 每页数量
+
+        Returns:
+            ResultEntity: 播放记录列表
+        """
+        try:
+            # 参数校验
+            if not user_id:
+                return ResultUtil.fail(msg="用户ID不能为空", data=None)
+
+            if page_num < 1:
+                page_num = 1
+
+            if page_size < 1:
+                page_size = 20
+            if page_size > 500:
+                page_size = 500
+
+            # 验证时间范围
+            if start_date and end_date and start_date > end_date:
+                return ResultUtil.fail(msg="开始时间不能晚于结束时间", data=None)
+
+            # 查询播放记录
+            music_list, total = self.music_repository.get_music_record_with_times(
+                user_id=user_id,
+                start_date=start_date,
+                end_date=end_date,
+                page_num=page_num,
+                page_size=page_size
+            )
+
+            # 使用 ResultUtil 返回数据（自动转换驼峰）
+            return ResultUtil.success(data=music_list, total=total)
+
+        except Exception as e:
+            logger.error(f"获取音乐播放记录失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"获取音乐播放记录失败: {str(e)}", data=None)
