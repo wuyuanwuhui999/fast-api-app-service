@@ -1,9 +1,10 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query, Header, HTTPException, Path
-from typing import Optional
+from fastapi import APIRouter, Depends, Query, Header, HTTPException, Path, Body
+from typing import Optional, List
 
 from common.utils.result_util import ResultEntity
+from music.schemas.music_favorite_schema import FavoriteDirectoryCreateSchema, FavoriteDirectoryUpdateSchema
 from music.schemas.music_query_schema import MusicQuerySchema
 from music.schemas.music_record_schema import InsertMusicRecordSchema
 from music.services.music_service import MusicService
@@ -480,3 +481,186 @@ async def get_music_author_category(
         ResultEntity: 歌手分类列表
     """
     return await music_service.get_author_category_list()
+
+@router.get("/getFavoriteDirectory", response_model=ResultEntity)
+async def get_favorite_directory(
+    musicId: int = Query(..., description="要检查的音乐ID"),
+    current_user_id: str = Depends(get_user_id_from_header),
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    获取用户的音乐收藏夹列表
+
+    查询当前用户的所有收藏夹，统计每个收藏夹中的音乐总数，
+    检查指定音乐是否在各收藏夹中，获取每个收藏夹的封面图
+
+    Args:
+        musicId: 要检查的音乐ID
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 收藏夹列表（包含 total, checked, cover 字段）
+    """
+    return await music_service.get_favorite_directory_list(
+        user_id=current_user_id,
+        music_id=musicId
+    )
+
+
+@router.post("/insertFavoriteDirectory", response_model=ResultEntity)
+async def create_favorite_directory(
+    request: FavoriteDirectoryCreateSchema,
+    current_user_id: str = Depends(get_user_id_from_header),
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    创建音乐收藏夹
+
+    Args:
+        request: 创建收藏夹请求参数
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 创建的收藏夹
+    """
+    return await music_service.create_favorite_directory(
+        user_id=current_user_id,
+        name=request.name
+    )
+
+
+@router.delete("/deleteFavoriteDirectory/{directoryId}", response_model=ResultEntity)
+async def delete_favorite_directory(
+    directoryId: int = Path(..., description="收藏夹ID"),
+    current_user_id: str = Depends(get_user_id_from_header),
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    删除音乐收藏夹
+
+    删除收藏夹的同时会删除收藏夹中的所有音乐关联
+
+    Args:
+        directoryId: 收藏夹ID
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 操作结果
+    """
+    return await music_service.delete_favorite_directory(
+        user_id=current_user_id,
+        directory_id=directoryId
+    )
+
+@router.get("/getMusicListByFavoriteId", response_model=ResultEntity)
+async def get_music_list_by_favorite_id(
+    favoriteId: int = Query(..., description="收藏夹ID"),
+    pageNum: int = Query(1, ge=1, description="页码，从1开始"),
+    pageSize: int = Query(20, ge=1, le=500, description="每页数量，最大500"),
+    current_user_id: str = Depends(get_user_id_from_header),
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    根据收藏夹ID获取音乐列表
+
+    获取指定收藏夹内的音乐列表，验证收藏夹属于当前用户，
+    返回结果包含用户是否已红心收藏该音乐（isLike字段）
+
+    Args:
+        favoriteId: 收藏夹ID
+        pageNum: 页码，从1开始
+        pageSize: 每页数量，最大500
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 音乐列表（包含 isLike 字段）
+    """
+    return await music_service.get_music_list_by_favorite_id(
+        user_id=current_user_id,
+        favorite_id=favoriteId,
+        page_num=pageNum,
+        page_size=pageSize
+    )
+
+
+@router.put("/updateFavoriteDirectory", response_model=ResultEntity)
+async def update_favorite_directory(
+    update_data: FavoriteDirectoryUpdateSchema,
+    current_user_id: str = Depends(get_user_id_from_header),
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    更新收藏夹名称
+
+    仅允许用户修改自己的收藏夹名称
+
+    Args:
+        update_data: 更新请求参数（id, name）
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 受影响行数（1成功，0失败）
+    """
+    return await music_service.update_favorite_directory(
+        user_id=current_user_id,
+        update_data=update_data
+    )
+
+
+@router.get("/isMusicFavorite/{musicId}", response_model=ResultEntity)
+async def is_music_favorite(
+    musicId: int = Path(..., description="音乐ID"),
+    current_user_id: str = Depends(get_user_id_from_header),
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    查询音乐是否已被当前用户收藏
+
+    检查该音乐是否在用户的任意收藏夹中
+
+    Args:
+        musicId: 音乐ID（路径参数）
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 收藏数量（>0表示已收藏）
+    """
+    return await music_service.is_music_favorite(
+        user_id=current_user_id,
+        music_id=musicId
+    )
+
+
+@router.post("/insertMusicFavorite/{musicId}", response_model=ResultEntity)
+async def insert_music_favorite(
+    musicId: int = Path(..., description="音乐ID"),
+    favoriteIds: List[int] = Body(..., description="收藏夹ID列表"),
+    current_user_id: str = Depends(get_user_id_from_header),
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    将音乐添加到收藏夹
+
+    先删除该音乐在所有收藏夹中的记录，再批量插入新的收藏记录
+    如果传入空列表，则清空该音乐的所有收藏
+
+    Args:
+        musicId: 音乐ID（路径参数）
+        favoriteIds: 收藏夹ID列表（Body数组）
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 新增的收藏记录数
+    """
+    return await music_service.insert_music_favorite(
+        user_id=current_user_id,
+        music_id=musicId,
+        favorite_ids=favoriteIds
+    )

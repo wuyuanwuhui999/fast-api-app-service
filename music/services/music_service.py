@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 from fastapi.logger import logger
@@ -7,6 +7,7 @@ from fastapi.logger import logger
 from common.config.common_database import get_db
 from common.utils.result_util import ResultEntity, ResultUtil
 from music.repositories.music_repository import MusicRepository
+from music.schemas.music_favorite_schema import FavoriteDirectoryUpdateSchema
 from music.schemas.music_query_schema import MusicQuerySchema
 from music.schemas.music_record_schema import InsertMusicRecordSchema
 from music.schemas.music_schema import MusicQueryParams
@@ -703,3 +704,315 @@ class MusicService:
         except Exception as e:
             logger.error(f"获取歌手分类列表失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg=f"获取歌手分类失败: {str(e)}", data=None)
+
+    async def get_favorite_directory_list(
+        self,
+        user_id: str,
+        music_id: int
+    ) -> ResultEntity:
+        """
+        获取用户的所有音乐收藏夹列表
+
+        Args:
+            user_id: 当前用户ID
+            music_id: 要检查的音乐ID
+
+        Returns:
+            ResultEntity: 收藏夹列表
+        """
+        try:
+            # 参数校验
+            if not user_id:
+                return ResultUtil.fail(msg="用户ID不能为空", data=None)
+
+            if not music_id or music_id <= 0:
+                return ResultUtil.fail(msg="音乐ID不能为空", data=None)
+
+            # 获取收藏夹列表
+            directory_list = self.music_repository.get_favorite_directory_list(
+                user_id=user_id,
+                music_id=music_id
+            )
+
+            return ResultUtil.success(
+                data=directory_list,
+                total=len(directory_list)
+            )
+
+        except Exception as e:
+            logger.error(f"获取收藏夹列表失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"获取收藏夹列表失败: {str(e)}", data=None)
+
+    async def create_favorite_directory(
+        self,
+        user_id: str,
+        name: str
+    ) -> ResultEntity:
+        """
+        创建音乐收藏夹
+
+        Args:
+            user_id: 当前用户ID
+            name: 收藏夹名称
+
+        Returns:
+            ResultEntity: 创建的收藏夹
+        """
+        try:
+            # 参数校验
+            if not user_id:
+                return ResultUtil.fail(msg="用户ID不能为空", data=None)
+
+            if not name or not name.strip():
+                return ResultUtil.fail(msg="收藏夹名称不能为空", data=None)
+
+            name = name.strip()
+            if len(name) > 100:
+                return ResultUtil.fail(msg="收藏夹名称不能超过100个字符", data=None)
+
+            # 创建收藏夹
+            result = self.music_repository.create_favorite_directory(
+                user_id=user_id,
+                name=name
+            )
+
+            if not result:
+                return ResultUtil.fail(msg="收藏夹名称已存在", data=None)
+
+            return ResultUtil.success(
+                data=result,
+                msg="收藏夹创建成功"
+            )
+
+        except Exception as e:
+            logger.error(f"创建收藏夹失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"创建收藏夹失败: {str(e)}", data=None)
+
+    async def delete_favorite_directory(
+        self,
+        user_id: str,
+        directory_id: int
+    ) -> ResultEntity:
+        """
+        删除音乐收藏夹
+
+        Args:
+            user_id: 当前用户ID
+            directory_id: 收藏夹ID
+
+        Returns:
+            ResultEntity: 操作结果
+        """
+        try:
+            # 参数校验
+            if not user_id:
+                return ResultUtil.fail(msg="用户ID不能为空", data=None)
+
+            if not directory_id or directory_id <= 0:
+                return ResultUtil.fail(msg="收藏夹ID不能为空", data=None)
+
+            # 删除收藏夹
+            success = self.music_repository.delete_favorite_directory(
+                user_id=user_id,
+                directory_id=directory_id
+            )
+
+            if not success:
+                return ResultUtil.fail(msg="收藏夹不存在或无权限删除", data=None)
+
+            return ResultUtil.success(
+                data=1,
+                msg="收藏夹删除成功"
+            )
+
+        except Exception as e:
+            logger.error(f"删除收藏夹失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"删除收藏夹失败: {str(e)}", data=None)
+
+    async def get_music_list_by_favorite_id(
+        self,
+        user_id: str,
+        favorite_id: int,
+        page_num: int = 1,
+        page_size: int = 20
+    ) -> ResultEntity:
+        """
+        根据收藏夹ID获取音乐列表
+
+        Args:
+            user_id: 当前用户ID
+            favorite_id: 收藏夹ID
+            page_num: 页码，从1开始
+            page_size: 每页数量
+
+        Returns:
+            ResultEntity: 音乐列表
+        """
+        try:
+            # 参数校验
+            if not user_id:
+                return ResultUtil.fail(msg="用户ID不能为空", data=None)
+
+            if not favorite_id or favorite_id <= 0:
+                return ResultUtil.fail(msg="收藏夹ID不能为空", data=None)
+
+            if page_num < 1:
+                page_num = 1
+
+            if page_size < 1:
+                page_size = 20
+            if page_size > 500:
+                page_size = 500
+
+            # 查询音乐列表
+            music_list, total = self.music_repository.get_music_list_by_favorite_id(
+                user_id=user_id,
+                favorite_id=favorite_id,
+                page_num=page_num,
+                page_size=page_size
+            )
+
+            return ResultUtil.success(data=music_list, total=total)
+
+        except Exception as e:
+            logger.error(f"获取收藏夹音乐列表失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"获取音乐列表失败: {str(e)}", data=None)
+
+    async def update_favorite_directory(
+        self,
+        user_id: str,
+        update_data: FavoriteDirectoryUpdateSchema
+    ) -> ResultEntity:
+        """
+        更新收藏夹名称
+
+        Args:
+            user_id: 当前用户ID
+            update_data: 更新请求数据
+
+        Returns:
+            ResultEntity: 操作结果
+        """
+        try:
+            # 参数校验
+            if not user_id:
+                return ResultUtil.fail(msg="用户ID不能为空", data=None)
+
+            if not update_data.id or update_data.id <= 0:
+                return ResultUtil.fail(msg="收藏夹ID不能为空", data=None)
+
+            if not update_data.name or not update_data.name.strip():
+                return ResultUtil.fail(msg="收藏夹名称不能为空", data=None)
+
+            name = update_data.name.strip()
+            if len(name) > 100:
+                return ResultUtil.fail(msg="收藏夹名称不能超过100个字符", data=None)
+
+            # 更新收藏夹名称
+            success = self.music_repository.update_favorite_directory(
+                user_id=user_id,
+                favorite_id=update_data.id,
+                new_name=name
+            )
+
+            if not success:
+                return ResultUtil.fail(msg="收藏夹不存在或无权限修改", data=None)
+
+            return ResultUtil.success(data=1, msg="收藏夹名称更新成功")
+
+        except Exception as e:
+            logger.error(f"更新收藏夹名称失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"更新收藏夹名称失败: {str(e)}", data=None)
+
+    async def is_music_favorite(
+        self,
+        user_id: str,
+        music_id: int
+    ) -> ResultEntity:
+        """
+        查询音乐是否已被当前用户收藏
+
+        Args:
+            user_id: 当前用户ID
+            music_id: 音乐ID
+
+        Returns:
+            ResultEntity: 收藏数量
+        """
+        try:
+            # 参数校验
+            if not user_id:
+                return ResultUtil.fail(msg="用户ID不能为空", data=None)
+
+            if not music_id or music_id <= 0:
+                return ResultUtil.fail(msg="音乐ID不能为空", data=None)
+
+            # 查询收藏数量
+            count = self.music_repository.is_music_favorite(
+                user_id=user_id,
+                music_id=music_id
+            )
+
+            return ResultUtil.success(
+                data=count,
+                msg=None
+            )
+
+        except Exception as e:
+            logger.error(f"查询音乐收藏状态失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"查询收藏状态失败: {str(e)}", data=None)
+
+    async def insert_music_favorite(
+        self,
+        user_id: str,
+        music_id: int,
+        favorite_ids: List[int]
+    ) -> ResultEntity:
+        """
+        将音乐添加到收藏夹
+
+        先删除该音乐在所有收藏夹中的记录，再批量插入新的收藏记录
+
+        Args:
+            user_id: 当前用户ID
+            music_id: 音乐ID
+            favorite_ids: 收藏夹ID列表
+
+        Returns:
+            ResultEntity: 新增的收藏记录数
+        """
+        try:
+            # 参数校验
+            if not user_id:
+                return ResultUtil.fail(msg="用户ID不能为空", data=None)
+
+            if not music_id or music_id <= 0:
+                return ResultUtil.fail(msg="音乐ID不能为空", data=None)
+
+            # 如果收藏夹列表为空，相当于清空该音乐的所有收藏
+            if favorite_ids is None:
+                favorite_ids = []
+
+            # 检查音乐是否存在
+            if not self.music_repository.check_music_exists(music_id):
+                return ResultUtil.fail(msg=f"音乐不存在: musicId={music_id}", data=None)
+
+            # 添加音乐到收藏夹
+            insert_count = self.music_repository.insert_music_favorite(
+                user_id=user_id,
+                music_id=music_id,
+                favorite_ids=favorite_ids
+            )
+
+            if insert_count == 0 and favorite_ids:
+                return ResultUtil.fail(msg="所有收藏夹均无效或无权限", data=None)
+
+            return ResultUtil.success(
+                data=insert_count,
+                msg=f"已收藏到 {insert_count} 个收藏夹"
+            )
+
+        except Exception as e:
+            logger.error(f"添加音乐到收藏夹失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"添加收藏失败: {str(e)}", data=None)
+
