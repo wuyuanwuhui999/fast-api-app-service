@@ -1010,3 +1010,146 @@ class MusicRepository:
             self.db.rollback()
             logger.error(f"取消音乐收藏失败: {str(e)}", exc_info=True)
             return False
+
+    def get_music_like_list(
+        self,
+        user_id: str,
+        page_num: int = 1,
+        page_size: int = 20
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """
+        获取用户收藏的音乐列表
+
+        从 music_like 表查询用户收藏记录，关联 music 表获取音乐详情
+        按收藏时间倒序排列
+
+        Args:
+            user_id: 用户ID
+            page_num: 页码，从1开始
+            page_size: 每页数量
+
+        Returns:
+            Tuple[List[Dict[str, Any]], int]: (音乐列表, 总记录数)
+        """
+        try:
+            from music.models.music_model import MusicModel, MusicLikeModel
+            from sqlalchemy import desc, func
+
+            offset = (page_num - 1) * page_size
+
+            # ==================== 查询总数 ====================
+            total_stmt = (
+                self.db.query(func.count(MusicLikeModel.id))
+                .filter(MusicLikeModel.user_id == user_id)
+            )
+            total = total_stmt.scalar() or 0
+
+            if total == 0:
+                return [], 0
+
+            # ==================== 查询收藏音乐列表 ====================
+            results = (
+                self.db.query(MusicModel)
+                .join(MusicLikeModel, MusicModel.id == MusicLikeModel.music_id)
+                .filter(MusicLikeModel.user_id == user_id)
+                .order_by(desc(MusicLikeModel.create_time))
+                .offset(offset)
+                .limit(page_size)
+                .all()
+            )
+
+            # 构建返回数据
+            music_list = []
+            for music_obj in results:
+                music_dict = self._music_to_dict(music_obj)
+                # 收藏的音乐默认 is_like = 1（已收藏）
+                music_dict["is_like"] = 1
+                music_list.append(music_dict)
+
+            return music_list, total
+
+        except Exception as e:
+            logger.error(f"获取用户收藏音乐列表失败: {str(e)}", exc_info=True)
+            return [], 0
+
+    def search_music_by_keyword(
+        self,
+        keyword: str,
+        user_id: str,
+        page_num: int = 1,
+        page_size: int = 20
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """
+        根据关键词搜索音乐
+
+        在 song_name、author_name、album_name 三个字段上执行模糊匹配
+        左连接 music_like 表，判断当前用户是否已收藏该音乐
+
+        Args:
+            keyword: 搜索关键词
+            user_id: 当前用户ID（用于判断收藏状态）
+            page_num: 页码，从1开始
+            page_size: 每页数量
+
+        Returns:
+            Tuple[List[Dict[str, Any]], int]: (音乐列表, 总记录数)
+        """
+        try:
+            from music.models.music_model import MusicModel, MusicLikeModel
+            from sqlalchemy import func, or_
+
+            offset = (page_num - 1) * page_size
+            search_pattern = f"%{keyword}%"
+
+            # ==================== 查询总数 ====================
+            total_stmt = (
+                self.db.query(func.count(MusicModel.id))
+                .filter(
+                    or_(
+                        MusicModel.song_name.like(search_pattern),
+                        MusicModel.author_name.like(search_pattern),
+                        MusicModel.album_name.like(search_pattern)
+                    )
+                )
+            )
+            total = total_stmt.scalar() or 0
+
+            if total == 0:
+                return [], 0
+
+            # ==================== 查询音乐列表（含收藏状态） ====================
+            results = (
+                self.db.query(
+                    MusicModel,
+                    func.if_(MusicLikeModel.id.isnot(None), 1, 0).label('is_favorite')
+                )
+                .outerjoin(
+                    MusicLikeModel,
+                    (MusicModel.id == MusicLikeModel.music_id) &
+                    (MusicLikeModel.user_id == user_id)
+                )
+                .filter(
+                    or_(
+                        MusicModel.song_name.like(search_pattern),
+                        MusicModel.author_name.like(search_pattern),
+                        MusicModel.album_name.like(search_pattern)
+                    )
+                )
+                .order_by(desc(MusicModel.is_hot), desc(MusicModel.create_time))
+                .offset(offset)
+                .limit(page_size)
+                .all()
+            )
+
+            # 构建返回数据
+            music_list = []
+            for music_obj, is_favorite in results:
+                music_dict = self._music_to_dict(music_obj)
+                music_dict["is_favorite"] = int(is_favorite) if is_favorite is not None else 0
+                music_list.append(music_dict)
+
+            return music_list, total
+
+        except Exception as e:
+            logger.error(f"搜索音乐失败: {str(e)}", exc_info=True)
+            return [], 0

@@ -518,3 +518,105 @@ class MusicService:
             logger.error(f"取消音乐收藏失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg=f"取消收藏失败: {str(e)}", data=None)
 
+    async def get_music_like_list(
+        self,
+        user_id: str,
+        page_num: int = 1,
+        page_size: int = 20
+    ) -> ResultEntity:
+        """
+        获取用户收藏的音乐列表
+
+        Args:
+            user_id: 当前用户ID
+            page_num: 页码，从1开始
+            page_size: 每页数量
+
+        Returns:
+            ResultEntity: 收藏音乐列表
+        """
+        try:
+            # 参数校验
+            if not user_id:
+                return ResultUtil.fail(msg="用户ID不能为空", data=None)
+
+            if page_num < 1:
+                page_num = 1
+
+            if page_size < 1:
+                page_size = 20
+            if page_size > 500:
+                page_size = 500
+
+            # 查询收藏音乐列表
+            music_list, total = self.music_repository.get_music_like_list(
+                user_id=user_id,
+                page_num=page_num,
+                page_size=page_size
+            )
+
+            # 使用 ResultUtil 返回数据（自动转换驼峰）
+            return ResultUtil.success(data=music_list, total=total)
+
+        except Exception as e:
+            logger.error(f"获取用户收藏音乐列表失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"获取收藏列表失败: {str(e)}", data=None)
+
+    async def search_music(
+        self,
+        user_id: str,
+        keyword: str,
+        page_num: int = 1,
+        page_size: int = 20
+    ) -> ResultEntity:
+        """
+        根据关键词搜索音乐
+
+        在 song_name、author_name、album_name 三个字段上执行模糊匹配
+        返回结果包含当前用户的收藏状态
+
+        Args:
+            user_id: 当前用户ID
+            keyword: 搜索关键词
+            page_num: 页码，从1开始
+            page_size: 每页数量
+
+        Returns:
+            ResultEntity: 搜索结果列表
+        """
+        try:
+            # 参数校验
+            if not user_id:
+                return ResultUtil.fail(msg="用户ID不能为空", data=None)
+
+            if not keyword or not keyword.strip():
+                return ResultUtil.fail(msg="搜索关键词不能为空", data=None)
+
+            # 关键词长度限制（防止过长的搜索词）
+            keyword = keyword.strip()
+            if len(keyword) > 100:
+                return ResultUtil.fail(msg="搜索关键词不能超过100个字符", data=None)
+
+            if page_num < 1:
+                page_num = 1
+
+            if page_size < 1:
+                page_size = 20
+            if page_size > 500:
+                page_size = 500
+
+            # 执行搜索
+            music_list, total = self.music_repository.search_music_by_keyword(
+                keyword=keyword,
+                user_id=user_id,
+                page_num=page_num,
+                page_size=page_size
+            )
+
+            # 使用 ResultUtil 返回数据（自动转换驼峰）
+            return ResultUtil.success(data=music_list, total=total)
+
+        except Exception as e:
+            logger.error(f"搜索音乐失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"搜索音乐失败: {str(e)}", data=None)
+

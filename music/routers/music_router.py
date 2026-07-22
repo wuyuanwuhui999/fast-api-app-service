@@ -353,4 +353,61 @@ async def delete_music_like(
         music_id=id
     )
 
+@router.get("/getMusicLike", response_model=ResultEntity)
+async def get_music_like_list(
+    pageNum: int = Query(1, ge=1, description="页码，从1开始"),
+    pageSize: int = Query(20, ge=1, le=500, description="每页数量，最大500"),
+    current_user_id: str = Depends(get_user_id_from_header),
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    获取用户收藏的音乐列表（红心收藏）
 
+    从 music_like 表查询用户所有收藏记录，关联 music 表获取音乐详情
+    按收藏时间倒序排列
+
+    Args:
+        pageNum: 页码，从1开始
+        pageSize: 每页数量，最大500
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 收藏音乐列表
+    """
+    return await music_service.get_music_like_list(
+        user_id=current_user_id,
+        page_num=pageNum,
+        page_size=pageSize
+    )
+
+@router.get("/searchMusic", response_model=ResultEntity)
+async def search_music(
+    keyword: str = Query(..., description="搜索关键词（支持歌曲名、歌手名、专辑名模糊匹配）"),
+    pageNum: int = Query(1, ge=1, description="页码，从1开始"),
+    pageSize: int = Query(20, ge=1, le=500, description="每页数量，最大500"),
+    current_user_id: str = Depends(get_user_id_from_header),
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    根据关键词搜索音乐
+
+    在 music 表的 song_name、author_name、album_name 三个字段上执行模糊匹配
+    返回结果包含当前用户是否已收藏该音乐（isFavorite 字段）
+
+    Args:
+        keyword: 搜索关键词
+        pageNum: 页码，从1开始
+        pageSize: 每页数量，最大500
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 搜索结果列表（包含 isFavorite 字段）
+    """
+    return await music_service.search_music(
+        user_id=current_user_id,
+        keyword=keyword,
+        page_num=pageNum,
+        page_size=pageSize
+    )

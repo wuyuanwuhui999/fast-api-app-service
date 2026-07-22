@@ -1,4 +1,4 @@
-# test_music_like.py
+# test_search_music.py
 import requests
 import hashlib
 import json
@@ -35,15 +35,31 @@ def login(base_url, user_account, password):
         return None
 
 
-def test_insert_music_like():
+def safe_get_value(data, key, default='N/A'):
+    """安全获取字典值"""
+    value = data.get(key)
+    if value is None:
+        return default
+    return str(value)
+
+
+def safe_get_int(data, key, default=0):
+    """安全获取整数值"""
+    value = data.get(key)
+    if value is None:
+        return default
+    return int(value)
+
+
+def test_search_music():
     """
-    测试添加音乐红心收藏
+    测试关键词搜索音乐
     """
     # ==================== 配置参数 ====================
     base_url = "http://localhost:4009"
     user_account = "吴时吴刻"
     password = "123456"
-    music_id = 64340  # 盛夏的果实
+    keyword = "黄昏"  # 搜索关键词
 
     # ==================== 登录 ====================
     print("=" * 60)
@@ -60,39 +76,23 @@ def test_insert_music_like():
         'Content-Type': 'application/json'
     }
 
-    # ==================== 1. 检查收藏状态 ====================
+    # ==================== 测试1：搜索音乐 ====================
     print("\n" + "=" * 60)
-    print(f"步骤1：检查音乐收藏状态 (musicId: {music_id})")
+    print(f"测试1：搜索音乐 (keyword: {keyword})")
     print("=" * 60)
 
-    check_url = f"{base_url}/service/music/checkMusicLike/{music_id}"
+    search_url = f"{base_url}/service/music/searchMusic"
+    params = {
+        "keyword": keyword,
+        "pageNum": 1,
+        "pageSize": 20
+    }
+
+    print(f"\n请求URL: {search_url}")
+    print(f"请求参数: {params}")
 
     try:
-        response = requests.get(check_url, headers=headers)
-        result = response.json()
-
-        if result.get("status") == "SUCCESS":
-            data = result.get("data", {})
-            is_liked = data.get("isLiked", False)
-            print(f"当前收藏状态: {'✅ 已收藏' if is_liked else '❌ 未收藏'}")
-        else:
-            print(f"❌ 查询失败: {result.get('msg')}")
-
-    except Exception as e:
-        print(f"❌ 请求失败: {e}")
-
-    # ==================== 2. 添加收藏 ====================
-    print("\n" + "=" * 60)
-    print(f"步骤2：添加音乐红心收藏 (musicId: {music_id})")
-    print("=" * 60)
-
-    insert_url = f"{base_url}/service/music/insertMusicLike/{music_id}"
-
-    print(f"\n请求URL: {insert_url}")
-    print(f"请求方式: POST")
-
-    try:
-        response = requests.post(insert_url, headers=headers)
+        response = requests.get(search_url, headers=headers, params=params)
         response.raise_for_status()
 
         result = response.json()
@@ -104,107 +104,168 @@ def test_insert_music_like():
         print(json.dumps(result, ensure_ascii=False, indent=2))
 
         if result.get("status") == "SUCCESS":
-            record_id = result.get("data")
-            print(f"\n✅ {result.get('msg')}")
-            print(f"📝 新增记录ID: {record_id}")
+            data = result.get("data", [])
+            total = result.get("total", 0)
+
+            print(f"\n📊 搜索结果总数: {total}")
+            print(f"📊 当前返回记录数: {len(data)}")
+
+            if data:
+                print("\n" + "-" * 60)
+                print(f"🎵 搜索 \"{keyword}\" 的结果:")
+                print("-" * 60)
+
+                for idx, music in enumerate(data, 1):
+                    song_name = safe_get_value(music, 'songName', '未知歌曲')
+                    author_name = safe_get_value(music, 'authorName', '未知歌手')
+                    album_name = safe_get_value(music, 'albumName', '未知专辑')
+                    music_id = safe_get_value(music, 'id', 'N/A')
+                    is_favorite = safe_get_int(music, 'isFavorite', 0)
+                    is_hot = safe_get_int(music, 'isHot', 0)
+
+                    # 匹配的字段标记
+                    matched_fields = []
+                    if keyword.lower() in song_name.lower():
+                        matched_fields.append("歌曲名")
+                    if keyword.lower() in author_name.lower():
+                        matched_fields.append("歌手名")
+                    if keyword.lower() in album_name.lower():
+                        matched_fields.append("专辑名")
+
+                    print(f"{idx}. 🎶 {song_name}")
+                    print(f"   - 歌手: {author_name}")
+                    print(f"   - 专辑: {album_name}")
+                    print(f"   - 音乐ID: {music_id}")
+                    print(f"   - 匹配字段: {', '.join(matched_fields) if matched_fields else '未知'}")
+                    print(f"   - 收藏状态: {'❤️ 已收藏' if is_favorite == 1 else '🤍 未收藏'}")
+                    print(f"   - 是否热门: {'🔥 热门' if is_hot == 1 else '普通'}")
+                    print("-" * 50)
+            else:
+                print(f"\n💡 未找到与 \"{keyword}\" 相关的音乐")
         else:
-            print(f"\n❌ {result.get('msg')}")
+            print(f"\n❌ 请求失败: {result.get('msg')}")
 
     except requests.exceptions.RequestException as e:
         print(f"\n❌ 请求失败: {e}")
 
-    # ==================== 3. 再次检查收藏状态 ====================
+    # ==================== 测试2：多关键词搜索 ====================
     print("\n" + "=" * 60)
-    print(f"步骤3：再次检查收藏状态（验证添加）")
+    print("测试2：多关键词搜索 (keyword: 周杰伦)")
     print("=" * 60)
 
+    params2 = {
+        "keyword": "周杰伦",
+        "pageNum": 1,
+        "pageSize": 10
+    }
+
     try:
-        response = requests.get(check_url, headers=headers)
+        response = requests.get(search_url, headers=headers, params=params2)
         result = response.json()
 
         if result.get("status") == "SUCCESS":
-            data = result.get("data", {})
-            is_liked = data.get("isLiked", False)
-            print(f"当前收藏状态: {'✅ 已收藏' if is_liked else '❌ 未收藏'}")
+            data = result.get("data", [])
+            total = result.get("total", 0)
 
-            if is_liked:
-                print("✅ 收藏添加成功！")
-            else:
-                print("❌ 收藏添加失败！")
+            print(f"\n📊 搜索 \"周杰伦\" 结果总数: {total}")
+
+            if data:
+                print("\n前5首搜索结果:")
+                for idx, music in enumerate(data[:5], 1):
+                    song_name = safe_get_value(music, 'songName', '未知歌曲')
+                    author_name = safe_get_value(music, 'authorName', '未知歌手')
+                    is_favorite = safe_get_int(music, 'isFavorite', 0)
+                    fav_icon = "❤️" if is_favorite == 1 else "🤍"
+                    print(f"  {idx}. {fav_icon} 《{song_name}》- {author_name}")
+        else:
+            print(f"\n❌ 请求失败: {result.get('msg')}")
 
     except Exception as e:
         print(f"❌ 请求失败: {e}")
 
-    # ==================== 4. 重复添加（幂等性测试） ====================
+    # ==================== 测试3：空关键词（错误场景） ====================
     print("\n" + "=" * 60)
-    print(f"步骤4：重复添加收藏（幂等性测试）")
+    print("测试3：空关键词（错误场景）")
     print("=" * 60)
 
+    params3 = {
+        "keyword": "",
+        "pageNum": 1,
+        "pageSize": 10
+    }
+
     try:
-        response = requests.post(insert_url, headers=headers)
+        response = requests.get(search_url, headers=headers, params=params3)
         result = response.json()
 
         if result.get("status") != "SUCCESS":
-            print(f"✅ 重复添加被正确拦截: {result.get('msg')}")
+            print(f"✅ 空关键词被正确拦截: {result.get('msg')}")
         else:
-            print(f"⚠️ 异常：重复添加被允许")
+            print(f"⚠️ 异常：空关键词未被拦截")
 
     except Exception as e:
         print(f"❌ 请求失败: {e}")
 
-    # ==================== 5. 取消收藏 ====================
+    # ==================== 测试4：分页测试 ====================
     print("\n" + "=" * 60)
-    print(f"步骤5：取消音乐红心收藏 (musicId: {music_id})")
+    print("测试4：分页测试（第2页）")
     print("=" * 60)
 
-    cancel_url = f"{base_url}/service/music/deleteMusicLike/{music_id}"
+    params4 = {
+        "keyword": keyword,
+        "pageNum": 2,
+        "pageSize": 5
+    }
 
     try:
-        response = requests.delete(cancel_url, headers=headers)
-        result = response.json()
-
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-
-        if result.get("status") == "SUCCESS":
-            print(f"\n✅ {result.get('msg')}")
-        else:
-            print(f"\n❌ {result.get('msg')}")
-
-    except Exception as e:
-        print(f"❌ 请求失败: {e}")
-
-    # ==================== 6. 最终检查收藏状态 ====================
-    print("\n" + "=" * 60)
-    print(f"步骤6：最终检查收藏状态（验证取消）")
-    print("=" * 60)
-
-    try:
-        response = requests.get(check_url, headers=headers)
+        response = requests.get(search_url, headers=headers, params=params4)
         result = response.json()
 
         if result.get("status") == "SUCCESS":
-            data = result.get("data", {})
-            is_liked = data.get("isLiked", False)
-            print(f"当前收藏状态: {'✅ 已收藏' if is_liked else '❌ 未收藏'}")
+            data = result.get("data", [])
+            total = result.get("total", 0)
 
-            if not is_liked:
-                print("✅ 取消收藏成功！")
-            else:
-                print("❌ 取消收藏失败！")
+            print(f"\n📊 第2页返回记录数: {len(data)}")
+            print(f"📊 总记录数: {total}")
+
+            if data:
+                print("\n第2页音乐列表:")
+                for idx, music in enumerate(data, 1):
+                    song_name = safe_get_value(music, 'songName', '未知歌曲')
+                    print(f"  {idx}. 《{song_name}》")
+        else:
+            print(f"\n❌ 请求失败: {result.get('msg')}")
+
+    except Exception as e:
+        print(f"❌ 请求失败: {e}")
+
+    # ==================== 测试5：未认证请求 ====================
+    print("\n" + "=" * 60)
+    print("测试5：未认证请求（错误场景）")
+    print("=" * 60)
+
+    try:
+        response = requests.get(search_url, params=params)
+        result = response.json()
+
+        if response.status_code == 401:
+            print(f"✅ 未认证请求被正确拦截: {result.get('msg')}")
+        else:
+            print(f"⚠️ 异常：未认证请求未被拦截")
 
     except Exception as e:
         print(f"❌ 请求失败: {e}")
 
 
-def test_music_like_flow():
+def test_search_suggestions():
     """
-    测试完整的收藏/取消收藏流程（使用不同音乐）
+    测试搜索建议（展示不同关键词的搜索结果）
     """
     # ==================== 配置参数 ====================
     base_url = "http://localhost:4009"
     user_account = "吴时吴刻"
     password = "123456"
-    music_ids = [64340, 64342, 64344]  # 多首音乐
+    keywords = ["爱", "梦", "心", "夜", "风", "雨", "月", "阳光", "春天", "大海"]
 
     # ==================== 登录 ====================
     token = login(base_url, user_account, password)
@@ -214,81 +275,50 @@ def test_music_like_flow():
     print(f"\n✅ 登录成功！")
     headers = {'Authorization': f'Bearer {token}'}
 
-    # ==================== 批量收藏 ====================
+    search_url = f"{base_url}/service/music/searchMusic"
+
     print("\n" + "=" * 60)
-    print("批量收藏音乐")
+    print("📊 热门关键词搜索结果统计")
     print("=" * 60)
+    print(f"{'关键词':<10} {'结果数':<10} {'状态'}")
+    print("-" * 40)
 
-    liked_count = 0
-    for music_id in music_ids:
-        insert_url = f"{base_url}/service/music/insertMusicLike/{music_id}"
-        response = requests.post(insert_url, headers=headers)
-        result = response.json()
+    for keyword in keywords:
+        params = {
+            "keyword": keyword,
+            "pageNum": 1,
+            "pageSize": 1
+        }
 
-        if result.get("status") == "SUCCESS":
-            liked_count += 1
-            print(f"  ✅ 收藏音乐 {music_id} 成功")
-        else:
-            print(f"  ❌ 收藏音乐 {music_id} 失败: {result.get('msg')}")
+        try:
+            response = requests.get(search_url, headers=headers, params=params)
+            result = response.json()
 
-    print(f"\n共成功收藏 {liked_count} 首音乐")
+            if result.get("status") == "SUCCESS":
+                total = result.get("total", 0)
+                status = "✅" if total > 0 else "❌"
+                print(f"{keyword:<10} {total:<10} {status}")
+            else:
+                print(f"{keyword:<10} {'错误':<10} ❌")
 
-    # ==================== 查询播放记录（验证点赞状态） ====================
-    print("\n" + "=" * 60)
-    print("查询播放记录（验证 isLike 字段）")
-    print("=" * 60)
-
-    record_url = f"{base_url}/service/music/getMusicRecord"
-    params = {"pageNum": 1, "pageSize": 10}
-
-    try:
-        response = requests.get(record_url, headers=headers, params=params)
-        result = response.json()
-
-        if result.get("status") == "SUCCESS":
-            data = result.get("data", [])
-            print(f"\n📊 前5首音乐的点赞状态:")
-            print("-" * 50)
-
-            for idx, music in enumerate(data[:5], 1):
-                song_name = music.get('songName', '未知歌曲')
-                is_like = music.get('isLike', 0)
-                status = "❤️ 已点赞" if is_like == 1 else "🤍 未点赞"
-                print(f"{idx}. 《{song_name}》- {status}")
-
-    except Exception as e:
-        print(f"❌ 请求失败: {e}")
-
-    # ==================== 批量取消收藏 ====================
-    print("\n" + "=" * 60)
-    print("批量取消收藏音乐")
-    print("=" * 60)
-
-    for music_id in music_ids:
-        cancel_url = f"{base_url}/service/music/deleteMusicLike/{music_id}"
-        response = requests.delete(cancel_url, headers=headers)
-        result = response.json()
-
-        if result.get("status") == "SUCCESS":
-            print(f"  ✅ 取消收藏音乐 {music_id} 成功")
-        else:
-            print(f"  ❌ 取消收藏音乐 {music_id} 失败: {result.get('msg')}")
+        except Exception as e:
+            print(f"{keyword:<10} {'异常':<10} ❌")
 
 
 if __name__ == "__main__":
     print("\n" + "=" * 60)
-    print("  🎵 测试音乐红心收藏接口")
+    print("  🎵 测试关键词搜索音乐接口")
     print("=" * 60)
-    print("\n提示：确保 music_id 在 music 表中存在")
+    print("\n提示：确保 music 表中有数据")
     print()
 
-    # 运行完整测试
-    test_insert_music_like()
+    # 运行测试
+    test_search_music()
 
     print("\n" + "=" * 60)
 
-    # 批量测试
-    test_music_like_flow()
+    # 搜索建议统计
+    test_search_suggestions()
 
     print("\n" + "=" * 60)
     print("  ✅ 所有测试完成")
