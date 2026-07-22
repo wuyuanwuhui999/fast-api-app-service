@@ -7,6 +7,7 @@ from fastapi.logger import logger
 from common.config.common_database import get_db
 from common.utils.result_util import ResultEntity, ResultUtil
 from music.repositories.music_repository import MusicRepository
+from music.schemas.music_query_schema import MusicQuerySchema
 from music.schemas.music_record_schema import InsertMusicRecordSchema
 from music.schemas.music_schema import MusicQueryParams
 
@@ -620,3 +621,85 @@ class MusicService:
             logger.error(f"搜索音乐失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg=f"搜索音乐失败: {str(e)}", data=None)
 
+    async def query_music(
+        self,
+        user_id: str,
+        query_params: MusicQuerySchema
+    ) -> ResultEntity:
+        """
+        多条件查询音乐列表
+
+        支持按歌曲名、歌手名、专辑名、语言、发布日期起始、标签进行组合查询
+        所有条件均为可选
+
+        Args:
+            user_id: 当前用户ID
+            query_params: 查询参数
+
+        Returns:
+            ResultEntity: 符合条件的音乐列表
+        """
+        try:
+            # 参数校验
+            if not user_id:
+                return ResultUtil.fail(msg="用户ID不能为空", data=None)
+
+            # 构建查询参数
+            song_name = query_params.songName
+            author_name = query_params.authorName
+            album_name = query_params.albumName
+            language = query_params.language
+            publish_start = query_params.publishStart
+            label = query_params.label
+            page_num = query_params.pageNum
+            page_size = query_params.pageSize
+
+            # 分页参数校验
+            if page_num < 1:
+                page_num = 1
+
+            if page_size < 1:
+                page_size = 20
+            if page_size > 500:
+                page_size = 500
+
+            # 执行查询
+            music_list, total = self.music_repository.query_music_by_conditions(
+                user_id=user_id,
+                song_name=song_name,
+                author_name=author_name,
+                album_name=album_name,
+                language=language,
+                publish_start=publish_start,
+                label=label,
+                page_num=page_num,
+                page_size=page_size
+            )
+
+            # 使用 ResultUtil 返回数据（自动转换驼峰）
+            return ResultUtil.success(data=music_list, total=total)
+
+        except Exception as e:
+            logger.error(f"多条件查询音乐失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"查询音乐失败: {str(e)}", data=None)
+
+    async def get_author_category_list(self) -> ResultEntity:
+        """
+        获取所有可用的歌手分类列表
+
+        查询 disabled = 0 的分类，按 rank 降序排列
+
+        Returns:
+            ResultEntity: 歌手分类列表
+        """
+        try:
+            category_list = self.music_repository.get_author_category_list()
+
+            return ResultUtil.success(
+                data=category_list,
+                total=len(category_list)
+            )
+
+        except Exception as e:
+            logger.error(f"获取歌手分类列表失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"获取歌手分类失败: {str(e)}", data=None)

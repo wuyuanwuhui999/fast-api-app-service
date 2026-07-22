@@ -1,10 +1,10 @@
-# music/routers/music_router.py
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, Header, HTTPException, Path
 from typing import Optional
 
 from common.utils.result_util import ResultEntity
+from music.schemas.music_query_schema import MusicQuerySchema
 from music.schemas.music_record_schema import InsertMusicRecordSchema
 from music.services.music_service import MusicService
 
@@ -411,3 +411,72 @@ async def search_music(
         page_num=pageNum,
         page_size=pageSize
     )
+
+@router.get("/queryMusic", response_model=ResultEntity)
+async def query_music(
+    songName: Optional[str] = Query(None, description="歌曲名称（模糊匹配）"),
+    authorName: Optional[str] = Query(None, description="歌手名称（模糊匹配）"),
+    albumName: Optional[str] = Query(None, description="专辑名称（模糊匹配）"),
+    language: Optional[str] = Query(None, description="语言（精确匹配）"),
+    publishStart: Optional[datetime] = Query(None, description="发布日期起始（>=），格式yyyy-MM-dd"),
+    label: Optional[str] = Query(None, description="标签（模糊匹配）"),
+    pageNum: int = Query(1, ge=1, description="页码，从1开始"),
+    pageSize: int = Query(20, ge=1, le=500, description="每页数量，最大500"),
+    current_user_id: str = Depends(get_user_id_from_header),
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    多条件查询音乐列表
+
+    支持按歌曲名、歌手名、专辑名、语言、发布日期起始、标签进行组合查询
+    所有条件均为可选，返回结果包含当前用户是否已收藏该音乐（isFavorite 字段）
+
+    Args:
+        songName: 歌曲名称（模糊匹配）
+        authorName: 歌手名称（模糊匹配）
+        albumName: 专辑名称（模糊匹配）
+        language: 语言（精确匹配）
+        publishStart: 发布日期起始（>=）
+        label: 标签（模糊匹配）
+        pageNum: 页码，从1开始
+        pageSize: 每页数量，最大500
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 符合条件的音乐列表（包含 isFavorite 字段）
+    """
+    # 构建查询参数对象
+    query_params = MusicQuerySchema(
+        songName=songName,
+        authorName=authorName,
+        albumName=albumName,
+        language=language,
+        publishStart=publishStart,
+        label=label,
+        pageNum=pageNum,
+        pageSize=pageSize
+    )
+
+    return await music_service.query_music(
+        user_id=current_user_id,
+        query_params=query_params
+    )
+
+@router.get("/getMusicAuthorCategory", response_model=ResultEntity)
+async def get_music_author_category(
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    获取歌手分类列表
+
+    获取所有可用的歌手分类，用于前端展示歌手分类导航
+    只返回 disabled = 0 的分类，按 rank 降序排列
+
+    Args:
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 歌手分类列表
+    """
+    return await music_service.get_author_category_list()

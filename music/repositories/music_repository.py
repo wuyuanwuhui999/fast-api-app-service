@@ -1,12 +1,17 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Tuple
 
-from sqlalchemy import func, and_, desc, select
+from sqlalchemy import func, and_, desc, select, or_
 from sqlalchemy.orm import Session, aliased
 from fastapi.logger import logger
 
-from music.models.music_model import MusicModel
+from music.models.music_author import MusicAuthorModel
+from music.models.music_author_like import MusicAuthorLikeModel
+from music.models.music_classify import MusicClassifyModel
+from music.models.music_classify_relation import MusicClassifyRelationModel
+from music.models.music_model import MusicModel, MusicLikeModel
 from music.models.music_record import MusicRecordModel
+from music.schemas.music_author_category_schema import MusicAuthorCategorySchema
 from music.schemas.music_record_schema import MusicRecordResponseSchema
 
 
@@ -32,9 +37,6 @@ class MusicRepository:
             Optional[Dict[str, Any]]: 音乐数据字典，如果未找到则返回 None
         """
         try:
-            from music.models.music_model import MusicModel, MusicLikeModel
-            from sqlalchemy import func
-
             # 使用 ORM 查询音乐（按 is_hot 降序，取第一条）
             # 使用 left join 查询点赞状态
             music = (
@@ -103,8 +105,6 @@ class MusicRepository:
             List[Dict[str, Any]]: 分类列表
         """
         try:
-            from music.models.music_classify_relation import MusicClassifyRelationModel
-
             results = (
                 self.db.query(MusicClassifyRelationModel)
                 .filter(
@@ -153,10 +153,6 @@ class MusicRepository:
             Tuple[List[Dict[str, Any]], int]: (音乐列表, 总记录数)
         """
         try:
-            from music.models.music_classify import MusicClassifyModel
-            from music.models.music_model import MusicModel, MusicLikeModel
-            from sqlalchemy import func, desc
-
             offset = (page_num - 1) * page_size
 
             # ==================== 查询总数 ====================
@@ -260,10 +256,6 @@ class MusicRepository:
             Tuple[List[Dict[str, Any]], int]: (歌手列表, 总记录数)
         """
         try:
-            from music.models.music_author import MusicAuthorModel
-            from music.models.music_author_like import MusicAuthorLikeModel
-            from music.models.music_model import MusicModel
-            from sqlalchemy import func, desc
 
             offset = (page_num - 1) * page_size
 
@@ -369,8 +361,6 @@ class MusicRepository:
             Tuple[List[Dict[str, Any]], int]: (音乐列表, 总记录数)
         """
         try:
-            from music.models.music_model import MusicModel, MusicLikeModel
-            from sqlalchemy import func, desc
 
             offset = (page_num - 1) * page_size
 
@@ -473,9 +463,6 @@ class MusicRepository:
             List[Dict[str, Any]]: 歌手列表（包含歌手详情）
         """
         try:
-            from music.models.music_author import MusicAuthorModel
-            from music.models.music_author_like import MusicAuthorLikeModel
-            from sqlalchemy import desc
 
             # 使用 INNER JOIN 查询用户收藏的歌手
             results = (
@@ -538,9 +525,6 @@ class MusicRepository:
             bool: 是否添加成功（True=成功，False=失败或已存在）
         """
         try:
-            from music.models.music_author_like import MusicAuthorLikeModel
-            from datetime import datetime
-
             # 检查是否已存在
             existing = self.db.query(MusicAuthorLikeModel).filter(
                 MusicAuthorLikeModel.user_id == user_id,
@@ -552,7 +536,6 @@ class MusicRepository:
                 return False
 
             # 检查歌手是否存在
-            from music.models.music_author import MusicAuthorModel
             author = self.db.query(MusicAuthorModel).filter(
                 MusicAuthorModel.author_id == author_id,
                 MusicAuthorModel.is_publish == 1
@@ -596,8 +579,6 @@ class MusicRepository:
             bool: 是否删除成功（True=成功，False=失败或不存在）
         """
         try:
-            from music.models.music_author_like import MusicAuthorLikeModel
-
             # 查询记录
             existing = self.db.query(MusicAuthorLikeModel).filter(
                 MusicAuthorLikeModel.user_id == user_id,
@@ -631,8 +612,6 @@ class MusicRepository:
             bool: 是否存在
         """
         try:
-            from music.models.music_author import MusicAuthorModel
-
             author = self.db.query(MusicAuthorModel).filter(
                 MusicAuthorModel.author_id == author_id,
                 MusicAuthorModel.is_publish == 1
@@ -656,8 +635,6 @@ class MusicRepository:
             bool: 是否已喜欢
         """
         try:
-            from music.models.music_author_like import MusicAuthorLikeModel
-
             existing = self.db.query(MusicAuthorLikeModel).filter(
                 MusicAuthorLikeModel.user_id == user_id,
                 MusicAuthorLikeModel.author_id == author_id
@@ -870,7 +847,6 @@ class MusicRepository:
             Optional[MusicRecordResponseSchema]: 创建的记录，失败返回None
         """
         try:
-            from music.models.music_record import MusicRecordModel
 
             db_record = MusicRecordModel(
                 music_id=music_id,
@@ -894,8 +870,6 @@ class MusicRepository:
     def check_music_exists(self, music_id: int) -> bool:
         """检查音乐是否存在"""
         try:
-            from music.models.music_model import MusicModel
-
             music = self.db.query(MusicModel).filter(
                 MusicModel.id == music_id,
                 MusicModel.is_publish == 1
@@ -925,8 +899,6 @@ class MusicRepository:
             Optional[int]: 新增记录ID，如果已存在则返回0，失败返回None
         """
         try:
-            from music.models.music_model import MusicLikeModel
-
             # 检查是否已收藏
             existing = self.db.query(MusicLikeModel).filter(
                 MusicLikeModel.music_id == music_id,
@@ -958,8 +930,6 @@ class MusicRepository:
     def check_music_like_exists(self, music_id: int, user_id: str) -> bool:
         """检查用户是否已收藏该音乐"""
         try:
-            from music.models.music_model import MusicLikeModel
-
             existing = self.db.query(MusicLikeModel).filter(
                 MusicLikeModel.music_id == music_id,
                 MusicLikeModel.user_id == user_id
@@ -987,8 +957,6 @@ class MusicRepository:
             bool: 是否删除成功
         """
         try:
-            from music.models.music_model import MusicLikeModel
-
             # 查询记录
             existing = self.db.query(MusicLikeModel).filter(
                 MusicLikeModel.music_id == music_id,
@@ -1032,8 +1000,6 @@ class MusicRepository:
             Tuple[List[Dict[str, Any]], int]: (音乐列表, 总记录数)
         """
         try:
-            from music.models.music_model import MusicModel, MusicLikeModel
-            from sqlalchemy import desc, func
 
             offset = (page_num - 1) * page_size
 
@@ -1095,8 +1061,6 @@ class MusicRepository:
             Tuple[List[Dict[str, Any]], int]: (音乐列表, 总记录数)
         """
         try:
-            from music.models.music_model import MusicModel, MusicLikeModel
-            from sqlalchemy import func, or_
 
             offset = (page_num - 1) * page_size
             search_pattern = f"%{keyword}%"
@@ -1153,3 +1117,131 @@ class MusicRepository:
         except Exception as e:
             logger.error(f"搜索音乐失败: {str(e)}", exc_info=True)
             return [], 0
+
+    def query_music_by_conditions(
+        self,
+        user_id: str,
+        song_name: Optional[str] = None,
+        author_name: Optional[str] = None,
+        album_name: Optional[str] = None,
+        language: Optional[str] = None,
+        publish_start: Optional[datetime] = None,
+        label: Optional[str] = None,
+        page_num: int = 1,
+        page_size: int = 20
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """
+        多条件查询音乐列表
+
+        支持按歌曲名、歌手名、专辑名、语言、发布日期起始、标签进行组合查询
+        所有条件均为可选，返回结果包含当前用户的收藏状态
+
+        Args:
+            user_id: 当前用户ID（用于判断收藏状态）
+            song_name: 歌曲名称（模糊匹配）
+            author_name: 歌手名称（模糊匹配）
+            album_name: 专辑名称（模糊匹配）
+            language: 语言（精确匹配）
+            publish_start: 发布日期起始（>=）
+            label: 标签（模糊匹配）
+            page_num: 页码，从1开始
+            page_size: 每页数量
+
+        Returns:
+            Tuple[List[Dict[str, Any]], int]: (音乐列表, 总记录数)
+        """
+        try:
+            offset = (page_num - 1) * page_size
+
+            # ==================== 构建查询条件 ====================
+            filters = []
+
+            if song_name and song_name.strip():
+                filters.append(MusicModel.song_name.like(f"%{song_name.strip()}%"))
+
+            if author_name and author_name.strip():
+                filters.append(MusicModel.author_name.like(f"%{author_name.strip()}%"))
+
+            if album_name and album_name.strip():
+                filters.append(MusicModel.album_name.like(f"%{album_name.strip()}%"))
+
+            if language and language.strip():
+                filters.append(MusicModel.language == language.strip())
+
+            if publish_start:
+                filters.append(MusicModel.publish_date >= publish_start)
+
+            if label and label.strip():
+                filters.append(MusicModel.label.like(f"%{label.strip()}%"))
+
+            # ==================== 查询总数 ====================
+            total_stmt = self.db.query(func.count(MusicModel.id))
+            if filters:
+                total_stmt = total_stmt.filter(and_(*filters))
+            total = total_stmt.scalar() or 0
+
+            if total == 0:
+                return [], 0
+
+            # ==================== 查询音乐列表（含收藏状态） ====================
+            query = (
+                self.db.query(
+                    MusicModel,
+                    func.if_(MusicLikeModel.id.isnot(None), 1, 0).label('is_favorite')
+                )
+                .outerjoin(
+                    MusicLikeModel,
+                    (MusicModel.id == MusicLikeModel.music_id) &
+                    (MusicLikeModel.user_id == user_id)
+                )
+            )
+
+            if filters:
+                query = query.filter(and_(*filters))
+
+            results = (
+                query
+                .order_by(desc(MusicModel.update_time))
+                .offset(offset)
+                .limit(page_size)
+                .all()
+            )
+
+            # 构建返回数据
+            music_list = []
+            for music_obj, is_favorite in results:
+                music_dict = self._music_to_dict(music_obj)
+                music_dict["is_favorite"] = int(is_favorite) if is_favorite is not None else 0
+                music_list.append(music_dict)
+
+            return music_list, total
+
+        except Exception as e:
+            logger.error(f"多条件查询音乐失败: {str(e)}", exc_info=True)
+            return [], 0
+
+    def get_author_category_list(self) -> List[MusicAuthorCategorySchema]:
+        """
+        获取所有可用的歌手分类列表
+
+        查询条件：disabled = 0（未禁用）
+        排序规则：按 rank 降序排列
+
+        Returns:
+            List[MusicAuthorCategorySchema]: 歌手分类列表
+        """
+        try:
+            from music.models.music_author_category import MusicAuthorCategoryModel
+
+            results = (
+                self.db.query(MusicAuthorCategoryModel)
+                .filter(MusicAuthorCategoryModel.disabled == 0)
+                .order_by(desc(MusicAuthorCategoryModel.rank))
+                .all()
+            )
+
+            return [MusicAuthorCategorySchema.model_validate(item) for item in results]
+
+        except Exception as e:
+            logger.error(f"获取歌手分类列表失败: {str(e)}", exc_info=True)
+            return []
