@@ -28,17 +28,22 @@ timeout /t 2 /nobreak > nul
 
 start "Gateway Service" cmd /c "python -m uvicorn gateway.main:app --reload --port 4009 --host 0.0.0.0"
 
+start "Social Service" cmd /c "python -m uvicorn social.main:app --reload --port 4003 --host 0.0.0.0"
+timeout /t 2 /nobreak > nul
+
 echo.
 echo 所有服务已启动
 echo ========================================
 echo Gateway:    http://localhost:4009
 echo User:       http://localhost:4005
-echo Chat:       http://localhost:4006  
+echo Chat:       http://localhost:4006
 echo Tenant:     http://localhost:4007
 echo Prompt:     http://localhost:4008
 echo Agent:      http://localhost:4010
 echo Music:      http://localhost:4002
+echo Social:     http://localhost:4003
 echo ========================================
+
 echo.
 echo Nacos控制台: http://localhost:8848/nacos
 echo 账号/密码: nacos/nacos
