@@ -19,7 +19,8 @@ class RouteService:
         "agent": "agent-service",
         "company": "company-service",
         "music": "music-service",
-        "social": "social-service"
+        "social": "social-service",
+        "movie": "movie-service"
     }
 
     # 服务实例缓存
@@ -31,7 +32,8 @@ class RouteService:
         "agent-service": {"ip": "127.0.0.1", "port": 4010, "healthy": True, "weight": 1.0},
         "company-service": {"ip": "127.0.0.1", "port": 4011, "healthy": True, "weight": 1.0},
         "music-service": {"ip": "127.0.0.1", "port": 4002, "healthy": True, "weight": 1.0},
-        "social-service": {"ip": "127.0.0.1", "port": 4003, "healthy": True, "weight": 1.0}
+        "social-service": {"ip": "127.0.0.1", "port": 4003, "healthy": True, "weight": 1.0},
+        "movie-service": {"ip": "127.0.0.1", "port": 4001, "healthy": True, "weight": 1.0}
     }
     
     def __init__(self):

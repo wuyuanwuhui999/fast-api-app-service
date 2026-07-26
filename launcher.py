@@ -21,7 +21,8 @@ class ServiceManager:
             {"name": "Agent Service", "port": 4010, "module": "agent.main", "color": "\033[96m"},
             {"name": "Company Service", "port": 4011, "module": "company.main", "color": "\033[92m"},
             {"name": "Music Service", "port": 4002, "module": "music.main", "color": "\033[94m"},
-            {"name": "Social Service", "port": 4003, "module": "social.main", "color": "\033[91m"},  # 新增
+            {"name": "Social Service", "port": 4003, "module": "social.main", "color": "\033[91m"},
+            {"name": "Movie Service", "port": 4001, "module": "movie.main", "color": "\033[95m"},
         ]
         
         self.processes = []
