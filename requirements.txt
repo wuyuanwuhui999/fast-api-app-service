@@ -32,3 +32,4 @@ psycopg2-binary>=2.9.11
 nacos-sdk-python==2.0.1
 httpx==0.28.1
 chromadb==0.6.3
+playwright==1.61.0

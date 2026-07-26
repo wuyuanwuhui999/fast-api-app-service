@@ -829,12 +829,19 @@ class ChatService:
 
         return ResultUtil.success(msg="文档删除成功")
 
-    async def get_chat_history(self, user_id: str, page: int = 1, size: int = 10) -> ResultEntity:
-        """获取聊天历史"""
+    async def get_chat_history(
+            self,
+            user_id: str,
+            page: int = 1,
+            size: int = 10,
+            tenant_id: Optional[str] = None
+    ) -> ResultEntity:
+        """获取聊天历史，支持按租户ID过滤"""
         start = (page - 1) * size
-        chat_history_list = self.chat_repository.get_chat_history(user_id, start, size)
-        total = self.chat_repository.get_chat_history_total(user_id)
+        chat_history_list = self.chat_repository.get_chat_history(user_id, start, size, tenant_id)
+        total = self.chat_repository.get_chat_history_total(user_id, tenant_id)
         return ResultUtil.success(data=chat_history_list, total=total)
+
 
     async def upload_doc(self, file: UploadFile, user_id: str, directory_id: str, tenant_id: str) -> ResultEntity:
         """上传文档"""

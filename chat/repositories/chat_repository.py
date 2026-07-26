@@ -219,10 +219,29 @@ class ChatRepository:
                 self.db.rollback()
             return False
 
-    def get_chat_history(self, user_id: str, start: int, size: int) -> List[ChatSchema]:
-        chat_history_list = self.db.query(ChatHistory) \
-            .filter(ChatHistory.user_id == user_id) \
-            .order_by(ChatHistory.create_time.desc()) \
+    def get_chat_history(
+            self,
+            user_id: str,
+            start: int,
+            size: int,
+            tenant_id: Optional[str] = None
+    ) -> List[ChatSchema]:
+        """
+        获取用户的聊天历史记录
+
+        Args:
+            user_id: 用户ID
+            start: 起始位置（偏移量）
+            size: 每页数量
+            tenant_id: 租户ID（可选），不传则查询所有租户
+        """
+        query = self.db.query(ChatHistory).filter(ChatHistory.user_id == user_id)
+
+        # 如果传入了 tenant_id，则按租户过滤
+        if tenant_id is not None:
+            query = query.filter(ChatHistory.tenant_id == tenant_id)
+
+        chat_history_list = query.order_by(ChatHistory.create_time.desc()) \
             .offset(start) \
             .limit(size) \
             .all()
@@ -244,8 +263,25 @@ class ChatRepository:
             ) for chat in chat_history_list
         ]
 
-    def get_chat_history_total(self, user_id: str) -> int:
-        return self.db.query(ChatHistory).filter(ChatHistory.user_id == user_id).count()
+    def get_chat_history_total(
+            self,
+            user_id: str,
+            tenant_id: Optional[str] = None
+    ) -> int:
+        """
+        获取用户的聊天历史记录总数
+
+        Args:
+            user_id: 用户ID
+            tenant_id: 租户ID（可选），不传则统计所有租户
+        """
+        query = self.db.query(ChatHistory).filter(ChatHistory.user_id == user_id)
+
+        # 如果传入了 tenant_id，则按租户过滤
+        if tenant_id is not None:
+            query = query.filter(ChatHistory.tenant_id == tenant_id)
+
+        return query.count()
 
     def save_doc(self, doc: ChatDocSchema) -> int:
         try:

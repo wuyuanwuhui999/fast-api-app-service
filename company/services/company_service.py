@@ -144,7 +144,7 @@ class CompanyService:
             if result is None:
                 return ResultUtil.fail(msg="用户已存在于该企业中", data=None)
 
-            return ResultUtil.success(data=result, msg="添加用户成功")
+            return ResultUtil.success(data=1, msg="添加用户成功")
 
         except Exception as e:
             logger.error(f"添加企业用户失败: {str(e)}", exc_info=True)

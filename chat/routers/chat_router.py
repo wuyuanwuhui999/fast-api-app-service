@@ -167,12 +167,22 @@ async def delete_document(
 
 @router.get("/getChatHistory")
 async def get_history(
-        pageNum: int = 1,
-        pageSize: int = 10,
+        pageNum: int = Query(1, ge=1, description="页码"),
+        pageSize: int = Query(10, ge=1, le=100, description="每页数量"),
+        tenantId: Optional[str] = Query(None, description="租户ID，可选，不传则查询所有租户"),
         current_user_id: str = Depends(get_user_id_from_header),
         chat_service: ChatService = Depends()
 ):
-    return await chat_service.get_chat_history(current_user_id, pageNum, pageSize)
+    """
+    获取聊天历史记录
+
+    Args:
+        pageNum: 页码，从1开始
+        pageSize: 每页数量，最大100
+        tenantId: 租户ID（可选），不传则查询该用户所有租户的聊天记录
+        current_user_id: 当前登录用户ID
+    """
+    return await chat_service.get_chat_history(current_user_id, pageNum, pageSize, tenantId)
 
 
 @router.get("/getDocListByDirId")
