@@ -1,24 +1,104 @@
 """
 酷狗音乐爬虫 - 完善版本
 功能：扫码登录、记住cookie、获取榜单分类、获取歌曲列表、通过浏览器监听请求获取歌曲信息、下载歌曲和封面、存储到数据库
+支持断点续传，记录任务进度
 """
 
 import asyncio
 import pickle
 import time
-import re
 import os
 import requests
 import aiohttp
 import aiofiles
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Set
 from datetime import datetime
 import pymysql
 import json
 from urllib.parse import urlparse, parse_qs
+import hashlib
 
 from playwright.async_api import async_playwright, Browser, Page, BrowserContext
+
+
+class TaskManager:
+    """任务管理器 - 负责保存和恢复任务进度"""
+
+    def __init__(self, task_file: str = "kugou_tasks.json"):
+        self.task_file = Path(task_file)
+        self.tasks: Dict = {}
+        self.completed_songs: Set[str] = set()  # 已完成的歌曲URL
+        self.failed_songs: Set[str] = set()     # 失败的歌曲URL
+        self.processed_categories: Set[str] = set()  # 已处理的分类
+        self.current_category: str = ""
+        self.current_index: int = 0
+        self.load()
+
+    def load(self):
+        """加载任务进度"""
+        if self.task_file.exists():
+            try:
+                with open(self.task_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self.completed_songs = set(data.get('completed_songs', []))
+                    self.failed_songs = set(data.get('failed_songs', []))
+                    self.processed_categories = set(data.get('processed_categories', []))
+                    self.current_category = data.get('current_category', '')
+                    self.current_index = data.get('current_index', 0)
+                print(f"📂 加载任务进度: 已完成 {len(self.completed_songs)} 首, 失败 {len(self.failed_songs)} 首, 已处理 {len(self.processed_categories)} 个分类")
+            except Exception as e:
+                print(f"⚠️ 加载任务进度失败: {e}")
+
+    def save(self):
+        """保存任务进度"""
+        try:
+            data = {
+                'completed_songs': list(self.completed_songs),
+                'failed_songs': list(self.failed_songs),
+                'processed_categories': list(self.processed_categories),
+                'current_category': self.current_category,
+                'current_index': self.current_index,
+                'last_update': datetime.now().isoformat()
+            }
+            with open(self.task_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"⚠️ 保存任务进度失败: {e}")
+
+    def add_completed_song(self, song_url: str):
+        """添加已完成的歌曲"""
+        self.completed_songs.add(song_url)
+        # 如果之前在失败列表中，移除
+        self.failed_songs.discard(song_url)
+
+    def add_failed_song(self, song_url: str):
+        """添加失败的歌曲"""
+        self.failed_songs.add(song_url)
+
+    def add_processed_category(self, category: str):
+        """添加已处理的分类"""
+        self.processed_categories.add(category)
+
+    def is_song_completed(self, song_url: str) -> bool:
+        """检查歌曲是否已完成"""
+        return song_url in self.completed_songs
+
+    def is_song_failed(self, song_url: str) -> bool:
+        """检查歌曲是否已失败"""
+        return song_url in self.failed_songs
+
+    def is_category_processed(self, category: str) -> bool:
+        """检查分类是否已处理"""
+        return category in self.processed_categories
+
+    def set_current_category(self, category: str):
+        """设置当前处理的分类"""
+        self.current_category = category
+
+    def set_current_index(self, index: int):
+        """设置当前处理的索引"""
+        self.current_index = index
 
 
 class KugouCrawler:
@@ -72,11 +152,52 @@ class KugouCrawler:
         self.song_info_data = None
         self.song_info_event = asyncio.Event()
 
+        # 标记是否需要登录
+        self.need_login = False
+
+        # 任务管理器
+        self.task_manager = TaskManager()
+
+        # 统计信息
+        self.stats = {
+            'total_songs': 0,
+            'completed_songs': 0,
+            'failed_songs': 0,
+            'skipped_songs': 0
+        }
+
+    def check_cookie_exists(self) -> bool:
+        """检查cookie文件是否存在且有效"""
+        if not self.cookie_file.exists():
+            return False
+
+        try:
+            with open(self.cookie_file, 'rb') as f:
+                cookies = pickle.load(f)
+                if cookies and len(cookies) > 0:
+                    for cookie in cookies:
+                        if 'user' in cookie.get('name', '').lower() or 'token' in cookie.get('name', '').lower():
+                            return True
+                    return True
+                return False
+        except Exception as e:
+            print(f"⚠️ 检查Cookie文件失败: {e}")
+            return False
+
     async def init_browser(self):
         """初始化浏览器 - 使用持久化上下文"""
+        has_cookie = self.check_cookie_exists()
+
+        if has_cookie:
+            self.headless = True
+            print("🍪 检测到Cookie文件，使用无头浏览器模式")
+        else:
+            self.headless = False
+            self.need_login = True
+            print("🔍 未检测到Cookie文件，使用有头浏览器模式（需要手动登录）")
+
         self.playwright = await async_playwright().start()
 
-        # 使用持久化上下文
         self.context = await self.playwright.chromium.launch_persistent_context(
             user_data_dir=str(self.user_data_dir),
             headless=self.headless,
@@ -98,7 +219,12 @@ class KugouCrawler:
         self.page = await self.context.new_page()
         self.page.set_default_timeout(30000)
 
+        print("🚀 正在打开酷狗音乐榜单页面...")
+        await self.page.goto('https://www.kugou.com/yy/html/rank.html?from=homepage', wait_until='networkidle')
+        await self.page.wait_for_timeout(3000)
+
         print(f"✅ 浏览器已初始化，用户数据目录: {self.user_data_dir}")
+        print(f"   🔧 浏览器模式: {'无头' if self.headless else '有头'}")
 
     async def load_cookies(self):
         """加载保存的cookie"""
@@ -151,14 +277,22 @@ class KugouCrawler:
 
     async def login(self):
         """登录酷狗音乐"""
-        print("🚀 正在打开酷狗音乐榜单页面...")
-        await self.page.goto('https://www.kugou.com/yy/html/rank.html?from=homepage', wait_until='networkidle')
-        await self.page.wait_for_timeout(3000)
+        current_url = self.page.url
+        if 'about:blank' in current_url or not current_url.startswith('https://www.kugou.com'):
+            print("🚀 正在导航到酷狗音乐榜单页面...")
+            await self.page.goto('https://www.kugou.com/yy/html/rank.html?from=homepage', wait_until='networkidle')
+            await self.page.wait_for_timeout(3000)
 
-        if await self.check_login_status():
-            print("✅ 您已登录（通过持久化上下文）")
-            await self.save_cookies()
-            return True
+        if not self.need_login:
+            if await self.check_login_status():
+                print("✅ 您已登录（通过持久化上下文）")
+                await self.save_cookies()
+                return True
+            else:
+                print("⚠️ Cookie已过期，需要重新登录")
+                self.need_login = True
+                self.headless = False
+                await self.recreate_browser_with_headful()
 
         print("📱 请点击右上角'登录'按钮进行扫码登录...")
         print("💡 提示: 如果登录按钮未自动点击，请手动点击")
@@ -222,6 +356,40 @@ class KugouCrawler:
         else:
             print("❌ 登录超时或失败")
             return False
+
+    async def recreate_browser_with_headful(self):
+        """重新创建有头模式的浏览器"""
+        print("🔄 重新创建有头模式的浏览器...")
+
+        if self.context:
+            await self.context.close()
+
+        self.context = await self.playwright.chromium.launch_persistent_context(
+            user_data_dir=str(self.user_data_dir),
+            headless=False,
+            viewport={'width': 1280, 'height': 720},
+            user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            args=[
+                '--disable-blink-features=AutomationControlled',
+                '--disable-dev-shm-usage',
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+            ]
+        )
+
+        self.browser = self.context.browser
+
+        if self.cookie_file.exists():
+            await self.load_cookies()
+
+        self.page = await self.context.new_page()
+        self.page.set_default_timeout(30000)
+
+        print("🚀 正在打开酷狗音乐榜单页面...")
+        await self.page.goto('https://www.kugou.com/yy/html/rank.html?from=homepage', wait_until='networkidle')
+        await self.page.wait_for_timeout(3000)
+
+        print("✅ 有头模式浏览器已重新创建")
 
     async def get_cookies(self) -> list:
         """获取当前cookies"""
@@ -363,17 +531,14 @@ class KugouCrawler:
         self.song_info_data = None
         self.song_info_event.clear()
 
-        # 监听响应
         def handle_response(response):
             try:
                 url = response.url
                 if 'wwwapi.kugou.com/play/songinfo' in url:
-                    # 异步处理响应
                     asyncio.create_task(self.process_song_info_response(response))
             except Exception as e:
                 print(f"  ⚠️ 处理响应失败: {e}")
 
-        # 监听请求
         def handle_request(request):
             try:
                 url = request.url
@@ -385,13 +550,11 @@ class KugouCrawler:
         page.on('response', handle_response)
         page.on('request', handle_request)
 
-        # 等待歌曲信息加载完成
         try:
             await self.song_info_event.wait()
         except Exception as e:
             print(f"  ⚠️ 等待歌曲信息超时: {e}")
 
-        # 移除监听器
         page.remove_listener('response', handle_response)
         page.remove_listener('request', handle_request)
 
@@ -413,68 +576,76 @@ class KugouCrawler:
 
     async def get_song_info_from_page(self, song_url: str, timeout: int = 30) -> Optional[Dict]:
         """通过打开新页面获取歌曲信息"""
+        new_page = None
         try:
-            # 创建新页面
             new_page = await self.context.new_page()
-
-            # 设置监听器捕获歌曲信息
             capture_task = asyncio.create_task(self.capture_song_info(new_page))
 
-            # 打开歌曲页面
             print(f"  📄 打开歌曲页面: {song_url}")
             await new_page.goto(song_url, wait_until='networkidle', timeout=timeout * 1000)
-
-            # 等待页面加载完成
             await new_page.wait_for_timeout(3000)
 
-            # 等待歌曲信息捕获完成
             try:
                 await asyncio.wait_for(self.song_info_event.wait(), timeout=timeout)
             except asyncio.TimeoutError:
                 print(f"  ⚠️ 等待歌曲信息超时")
 
-            # 关闭新页面
             await new_page.close()
-
-            # 取消捕获任务
             capture_task.cancel()
 
             return self.song_info_data
 
         except Exception as e:
             print(f"  ❌ 获取歌曲信息失败: {e}")
-            try:
-                await new_page.close()
-            except:
-                pass
+            if new_page:
+                try:
+                    await new_page.close()
+                except:
+                    pass
             return None
 
-    async def process_song(self, song_url: str, song_title: str = ""):
+    async def process_song(self, song_url: str, song_title: str = "", category: str = ""):
         """处理单首歌曲：获取信息、下载、存储"""
+        # 检查是否已完成
+        if self.task_manager.is_song_completed(song_url):
+            print(f"\n⏭️ 歌曲已完成，跳过: {song_title}")
+            self.stats['skipped_songs'] += 1
+            return
+
+        # 检查是否已失败（可以重试）
+        if self.task_manager.is_song_failed(song_url):
+            print(f"\n🔄 重试失败歌曲: {song_title}")
+
         print(f"\n🎵 处理歌曲: {song_title}")
         print(f"   URL: {song_url}")
 
-        # 通过浏览器页面获取歌曲信息
         song_info = await self.get_song_info_from_page(song_url)
         if not song_info:
             print(f"  ❌ 获取歌曲信息失败")
+            self.task_manager.add_failed_song(song_url)
+            self.task_manager.save()
+            self.stats['failed_songs'] += 1
             return
 
-        # 检查歌曲是否已存在
         audio_id = song_info.get('audio_id')
         if not audio_id:
             print(f"  ❌ 没有audio_id，跳过")
+            self.task_manager.add_failed_song(song_url)
+            self.task_manager.save()
+            self.stats['failed_songs'] += 1
             return
 
         if self.check_audio_exists(str(audio_id)):
             print(f"  ⏭️ 歌曲已存在，跳过: {song_info.get('song_name')}")
+            self.task_manager.add_completed_song(song_url)
+            self.task_manager.save()
+            self.stats['skipped_songs'] += 1
             return
 
         # 下载音乐文件
         play_url = song_info.get('play_url')
         local_play_url = ''
         if play_url:
-            # 提取文件名
             filename = os.path.basename(urlparse(play_url).path)
             if not filename:
                 filename = f"{audio_id}.mp3"
@@ -486,12 +657,15 @@ class KugouCrawler:
                 print(f"  ✅ 音乐下载完成: {local_play_url}")
             else:
                 print(f"  ❌ 音乐下载失败")
+                self.task_manager.add_failed_song(song_url)
+                self.task_manager.save()
+                self.stats['failed_songs'] += 1
+                return
 
         # 下载封面图片
         img_url = song_info.get('img')
         cover = ''
         if img_url:
-            # 提取文件名
             filename = os.path.basename(urlparse(img_url).path)
             if filename:
                 save_path = self.image_dir / filename
@@ -499,8 +673,6 @@ class KugouCrawler:
                 if await self.download_file(img_url, save_path):
                     cover = str(save_path)
                     print(f"  ✅ 封面下载完成: {cover}")
-                else:
-                    print(f"  ❌ 封面下载失败")
 
         # 处理作者信息
         authors = song_info.get('authors', [])
@@ -515,7 +687,6 @@ class KugouCrawler:
             if author_id and author_name:
                 author_ids.append(str(author_id))
                 author_names.append(author_name)
-                # 插入歌手表
                 await asyncio.to_thread(self.insert_author, str(author_id), author_name, avatar or '')
 
         # 准备歌曲数据
@@ -534,34 +705,45 @@ class KugouCrawler:
         }
 
         # 插入歌曲表
-        await asyncio.to_thread(self.insert_music, music_data)
+        if await asyncio.to_thread(self.insert_music, music_data):
+            self.task_manager.add_completed_song(song_url)
+            self.task_manager.save()
+            self.stats['completed_songs'] += 1
+            print(f"  ✅ 歌曲处理完成: {song_info.get('song_name')}")
+        else:
+            self.task_manager.add_failed_song(song_url)
+            self.task_manager.save()
+            self.stats['failed_songs'] += 1
 
     async def get_songs_from_page(self, page_url: str, category_name: str):
         """从榜单页面获取歌曲列表"""
+        # 检查分类是否已处理
+        if self.task_manager.is_category_processed(category_name):
+            print(f"\n⏭️ 分类已处理，跳过: {category_name}")
+            return
+
         print(f"\n📊 正在处理榜单: {category_name}")
         print(f"   URL: {page_url}")
 
         try:
-            # 打开榜单页面
             await self.page.goto(page_url, wait_until='networkidle')
             await self.page.wait_for_timeout(3000)
-
-            # 等待歌曲列表加载
             await self.page.wait_for_selector('.pc_temp_songlist', timeout=10000)
 
-            # 获取所有歌曲项
             song_items = await self.page.query_selector_all('.pc_temp_songlist li')
-
             if not song_items:
                 print(f"  ⚠️ 没有找到歌曲")
                 return
 
             print(f"  📋 找到 {len(song_items)} 首歌曲")
+            self.stats['total_songs'] += len(song_items)
 
-            # 处理每首歌曲
+            # 更新当前处理的分类
+            self.task_manager.set_current_category(category_name)
+            self.task_manager.save()
+
             for idx, item in enumerate(song_items, 1):
                 try:
-                    # 获取歌曲链接
                     a_tag = await item.query_selector('a.pc_temp_songname')
                     if not a_tag:
                         continue
@@ -570,39 +752,52 @@ class KugouCrawler:
                     if not song_url:
                         continue
 
-                    # 确保URL完整
                     if not song_url.startswith('http'):
                         song_url = 'https://www.kugou.com' + song_url
 
-                    # 获取歌曲标题
                     title = await a_tag.get_attribute('title') or f"歌曲_{idx}"
 
-                    # 处理歌曲
-                    await self.process_song(song_url, title)
+                    # 更新当前进度
+                    self.task_manager.set_current_index(idx)
+                    self.task_manager.save()
 
-                    # 添加延迟，避免请求过快
+                    await self.process_song(song_url, title, category_name)
                     await self.page.wait_for_timeout(1000)
+
+                    # 定期保存进度
+                    if idx % 10 == 0:
+                        self.task_manager.save()
+                        self.print_stats()
 
                 except Exception as e:
                     print(f"  ⚠️ 处理歌曲 {idx} 失败: {e}")
                     continue
 
+            # 标记分类为已处理
+            self.task_manager.add_processed_category(category_name)
+            self.task_manager.save()
+
         except Exception as e:
             print(f"  ❌ 处理榜单失败: {e}")
+
+    def print_stats(self):
+        """打印统计信息"""
+        print(f"\n📊 当前统计:")
+        print(f"   总歌曲: {self.stats['total_songs']}")
+        print(f"   已完成: {self.stats['completed_songs']}")
+        print(f"   已跳过: {self.stats['skipped_songs']}")
+        print(f"   已失败: {self.stats['failed_songs']}")
+        print(f"   进度: {self.stats['completed_songs'] + self.stats['skipped_songs']}/{self.stats['total_songs']}\n")
 
     async def get_all_rank_categories(self):
         """获取所有榜单分类并处理"""
         print("\n📊 开始获取榜单分类...")
 
-        # 确保在榜单页面
         if 'rank' not in self.page.url:
             await self.page.goto('https://www.kugou.com/yy/html/rank.html?from=homepage', wait_until='networkidle')
             await self.page.wait_for_timeout(3000)
 
-        # 等待榜单容器加载
         await self.page.wait_for_selector('.pc_temp_side', timeout=10000)
-
-        # 获取所有榜单分类容器
         rank_containers = await self.page.query_selector_all('.pc_rank_sidebar')
 
         classify_names = ['热门榜单', '特色音乐榜', '全球榜']
@@ -614,16 +809,13 @@ class KugouCrawler:
             classify = classify_names[idx]
             print(f"\n📌 正在处理大分类: {classify}")
 
-            # 获取该分类下的所有榜单项
             items = await container.query_selector_all('li')
-
             for item in items:
                 try:
                     a_tag = await item.query_selector('a')
                     if not a_tag:
                         continue
 
-                    # 获取category名称
                     category = await a_tag.get_attribute('title')
                     if not category:
                         category = await a_tag.text_content()
@@ -633,22 +825,20 @@ class KugouCrawler:
                     if not category:
                         continue
 
-                    # 获取榜单链接
                     href = await a_tag.get_attribute('href')
                     if not href:
                         continue
 
-                    # 确保URL完整
                     if not href.startswith('http'):
                         href = 'https://www.kugou.com' + href
 
                     print(f"\n  🎯 处理小分类: {category}")
 
-                    # 处理该榜单的歌曲
                     await self.get_songs_from_page(href, category)
-
-                    # 添加延迟
                     await self.page.wait_for_timeout(2000)
+
+                    # 打印最终统计
+                    self.print_stats()
 
                 except Exception as e:
                     print(f"  ⚠️ 处理分类项失败: {e}")
@@ -677,6 +867,12 @@ class KugouCrawler:
     async def close(self):
         """关闭浏览器"""
         try:
+            # 保存最终进度
+            self.task_manager.save()
+            print(f"\n📊 最终统计:")
+            self.print_stats()
+            print(f"💾 任务进度已保存到: {self.task_manager.task_file}")
+
             if self.context:
                 await self.context.close()
             if self.playwright:
@@ -688,10 +884,8 @@ class KugouCrawler:
     async def run(self):
         """运行爬虫"""
         try:
-            # 初始化浏览器
             await self.init_browser()
 
-            # 登录
             login_success = await self.login()
             if not login_success:
                 print("❌ 登录失败，退出程序")
@@ -700,16 +894,17 @@ class KugouCrawler:
 
             print("\n" + "=" * 50)
             print("🎵 酷狗音乐爬虫已启动，登录成功！")
+            print(f"📂 任务进度文件: {self.task_manager.task_file}")
+            print(f"📊 已有进度: 已完成 {len(self.task_manager.completed_songs)} 首, 失败 {len(self.task_manager.failed_songs)} 首")
             print("=" * 50 + "\n")
 
-            # 获取所有榜单分类的歌曲
             await self.get_all_rank_categories()
 
             print("\n" + "=" * 50)
             print("✅ 所有任务执行完成！")
+            self.print_stats()
             print("=" * 50 + "\n")
 
-            # 保持浏览器打开
             if not self.auto_close:
                 await self.keep_browser_open()
             else:
@@ -729,7 +924,6 @@ class KugouCrawler:
 
 async def main():
     """主函数"""
-    # auto_close=True 表示执行完成后自动关闭浏览器
     crawler = KugouCrawler(headless=False, auto_close=True)
     await crawler.run()
 
