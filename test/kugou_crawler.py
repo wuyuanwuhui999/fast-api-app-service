@@ -29,7 +29,7 @@ class TaskManager:
         self.task_file = Path(task_file)
         self.tasks: Dict = {}
         self.completed_songs: Set[str] = set()  # 已完成的歌曲URL
-        self.failed_songs: Set[str] = set()     # 失败的歌曲URL
+        self.failed_songs: Set[str] = set()  # 失败的歌曲URL
         self.processed_categories: Set[str] = set()  # 已处理的分类
         self.current_category: str = ""
         self.current_index: int = 0
@@ -46,7 +46,8 @@ class TaskManager:
                     self.processed_categories = set(data.get('processed_categories', []))
                     self.current_category = data.get('current_category', '')
                     self.current_index = data.get('current_index', 0)
-                print(f"📂 加载任务进度: 已完成 {len(self.completed_songs)} 首, 失败 {len(self.failed_songs)} 首, 已处理 {len(self.processed_categories)} 个分类")
+                print(
+                    f"📂 加载任务进度: 已完成 {len(self.completed_songs)} 首, 失败 {len(self.failed_songs)} 首, 已处理 {len(self.processed_categories)} 个分类")
             except Exception as e:
                 print(f"⚠️ 加载任务进度失败: {e}")
 
@@ -263,8 +264,11 @@ class KugouCrawler:
             ]
 
             for selector in user_selectors:
-                if await self.page.locator(selector).count() > 0:
-                    return True
+                try:
+                    if await self.page.locator(selector).count() > 0:
+                        return True
+                except:
+                    continue
 
             cookies = await self.context.cookies()
             for cookie in cookies:
@@ -327,34 +331,30 @@ class KugouCrawler:
             print(f"⚠️ 点击登录按钮失败: {e}")
             print("📱 请手动点击登录按钮...")
 
-        print("\n⏳ 等待扫码登录... (请勿关闭浏览器)")
-        print("📱 使用酷狗音乐APP扫描二维码")
-        print("⏰ 等待时间: 2分钟\n")
+        print("\n" + "=" * 60)
+        print("📱 请使用酷狗音乐APP扫描二维码登录")
+        print("⏰ 等待时间: 20秒（扫码后自动继续）")
+        print("=" * 60 + "\n")
 
-        login_success = False
-        start_time = time.time()
+        # 等待20秒让用户扫码
+        for i in range(20, 0, -1):
+            print(f"⏳ 等待扫码登录... 剩余 {i} 秒", end='\r')
+            await self.page.wait_for_timeout(1000)
 
-        while time.time() - start_time < 120:
-            try:
-                if await self.check_login_status():
-                    login_success = True
-                    break
+        print("\n" + "=" * 60)
+        print("🔍 正在检查登录状态...")
+        print("=" * 60 + "\n")
 
-                await self.page.wait_for_timeout(2000)
-
-                elapsed = int(time.time() - start_time)
-                if elapsed % 10 == 0 and elapsed > 0:
-                    print(f"⏳ 已等待 {elapsed} 秒...")
-
-            except Exception as e:
-                await self.page.wait_for_timeout(1000)
+        # 检查登录状态
+        login_success = await self.check_login_status()
 
         if login_success:
             print("✅ 登录成功！")
             await self.save_cookies()
             return True
         else:
-            print("❌ 登录超时或失败")
+            print("❌ 登录失败或未完成，请重新运行程序")
+            print("💡 提示：如果已扫码但未登录成功，可以重新运行程序")
             return False
 
     async def recreate_browser_with_headful(self):
@@ -453,9 +453,9 @@ class KugouCrawler:
             current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             with connection.cursor() as cursor:
                 sql = """
-                    INSERT INTO music_authors (author_id, author_name, avatar, create_time, update_time)
-                    VALUES (%s, %s, %s, %s, %s)
-                """
+                      INSERT INTO music_authors (author_id, author_name, avatar, create_time, update_time)
+                      VALUES (%s, %s, %s, %s, %s) \
+                      """
                 cursor.execute(sql, (author_id, author_name, avatar, current_time, current_time))
                 connection.commit()
                 print(f"  ✅ 歌手插入成功: {author_name} ({author_id})")
@@ -476,14 +476,13 @@ class KugouCrawler:
             current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             with connection.cursor() as cursor:
                 sql = """
-                    INSERT INTO music (
-                        album_id, song_name, author_id, author_name, 
-                        album_name, audio_id, album_audio_id, 
-                        cover, play_url, local_play_url, 
-                        source_name, source_url, lyrics,
-                        create_time, update_time
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """
+                      INSERT INTO music (album_id, song_name, author_id, author_name, \
+                                         album_name, audio_id, album_audio_id, \
+                                         cover, play_url, local_play_url, \
+                                         source_name, source_url, lyrics, \
+                                         create_time, update_time) \
+                      VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) \
+                      """
                 cursor.execute(sql, (
                     music_data.get('album_id'),
                     music_data.get('song_name'),
@@ -726,9 +725,17 @@ class KugouCrawler:
         print(f"   URL: {page_url}")
 
         try:
+            # 导航到目标页面
             await self.page.goto(page_url, wait_until='networkidle')
             await self.page.wait_for_timeout(3000)
-            await self.page.wait_for_selector('.pc_temp_songlist', timeout=10000)
+
+            # 等待歌曲列表加载
+            try:
+                await self.page.wait_for_selector('.pc_temp_songlist', timeout=10000)
+            except:
+                print(f"  ⚠️ 未找到歌曲列表，可能页面结构已变化")
+                # 尝试等待其他可能的容器
+                await self.page.wait_for_timeout(2000)
 
             song_items = await self.page.query_selector_all('.pc_temp_songlist li')
             if not song_items:
@@ -793,15 +800,41 @@ class KugouCrawler:
         """获取所有榜单分类并处理"""
         print("\n📊 开始获取榜单分类...")
 
+        # 确保在榜单页面
         if 'rank' not in self.page.url:
             await self.page.goto('https://www.kugou.com/yy/html/rank.html?from=homepage', wait_until='networkidle')
             await self.page.wait_for_timeout(3000)
 
-        await self.page.wait_for_selector('.pc_temp_side', timeout=10000)
-        rank_containers = await self.page.query_selector_all('.pc_rank_sidebar')
+        # 等待页面完全加载
+        await self.page.wait_for_load_state('networkidle')
+        await self.page.wait_for_timeout(2000)
 
+        # 定义分类名称和对应的索引位置
+        # 注意：这里我们不直接操作DOM元素，而是通过点击导航来切换
         classify_names = ['热门榜单', '特色音乐榜', '全球榜']
 
+        # 获取所有分类导航链接
+        try:
+            # 等待侧边栏加载
+            await self.page.wait_for_selector('.pc_rank_sidebar', timeout=15000)
+
+            # 获取所有侧边栏容器
+            rank_containers = await self.page.query_selector_all('.pc_rank_sidebar')
+
+            if not rank_containers:
+                print("⚠️ 未找到榜单侧边栏，尝试刷新页面...")
+                await self.page.reload(wait_until='networkidle')
+                await self.page.wait_for_timeout(3000)
+                rank_containers = await self.page.query_selector_all('.pc_rank_sidebar')
+
+                if not rank_containers:
+                    print("❌ 仍然无法找到榜单侧边栏，请检查页面结构")
+                    return
+        except Exception as e:
+            print(f"⚠️ 获取侧边栏失败: {e}")
+            return
+
+        # 处理每个大分类
         for idx, container in enumerate(rank_containers):
             if idx >= len(classify_names):
                 break
@@ -809,40 +842,101 @@ class KugouCrawler:
             classify = classify_names[idx]
             print(f"\n📌 正在处理大分类: {classify}")
 
-            items = await container.query_selector_all('li')
-            for item in items:
+            try:
+                # 重新获取容器，因为页面可能发生了变化
                 try:
-                    a_tag = await item.query_selector('a')
-                    if not a_tag:
+                    # 重新查询容器
+                    containers = await self.page.query_selector_all('.pc_rank_sidebar')
+                    if idx < len(containers):
+                        container = containers[idx]
+                    else:
+                        print(f"  ⚠️ 无法找到第 {idx} 个侧边栏")
                         continue
-
-                    category = await a_tag.get_attribute('title')
-                    if not category:
-                        category = await a_tag.text_content()
-                        if category:
-                            category = category.strip()
-
-                    if not category:
-                        continue
-
-                    href = await a_tag.get_attribute('href')
-                    if not href:
-                        continue
-
-                    if not href.startswith('http'):
-                        href = 'https://www.kugou.com' + href
-
-                    print(f"\n  🎯 处理小分类: {category}")
-
-                    await self.get_songs_from_page(href, category)
-                    await self.page.wait_for_timeout(2000)
-
-                    # 打印最终统计
-                    self.print_stats()
-
-                except Exception as e:
-                    print(f"  ⚠️ 处理分类项失败: {e}")
+                except:
+                    print(f"  ⚠️ 重新获取侧边栏失败，跳过")
                     continue
+
+                # 获取当前容器中的所有列表项
+                try:
+                    items = await container.query_selector_all('li')
+                except Exception as e:
+                    print(f"  ⚠️ 获取列表项失败: {e}")
+                    # 尝试通过其他方式获取
+                    items = []
+                    try:
+                        # 直接在页面中查找该分类下的链接
+                        items = await self.page.query_selector_all(f'.pc_rank_sidebar:nth-child({idx + 1}) li')
+                    except:
+                        pass
+                    if not items:
+                        print(f"  ⚠️ 大分类 '{classify}' 下没有找到子分类")
+                        continue
+
+                if not items:
+                    print(f"  ⚠️ 大分类 '{classify}' 下没有找到子分类")
+                    continue
+
+                for item_idx, item in enumerate(items):
+                    try:
+                        # 重新获取元素，避免上下文失效
+                        try:
+                            a_tag = await item.query_selector('a')
+                            if not a_tag:
+                                # 尝试重新获取
+                                a_tag = await self.page.query_selector(
+                                    f'.pc_rank_sidebar:nth-child({idx + 1}) li:nth-child({item_idx + 1}) a')
+                                if not a_tag:
+                                    continue
+                        except:
+                            continue
+
+                        category = await a_tag.get_attribute('title')
+                        if not category:
+                            category = await a_tag.text_content()
+                            if category:
+                                category = category.strip()
+
+                        if not category:
+                            continue
+
+                        href = await a_tag.get_attribute('href')
+                        if not href:
+                            continue
+
+                        if not href.startswith('http'):
+                            href = 'https://www.kugou.com' + href
+
+                        # 检查是否已处理
+                        if self.task_manager.is_category_processed(category):
+                            print(f"\n  ⏭️ 分类已处理，跳过: {category}")
+                            continue
+
+                        print(f"\n  🎯 处理小分类: {category}")
+
+                        # 直接导航到分类页面处理
+                        await self.get_songs_from_page(href, category)
+
+                        # 等待页面稳定
+                        await self.page.wait_for_timeout(2000)
+
+                        # 打印统计
+                        self.print_stats()
+
+                    except Exception as e:
+                        print(f"  ⚠️ 处理分类项 {item_idx} 失败: {e}")
+                        # 尝试重新加载页面
+                        try:
+                            await self.page.goto('https://www.kugou.com/yy/html/rank.html?from=homepage',
+                                                 wait_until='networkidle')
+                            await self.page.wait_for_timeout(3000)
+                        except:
+                            pass
+                        continue
+
+            except Exception as e:
+                print(f"  ❌ 处理大分类 '{classify}' 失败: {e}")
+                # 继续处理下一个大分类
+                continue
 
     async def keep_browser_open(self):
         """保持浏览器打开，等待用户手动关闭"""
@@ -895,7 +989,8 @@ class KugouCrawler:
             print("\n" + "=" * 50)
             print("🎵 酷狗音乐爬虫已启动，登录成功！")
             print(f"📂 任务进度文件: {self.task_manager.task_file}")
-            print(f"📊 已有进度: 已完成 {len(self.task_manager.completed_songs)} 首, 失败 {len(self.task_manager.failed_songs)} 首")
+            print(
+                f"📊 已有进度: 已完成 {len(self.task_manager.completed_songs)} 首, 失败 {len(self.task_manager.failed_songs)} 首")
             print("=" * 50 + "\n")
 
             await self.get_all_rank_categories()
