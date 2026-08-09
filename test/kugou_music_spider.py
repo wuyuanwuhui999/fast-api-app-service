@@ -3,7 +3,7 @@
 酷狗音乐爬虫 (Playwright 实现，非 selenium)
 流程:
   1. 打开酷狗音乐歌手页 https://www.kugou.com/yy/singer/index/1-all-2.html
-  2. 无cookie -> 有界面浏览器, 点击登录按钮弹二维码, 等待15秒人工扫码; 有cookie -> 无头浏览器
+  2. 默认有界面浏览器(扫码登录; 歌曲页/歌手页弹出滑块验证码时需手动拖动完成, 程序会提示并等待)
   4-5. 左侧分类(排除"全部歌手") -> 插入 music_author_category
   6-8. 点击分类 -> 右侧歌手列表分页抓取所有歌手 href -> [{category, hrefs}]
   10. 结果写入本地 singer_data.json
@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import json
 import os
+import random
 import re
 import sys
 from datetime import datetime
@@ -50,12 +51,14 @@ DB_CONFIG = {
 
 
 class KuGouSpider:
-    def __init__(self, max_categories=0, max_singers=0, max_songs=0, category_filter=None, skip_collect=False):
+    def __init__(self, max_categories=0, max_singers=0, max_songs=0, category_filter=None, skip_collect=False,
+                 headless=False):
         self.max_categories = max_categories
         self.max_singers = max_singers
         self.max_songs = max_songs
         self.category_filter = category_filter
         self.skip_collect = skip_collect
+        self.headless = headless
 
         os.makedirs(IMAGE_DIR, exist_ok=True)
         os.makedirs(MUSIC_DIR, exist_ok=True)
@@ -212,8 +215,9 @@ class KuGouSpider:
             login_btn = page.locator('div.cmhead1_d5._login:has-text("登录")')
             await login_btn.first.wait_for(state='attached', timeout=15000)
             await login_btn.first.click()
-            print("已点击登录按钮，请在弹出的窗口中扫描二维码登录（等待15秒）...")
-            await page.wait_for_timeout(15000)
+            print("已点击登录按钮，请在弹出的窗口中扫描二维码登录（等待30秒）...")
+            print("提示: 登录后若页面弹出滑块验证码，请手动拖动滑块完成拼图")
+            await page.wait_for_timeout(30000)
             return True
         except Exception as e:
             print(f"登录流程异常: {e}")
@@ -289,6 +293,7 @@ class KuGouSpider:
         return list(dict.fromkeys(hrefs))
 
     # ================= 歌手详情 + 歌曲 =================
+    # 返回值: True=成功 / False=页面无数据(标记done) / 'blocked'=验证码未完成(留待下次重试)
 
     async def process_singer(self, singer_page, song_page, href, category_name):
         try:
@@ -299,8 +304,24 @@ class KuGouSpider:
             m_name = re.search(r"singername = '([^']+)'", content)
             m_id = re.search(r"singerID = '([^']+)'", content)
             if not m_name or not m_id:
-                print(f"  未找到歌手信息, 跳过: {href}")
-                return
+                # 歌手页可能被滑块验证码挡住, 提示人工完成后等待页面自行加载
+                if await self.has_captcha(singer_page):
+                    print(f"  !! 歌手页弹出滑块验证码, 请在浏览器中拖动滑块完成拼图 (最多等待180秒)...")
+                    resolved = False
+                    for _ in range(36):  # 36 * 5s = 180s
+                        await singer_page.wait_for_timeout(5000)
+                        content = await singer_page.content()
+                        m_name = re.search(r"singername = '([^']+)'", content)
+                        m_id = re.search(r"singerID = '([^']+)'", content)
+                        if m_name and m_id:
+                            resolved = True
+                            break
+                    if not resolved:
+                        print(f"  人工验证超时, 留待下次续跑重试: {href}")
+                        return 'blocked'
+                else:
+                    print(f"  未找到歌手信息, 跳过: {href}")
+                    return False
             singer_name, singer_id_str = m_name.group(1), m_id.group(1)
             print(f"  歌手: {singer_name} (ID: {singer_id_str})")
 
@@ -330,12 +351,12 @@ class KuGouSpider:
             m_sd = re.search(r'songsdata\s*=\s*(\[.*?\]);', content, re.DOTALL)
             if not m_sd:
                 print(f"  未找到歌曲数据: {singer_name}")
-                return
+                return True
             try:
                 songs = json.loads(m_sd.group(1))
             except json.JSONDecodeError as e:
                 print(f"  songsdata 解析失败: {e}")
-                return
+                return True
             print(f"  获取到 {len(songs)} 首歌曲")
 
             if self.max_songs > 0:
@@ -370,24 +391,62 @@ class KuGouSpider:
 
                 # 点19/20: 插入歌曲
                 self.insert_music(info, song, singer_id_str, singer_name, local_play_url, cover, href)
+            return True
         except Exception as e:
             print(f"  处理歌手失败 {href}: {e}")
+            return False
+
+    async def has_captcha(self, page):
+        """检测页面是否弹出滑块验证码 (扫描所有frame的可见文本)"""
+        markers = ('拖动滑块', '拖动下面滑块', '拖动下方滑块', '向右拖动', '完成拼图', '滑块验证', '请完成验证')
+        try:
+            for frame in page.frames:
+                try:
+                    text = await frame.evaluate(
+                        "() => document.body ? document.body.innerText.slice(0, 3000) : ''")
+                except Exception:
+                    continue
+                if text and any(m in text for m in markers):
+                    return True
+        except Exception:
+            pass
+        return False
 
     async def capture_song_info(self, song_page, song_url):
-        """打开歌曲详情页, 捕获 wwwapi.kugou.com/play/songinfo 网络请求响应"""
-        self._song_data = None
-        self._song_event.clear()
-        try:
-            await song_page.goto(song_url, timeout=30000, wait_until='domcontentloaded')
-        except Exception as e:
-            print(f"    打开歌曲页失败: {e}")
-            return None
-        try:
-            await asyncio.wait_for(self._song_event.wait(), timeout=25)
-        except asyncio.TimeoutError:
-            print(f"    等待 songinfo 接口超时: {song_url}")
-        await song_page.wait_for_timeout(500)
-        return self._song_data
+        """打开歌曲详情页, 捕获 wwwapi.kugou.com/play/songinfo 网络请求响应。
+        若弹出滑块验证码: 提示人工完成并等待(最多180秒); 最多重试3次。"""
+        for attempt in range(1, 4):
+            self._song_data = None
+            self._song_event.clear()
+            try:
+                await song_page.goto(song_url, timeout=30000, wait_until='domcontentloaded')
+            except Exception as e:
+                print(f"    打开歌曲页失败: {e}")
+                return None
+            try:
+                # 接口响应到达即继续
+                await asyncio.wait_for(self._song_event.wait(), timeout=15)
+            except asyncio.TimeoutError:
+                pass
+            await song_page.wait_for_timeout(500)
+
+            if self._song_data:
+                return self._song_data
+
+            if await self.has_captcha(song_page):
+                print(f"    !! 歌曲页弹出滑块验证码, 请在浏览器中拖动滑块完成拼图 (最多等待180秒)...")
+                try:
+                    await asyncio.wait_for(self._song_event.wait(), timeout=180)
+                except asyncio.TimeoutError:
+                    print(f"    等待人工验证超时 [{attempt}/3], 重试: {song_url}")
+                    continue
+                if self._song_data:
+                    return self._song_data
+                print(f"    验证后接口仍未返回数据 [{attempt}/3], 重试: {song_url}")
+            else:
+                print(f"    歌曲接口无响应 [{attempt}/3], 15秒后重试: {song_url}")
+                await song_page.wait_for_timeout(15000)
+        return None
 
     async def _on_song_response(self, response):
         try:
@@ -456,8 +515,9 @@ class KuGouSpider:
         async with async_playwright() as p:
             has_cookie = os.path.exists(COOKIE_FILE)
 
-            # 点2/3: 有cookie无头浏览器, 无cookie有界面浏览器+扫码登录
-            browser = await p.chromium.launch(headless=has_cookie)
+            # 默认有界面浏览器: 登录需扫码, 歌曲页/歌手页可能弹滑块验证码需人工拖动完成
+            # --headless 无头模式: 无法人工验证, 弹出验证码的歌曲/歌手会被跳过
+            browser = await p.chromium.launch(headless=self.headless)
             context = await browser.new_context(viewport={'width': 1280, 'height': 800}, user_agent=UA)
             if has_cookie:
                 await self.load_cookies(context)
@@ -498,6 +558,9 @@ class KuGouSpider:
             progress = self.load_progress()
             done = progress.setdefault('done', {})
             total_cats = len(singer_data)
+            success_cnt = 0
+            blocked_cnt = 0
+            missing_cnt = 0
 
             for ci, item in enumerate(singer_data):
                 cat_name = item['category']
@@ -519,14 +582,23 @@ class KuGouSpider:
                     self.save_progress(progress)
 
                     print(f"\n[{ci + 1}/{total_cats}] {cat_name} 歌手 [{hi + 1}/{len(hrefs)}]: {href}")
-                    await self.process_singer(page, song_page, href, cat_name)
+                    result = await self.process_singer(page, song_page, href, cat_name)
 
-                    done.setdefault(cat_name, []).append(href)
+                    # 只有真正处理成功(或页面确实无数据)才标记done; 验证码未完成的不标记, 下次续跑重试
+                    if result == 'blocked':
+                        blocked_cnt += 1
+                    else:
+                        done.setdefault(cat_name, []).append(href)
+                        if result is True:
+                            success_cnt += 1
+                        else:
+                            missing_cnt += 1
+
                     progress['current'] = {}
                     self.save_progress(progress)
-                    await page.wait_for_timeout(800)
+                    await page.wait_for_timeout(random.randint(1000, 2000))
 
-            print("\n全部处理完成！")
+            print(f"\n全部处理完成！ 本次运行: 成功 {success_cnt} / 验证码未完成 {blocked_cnt} / 无数据跳过 {missing_cnt}")
             await browser.close()
 
 
@@ -537,6 +609,8 @@ async def main():
     parser.add_argument('--max-songs', type=int, default=0, help='每个歌手最多处理N首歌曲, 0=全部')
     parser.add_argument('--category', default=None, help='只处理指定分类名')
     parser.add_argument('--skip-collect', action='store_true', help='复用 singer_data.json, 跳过分类收集')
+    parser.add_argument('--headless', action='store_true',
+                        help='无头模式(不建议): 无法人工完成滑块验证码, 弹出验证码的歌曲/歌手会被跳过')
     args = parser.parse_args()
 
     spider = KuGouSpider(
@@ -545,6 +619,7 @@ async def main():
         max_songs=args.max_songs,
         category_filter=args.category,
         skip_collect=args.skip_collect,
+        headless=args.headless,
     )
     await spider.run()
 
