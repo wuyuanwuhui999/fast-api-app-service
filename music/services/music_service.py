@@ -136,7 +136,7 @@ class MusicService:
         """
         try:
             # 参数校验
-            if category_id is None or category_id <= 0:
+            if category_id is None:
                 return ResultUtil.fail(msg="分类ID不能为空", data=None)
 
             if page_num < 1:

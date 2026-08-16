@@ -33,6 +33,10 @@ python -m uvicorn music.main:app --reload --port 4002 --host 0.0.0.0 &
 python -m uvicorn social.main:app --reload --port 4003 --host 0.0.0.0 &
 
 sleep 2
+
+python -m uvicorn circle.main:app --reload --port 4004 --host 0.0.0.0 &
+
+sleep 2
 echo ""
 echo "所有服务已启动"
 echo "========================================"
@@ -45,6 +49,7 @@ echo "Agent:      http://localhost:4010"
 echo "Company:    http://localhost:4011"
 echo "Music:      http://localhost:4002"
 echo "Social:     http://localhost:4003"  # 新增
+echo "Circle:     http://localhost:4004"
 echo "========================================"
 
 echo ""

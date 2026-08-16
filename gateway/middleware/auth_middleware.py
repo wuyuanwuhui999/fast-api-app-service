@@ -38,6 +38,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     WEBSOCKET_PATHS: Set[str] = {
         "/service/chat/ws/chat",
         "/service/agent/ws/chat",
+        "/service/circle/ws",
     }
 
     async def dispatch(self, request: Request, call_next):

@@ -31,6 +31,9 @@ start "Gateway Service" cmd /c "python -m uvicorn gateway.main:app --reload --po
 start "Social Service" cmd /c "python -m uvicorn social.main:app --reload --port 4003 --host 0.0.0.0"
 timeout /t 2 /nobreak > nul
 
+start "Circle Service" cmd /c "python -m uvicorn circle.main:app --reload --port 4004 --host 0.0.0.0"
+timeout /t 2 /nobreak > nul
+
 echo.
 echo 所有服务已启动
 echo ========================================
@@ -42,6 +45,7 @@ echo Prompt:     http://localhost:4008
 echo Agent:      http://localhost:4010
 echo Music:      http://localhost:4002
 echo Social:     http://localhost:4003
+echo Circle:     http://localhost:4004
 echo ========================================
 
 echo.

@@ -279,6 +279,24 @@ async def websocket_gateway_agent(
     )
 
 
+@app.websocket("/service/circle/ws")
+async def websocket_gateway_circle(
+        websocket: WebSocket,
+        token: Optional[str] = None,
+):
+    """
+    Circle WebSocket网关 - 代理WebSocket连接到circle服务
+    认证信息通过URL参数token传递
+    """
+    await websocket_proxy(
+        websocket=websocket,
+        token=token,
+        service_name="circle-service",
+        target_path="/service/circle/ws",
+        gateway_name="CircleWebSocketGateway"
+    )
+
+
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
 async def gateway(request: Request, path: str):
     service_name = route_service.get_service_name_from_path(path)

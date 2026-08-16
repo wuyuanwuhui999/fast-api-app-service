@@ -20,7 +20,8 @@ class RouteService:
         "company": "company-service",
         "music": "music-service",
         "social": "social-service",
-        "movie": "movie-service"
+        "movie": "movie-service",
+        "circle": "circle-service"
     }
 
     # 服务实例缓存
@@ -33,7 +34,8 @@ class RouteService:
         "company-service": {"ip": "127.0.0.1", "port": 4011, "healthy": True, "weight": 1.0},
         "music-service": {"ip": "127.0.0.1", "port": 4002, "healthy": True, "weight": 1.0},
         "social-service": {"ip": "127.0.0.1", "port": 4003, "healthy": True, "weight": 1.0},
-        "movie-service": {"ip": "127.0.0.1", "port": 4001, "healthy": True, "weight": 1.0}
+        "movie-service": {"ip": "127.0.0.1", "port": 4001, "healthy": True, "weight": 1.0},
+        "circle-service": {"ip": "127.0.0.1", "port": 4004, "healthy": True, "weight": 1.0}
     }
     
     def __init__(self):

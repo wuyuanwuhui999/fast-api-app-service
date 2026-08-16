@@ -23,6 +23,7 @@ class ServiceManager:
             {"name": "Music Service", "port": 4002, "module": "music.main", "color": "\033[94m"},
             {"name": "Social Service", "port": 4003, "module": "social.main", "color": "\033[91m"},
             {"name": "Movie Service", "port": 4001, "module": "movie.main", "color": "\033[95m"},
+            {"name": "Circle Service", "port": 4004, "module": "circle.main", "color": "\033[92m"},
         ]
         
         self.processes = []
