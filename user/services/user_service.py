@@ -3,7 +3,8 @@ import os
 import random
 import redis
 from datetime import timedelta
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, UploadFile, File
+from fastapi.logger import logger
 from sqlalchemy.orm import Session
 
 from common.schemas.user_schema import UserSchema
@@ -16,6 +17,9 @@ from common.utils.result_util import ResultEntity, ResultUtil
 # 直接从环境变量读取配置
 REDIS_URL = os.getenv("REDIS_URL")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"))
+# 头像存储：URL 前缀（返回给前端）与文件系统保存目录
+AVATER_URL_PREFIX = os.getenv("AVATER_PATH", "/static/user/avater")
+AVATER_UPLOAD_PATH = os.getenv("AVATER_UPLOAD_PATH", "/Users/wuwenqiang/Documents/static/user/avater")
 
 
 class UserService:
@@ -165,3 +169,44 @@ class UserService:
             user_list.append(user_data)
 
         return ResultUtil.success(data=user_list,total = total)
+
+    async def update_avater(self, user_id: str, file: UploadFile) -> ResultEntity:
+        """
+        修改头像（文件上传方式）
+        :param user_id: 当前用户ID（由网关透传）
+        :param file: 上传的头像文件
+        :return: 新头像 URL
+        """
+        if not file or not file.filename:
+            return ResultUtil.fail(data=None, msg="请选择文件")
+
+        try:
+            # 获取文件扩展名
+            ext = ""
+            if "." in file.filename:
+                ext = file.filename.rsplit(".", 1)[1].lower()
+
+            # 验证文件类型
+            allowed_ext = {"jpg", "jpeg", "png", "gif", "bmp"}
+            if ext not in allowed_ext:
+                return ResultUtil.fail(data=None, msg="不支持的图片格式，仅支持 jpg、jpeg、png、gif、bmp 格式")
+
+            # 生成新文件名并保存
+            import uuid
+            img_name = uuid.uuid4().hex + "." + ext
+            save_path = os.path.join(AVATER_UPLOAD_PATH, img_name)
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+            content = await file.read()
+            with open(save_path, "wb") as f:
+                f.write(content)
+
+            # 更新数据库头像地址（存完整 URL 路径，与现有数据一致）
+            avater_url = AVATER_URL_PREFIX.rstrip("/") + "/" + img_name
+            self.user_repository.update_avater(user_id, avater_url)
+
+            return ResultUtil.success(data=avater_url)
+
+        except Exception as e:
+            logger.error(f"修改头像失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(data=None, msg=f"修改头像失败: {str(e)}")

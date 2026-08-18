@@ -842,6 +842,52 @@ class ChatService:
         total = self.chat_repository.get_chat_history_total(user_id, tenant_id)
         return ResultUtil.success(data=chat_history_list, total=total)
 
+    async def get_chat_history_by_chat_id(self, user_id: str, chat_id: str) -> ResultEntity:
+        """根据会话ID获取聊天历史"""
+        try:
+            chat_history_list = self.chat_repository.get_chat_history_by_chat_id(user_id, chat_id)
+            return ResultUtil.success(data=chat_history_list)
+        except Exception as e:
+            logger.error(f"获取聊天历史失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(data=None, msg=f"获取聊天历史失败: {str(e)}")
+
+    async def get_doc_list_by_tenant(self, user_id: str, tenant_id: str) -> ResultEntity:
+        """获取指定租户下的文档列表"""
+        try:
+            doc_list = self.chat_repository.get_doc_list_by_tenant(user_id, tenant_id)
+            return ResultUtil.success(data=doc_list)
+        except Exception as e:
+            logger.error(f"获取文档列表失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(data=None, msg=f"获取文档列表失败: {str(e)}")
+
+    async def rename_directory(self, user_id: str, directory_id: str, new_name: str) -> ResultEntity:
+        """重命名目录"""
+        try:
+            new_name = (new_name or "").strip()
+            if not new_name:
+                return ResultUtil.fail(data=None, msg="目录名称不能为空")
+            if len(new_name) > 255:
+                return ResultUtil.fail(data=None, msg="目录名称长度不能超过255个字符")
+
+            result = self.chat_repository.rename_directory(directory_id, user_id, new_name)
+            if result:
+                return ResultUtil.success(data=1, msg="目录重命名成功")
+            return ResultUtil.fail(data=None, msg="重命名目录失败")
+        except Exception as e:
+            logger.error(f"重命名目录失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(data=None, msg=f"重命名目录失败: {str(e)}")
+
+    async def delete_directory(self, user_id: str, directory_id: str) -> ResultEntity:
+        """删除目录"""
+        try:
+            result = self.chat_repository.delete_directory(directory_id, user_id)
+            if result:
+                return ResultUtil.success(data=1, msg="目录删除成功")
+            return ResultUtil.fail(data=None, msg="删除目录失败")
+        except Exception as e:
+            logger.error(f"删除目录失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(data=None, msg=f"删除目录失败: {str(e)}")
+
 
     async def upload_doc(self, file: UploadFile, user_id: str, directory_id: str, tenant_id: str) -> ResultEntity:
         """上传文档"""

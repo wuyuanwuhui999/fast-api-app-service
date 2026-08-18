@@ -122,6 +122,15 @@ class CreateDirectoryShema(BaseModel):
     tenantId: str
 
 
+class RenameDirectorySchema(BaseModel):
+    """重命名目录请求Schema"""
+    id: str = Field(..., description="目录ID")
+    directory: str = Field(..., description="新目录名称")
+    tenantId: Optional[str] = Field(None, description="租户ID（可选）")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 # ==================== 新增模型管理 Schema ====================
 
 class AddModelSchema(BaseModel):

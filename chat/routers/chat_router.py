@@ -1,8 +1,9 @@
 # chat/routers/chat_router.py
 from typing import Optional
 
-from fastapi import APIRouter, Depends, UploadFile, Header, HTTPException, WebSocket, WebSocketDisconnect, Query, Body
-from chat.schemas.chat_schema import ChatParamsEntity, CreateDirectoryShema
+from fastapi import APIRouter, Depends, UploadFile, Header, HTTPException, WebSocket, WebSocketDisconnect, Query, Body, Path
+from fastapi.responses import StreamingResponse
+from chat.schemas.chat_schema import ChatParamsEntity, CreateDirectoryShema, RenameDirectorySchema
 from chat.schemas.chat_schema import AddModelSchema, UpdateModelSchema  # 新增导入
 from chat.services.chat_service import ChatService
 import json
@@ -18,6 +19,66 @@ def get_user_id_from_header(x_user_id: str = Header(None, alias="X-User-Id")):
     if not x_user_id:
         raise HTTPException(status_code=401, detail="未提供用户标识")
     return x_user_id
+
+
+# ==================== 聊天接口 ====================
+
+@router.post("/chat")
+async def chat(
+        chat_params: ChatParamsEntity = Body(..., description="聊天参数"),
+        current_user_id: str = Depends(get_user_id_from_header),
+        chat_service: ChatService = Depends()
+):
+    """
+    AI 对话（HTTP 流式）
+    与 WebSocket 聊天逻辑一致，流式返回文本
+    """
+    return StreamingResponse(
+        chat_service.chat_with_websocket(current_user_id, chat_params),
+        media_type="text/plain;charset=utf-8"
+    )
+
+
+@router.get("/getChatHistoryByChatId")
+async def get_chat_history_by_chat_id(
+        chatId: str = Query(..., description="会话ID"),
+        current_user_id: str = Depends(get_user_id_from_header),
+        chat_service: ChatService = Depends()
+):
+    """根据会话ID获取聊天历史"""
+    return await chat_service.get_chat_history_by_chat_id(current_user_id, chatId)
+
+
+# ==================== 文档/目录接口 ====================
+
+@router.get("/getDocList")
+async def get_doc_list(
+        tenantId: str = Query(..., description="租户ID"),
+        current_user_id: str = Depends(get_user_id_from_header),
+        chat_service: ChatService = Depends()
+):
+    """获取指定租户下的文档列表"""
+    return await chat_service.get_doc_list_by_tenant(current_user_id, tenantId)
+
+
+@router.put("/renameDir")
+async def rename_dir(
+        directory_data: RenameDirectorySchema = Body(..., description="重命名目录参数"),
+        current_user_id: str = Depends(get_user_id_from_header),
+        chat_service: ChatService = Depends()
+):
+    """重命名目录"""
+    return await chat_service.rename_directory(current_user_id, directory_data.id, directory_data.directory)
+
+
+@router.put("/deleteDir/{directoryId}")
+async def delete_dir(
+        directoryId: str = Path(..., description="目录ID"),
+        current_user_id: str = Depends(get_user_id_from_header),
+        chat_service: ChatService = Depends()
+):
+    """删除目录"""
+    return await chat_service.delete_directory(current_user_id, directoryId)
 
 
 @router.get("/getModelList")

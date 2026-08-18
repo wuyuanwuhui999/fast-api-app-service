@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, Header, HTTPException
+from fastapi import APIRouter, Depends, Query, Header, HTTPException, File, UploadFile
 
 from user.models.user_model import LoginForm
 from common.schemas.user_schema import UserSchema
@@ -91,3 +91,13 @@ async def search_tenant_users(
 ):
     """模糊查询用户列表"""
     return await user_service.search_tenant_users(keyword, tenantId, (pageNum - 1) * pageSize, pageSize)
+
+
+@router.post("/user/updateAvater", response_model=ResultEntity)
+async def update_avater(
+    file: UploadFile = File(..., description="头像文件"),
+    current_user_id: str = Depends(get_user_id_from_header),
+    user_service: UserService = Depends()
+):
+    """上传头像"""
+    return await user_service.update_avater(current_user_id, file)

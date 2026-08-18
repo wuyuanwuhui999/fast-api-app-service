@@ -429,3 +429,83 @@ class ChatRepository:
         except Exception as e:
             logger.error(f"检查文件夹是否存在失败: {str(e)}")
             return False
+
+    def get_chat_history_by_chat_id(
+            self,
+            user_id: str,
+            chat_id: str
+    ) -> List[ChatSchema]:
+        """根据会话ID获取聊天历史（按时间正序）"""
+        chat_history_list = self.db.query(ChatHistory).filter(
+            ChatHistory.user_id == user_id,
+            ChatHistory.chat_id == chat_id
+        ).order_by(ChatHistory.create_time.asc()).all()
+
+        return [
+            ChatSchema(
+                id=chat.id,
+                user_id=chat.user_id,
+                tenant_id=chat.tenant_id,
+                model_id=chat.model_id,
+                files=chat.files,
+                chat_id=chat.chat_id,
+                prompt=chat.prompt,
+                system_prompt=chat.system_prompt,
+                think_content=chat.think_content,
+                response_content=chat.response_content,
+                content=chat.content,
+                create_time=chat.create_time
+            ) for chat in chat_history_list
+        ]
+
+    def get_doc_list_by_tenant(self, user_id: str, tenant_id: str) -> List[dict]:
+        """获取指定租户下的文档列表（含目录名称）"""
+        from sqlalchemy import text
+
+        sql = """
+            SELECT
+                cd.id,
+                cd.directory_id,
+                cd.name,
+                cd.ext,
+                cd.user_id,
+                cd.tenant_id,
+                cd.create_time,
+                cd.update_time,
+                CASE WHEN cd.directory_id = 'default' THEN '默认文件夹' ELSE cdd.directory END AS directory_name
+            FROM chat_doc cd
+            LEFT JOIN chat_doc_directory cdd ON cd.directory_id = cdd.id
+            WHERE cd.user_id = :user_id AND cd.tenant_id = :tenant_id
+        """
+        rows = self.db.execute(text(sql), {"user_id": user_id, "tenant_id": tenant_id}).mappings().all()
+
+        result = []
+        for row in rows:
+            item = dict(row)
+            for key, value in item.items():
+                if isinstance(value, datetime):
+                    item[key] = value.strftime("%Y-%m-%d %H:%M:%S")
+            result.append(item)
+        return result
+
+    def rename_directory(self, directory_id: str, user_id: str, new_name: str) -> bool:
+        """重命名目录（校验归属）"""
+        db_directory = self.db.query(ChatDocDirectory).filter(
+            ChatDocDirectory.id == directory_id,
+            ChatDocDirectory.user_id == user_id
+        ).first()
+        if db_directory:
+            db_directory.directory = new_name
+            db_directory.update_time = datetime.now()
+            self.db.commit()
+            return True
+        return False
+
+    def delete_directory(self, directory_id: str, user_id: str) -> bool:
+        """删除目录（校验归属）"""
+        result = self.db.query(ChatDocDirectory).filter(
+            ChatDocDirectory.id == directory_id,
+            ChatDocDirectory.user_id == user_id
+        ).delete()
+        self.db.commit()
+        return result > 0

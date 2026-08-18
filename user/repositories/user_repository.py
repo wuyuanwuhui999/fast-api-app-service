@@ -138,6 +138,17 @@ class UserRepository:
             return True
         return False
 
+    def update_avater(self, user_id: str, avater_url: str) -> bool:
+        """更新用户头像地址"""
+        from datetime import datetime
+        db_user = self.get_user_by_id(user_id)
+        if db_user:
+            db_user.avater = avater_url
+            db_user.update_date = datetime.now()
+            self.db.commit()
+            return True
+        return False
+
     def verify_password(self, user_account: str, password: str) -> bool:
         return self.get_user_by_user_account(user_account, password)
 
