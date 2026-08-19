@@ -17,10 +17,10 @@
 | GET | /service/prompt/getPrompt | 查提示词 | 需 |
 | GET | /service/prompt/getPromptList | 分页提示词列表 | 需 |
 | POST | /service/prompt/insertPrompt | 新增提示词 | 需 |
-| DELETE | /service/prompt/deletePrompt/{promptId} | 删除提示词 | 需 |
+| DELETE | /service/prompt/deletePrompt/{promptId}/{tenantId} | 删除提示词 | 需 |
 | PUT | /service/prompt/updatePrompt | 更新提示词 | 需 |
 
-> 差异：Spring Boot 的 `deletePrompt/{tenantId}/{id}`（两个路径参数）改为 `deletePrompt/{promptId}`（tenantId 走 Query）；`insertPrompt` 由 PUT 改为 POST。
+> 差异：`insertPrompt` 由 Spring 的 PUT 改为 POST（方法差异，其余接口一致）。
 
 ## 接口详情
 
@@ -41,8 +41,8 @@
 - 出参：ResultEntity
 
 ### 4. 删除提示词
-- 接口：`DELETE /service/prompt/deletePrompt/{promptId}`
-- 入参：`X-User-Id`（Header）+ Path：`promptId` + Query：`tenantId`
+- 接口：`DELETE /service/prompt/deletePrompt/{promptId}/{tenantId}`
+- 入参：`X-User-Id`（Header）+ Path：`promptId`、`tenantId`
 - 出参：ResultEntity
 
 ### 5. 更新提示词

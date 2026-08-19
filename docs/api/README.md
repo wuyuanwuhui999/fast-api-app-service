@@ -78,7 +78,6 @@
 | company | 多出的接口 | 6 个 | 8 个（多 `updateUserRole`、`removeUser`） |
 | tenant | 多出的接口 | 8 个 | 12 个（多 `create_tenant`、`update_tenant`、`delete_tenant`、`get_tenant_users`） |
 | tenant | addAdmin 方法 | PUT | POST |
-| prompt | deletePrompt 路径 | `/deletePrompt/{tenantId}/{id}` | `/deletePrompt/{promptId}?tenantId=` |
 | prompt | insertPrompt 方法 | PUT | POST |
 | music | deleteFavoriteDirectory 参数名 | `{favoriteId}` | `{directoryId}` |
 | music | getMusicListByAuthorId 参数 | 含 `authorName` | 无 `authorName` |
@@ -164,7 +163,7 @@
 | GET | /service/prompt/getPrompt | 查提示词 |
 | GET | /service/prompt/getPromptList | 分页提示词列表 |
 | POST | /service/prompt/insertPrompt | 新增提示词 |
-| DELETE | /service/prompt/deletePrompt/{promptId} | 删除提示词 |
+| DELETE | /service/prompt/deletePrompt/{promptId}/{tenantId} | 删除提示词 |
 | PUT | /service/prompt/updatePrompt | 更新提示词 |
 
 ### social（社交评论/点赞）

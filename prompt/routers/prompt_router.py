@@ -68,10 +68,10 @@ async def insert_prompt(
     return await prompt_service.insert_prompt(prompt_data, current_user_id)
 
 
-@router.delete("/deletePrompt/{promptId}", response_model=ResultEntity)
+@router.delete("/deletePrompt/{promptId}/{tenantId}", response_model=ResultEntity)
 async def delete_prompt(
         promptId: str = Path(..., description="提示词ID"),
-        tenantId: str = Query(..., description="租户ID"),
+        tenantId: str = Path(..., description="租户ID"),
         current_user_id: str = Depends(get_user_id_from_header),
         prompt_service: PromptService = Depends()
 ):
