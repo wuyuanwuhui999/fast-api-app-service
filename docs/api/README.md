@@ -68,25 +68,6 @@
 | social | social-service | 4003 | /service/social | 8 | [social.md](social.md) |
 | tenant | tenant-service | 4007 | /service/tenant | 12 | [tenant.md](tenant.md) |
 
-## 与 Spring Boot 项目的接口差异
-
-已补齐缺失接口（user 的 updateAvater，chat 的 chat/getChatHistoryByChatId/getDocList/renameDir/deleteDir），两个项目的接口数量现在一致。剩余差异仅为**方法/路径/参数细节**（非缺失接口）：
-
-| 模块 | 差异点 | Spring Boot | FastAPI |
-|------|--------|-------------|---------|
-| user | updateAvater 路径 | `/service/updateAvater`（源码 bug，前缀缺 /user） | `/service/user/updateAvater`（已修正） |
-| company | 多出的接口 | 6 个 | 8 个（多 `updateUserRole`、`removeUser`） |
-| tenant | 多出的接口 | 8 个 | 12 个（多 `create_tenant`、`update_tenant`、`delete_tenant`、`get_tenant_users`） |
-| tenant | addAdmin 方法 | PUT | POST |
-| prompt | insertPrompt 方法 | PUT | POST |
-| music | deleteFavoriteDirectory 参数名 | `{favoriteId}` | `{directoryId}` |
-| music | getMusicListByAuthorId 参数 | 含 `authorName` | 无 `authorName` |
-| music | getFavoriteAuthor 分页 | 含 pageNum/pageSize | 无分页 |
-| music | getMusicListByClassifyId 参数 | 含 `isRedis` | 无 `isRedis` |
-| music | insertMusicFavorite body | 对象数组 | `favoriteIds` int 数组 |
-
-> 说明：company/tenant 的"多出接口"是 FastAPI 额外增强（不影响 Spring 前端调用）；其余方法/路径/参数差异如需进一步对齐可另行处理。
-
 ## 接口快速索引（按模块）
 
 ### user（用户）
