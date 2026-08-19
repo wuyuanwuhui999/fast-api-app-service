@@ -107,7 +107,8 @@ class LogService:
         response: Response,
         user_id: Optional[str],
         execute_time: int,
-        error_message: Optional[str] = None
+        error_message: Optional[str] = None,
+        response_body: Optional[str] = None
     ):
         """保存请求日志（异步）"""
         try:
@@ -115,7 +116,7 @@ class LogService:
             request_id = request.headers.get("X-Request-ID")
             if not request_id:
                 request_id = str(uuid.uuid4()).replace("-", "")
-            
+
             # 获取请求体
             request_body = None
             try:
@@ -124,10 +125,10 @@ class LogService:
                     request_body = body.decode('utf-8', errors='ignore')[:65535]  # 限制长度
             except Exception:
                 pass
-            
-            # 获取响应体
-            response_body = None
-            if hasattr(response, "body"):
+
+            # 获取响应体：优先使用中间件传入的 response_body（由 request.state 读取），
+            # 回退到 response.body（仅对普通 Response 有效，_StreamingResponse 无 .body）
+            if response_body is None and hasattr(response, "body"):
                 try:
                     if response.body:
                         response_body = response.body.decode('utf-8', errors='ignore')[:65535]

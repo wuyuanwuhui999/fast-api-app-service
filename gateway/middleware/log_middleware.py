@@ -46,9 +46,14 @@ class LogMiddleware(BaseHTTPMiddleware):
         finally:
             # 计算执行时间
             execute_time = int((time.time() - start_time) * 1000)
-            
+
             # 异步保存日志（如果响应存在）
             if response is not None:
+                # 从 request.state 读取响应体（由 gateway 路由处理器写入，bytes）
+                response_body = getattr(request.state, "response_body", None)
+                if isinstance(response_body, bytes):
+                    response_body = response_body.decode("utf-8", errors="ignore")[:65535]
+
                 # 使用asyncio.create_task异步保存，不阻塞响应
                 import asyncio
                 asyncio.create_task(
@@ -57,6 +62,7 @@ class LogMiddleware(BaseHTTPMiddleware):
                         response=response,
                         user_id=user_id,
                         execute_time=execute_time,
-                        error_message=error_message
+                        error_message=error_message,
+                        response_body=response_body
                     )
                 )

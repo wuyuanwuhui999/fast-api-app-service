@@ -49,8 +49,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.add_middleware(AuthMiddleware)
+# 注意顺序：Starlette 中后注册的中间件是外层、先执行。
+# AuthMiddleware 必须后注册（外层、先执行）注入 request.state.user_id，
+# 否则 LogMiddleware 先执行时读取到的 user_id 为空。
 app.add_middleware(LogMiddleware)
+app.add_middleware(AuthMiddleware)
 
 route_service = RouteService()
 
@@ -335,6 +338,11 @@ async def gateway(request: Request, path: str):
                 content=body,
                 params=request.query_params
             )
+
+            # 供日志中间件读取响应体：Starlette 的 BaseHTTPMiddleware 会把响应包装成
+            # _StreamingResponse（无 .body 属性），因此在这里把上游响应体挂到 request.state
+            # （基于同一 scope，中间件可通过 request.state.response_body 读取）
+            request.state.response_body = response.content
 
             return Response(
                 content=response.content,
