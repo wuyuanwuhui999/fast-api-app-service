@@ -24,7 +24,7 @@ class AuthService:
     def __init__(self, user_repository: UserRepository):
         self.user_repository = user_repository
 
-    async def login(self, userAccount: str, password: str):
+    async def login(self, userAccount: str, password: str, ip: str = ""):
         user = self.user_repository.get_user_by_user_account(userAccount, password)
         if not user:
             raise HTTPException(
@@ -40,6 +40,11 @@ class AuthService:
             expires_delta=access_token_expires
         )
         logger.warning(f"[token]: token={access_token}")
+
+        # 异步记录登录日志
+        from user.services.login_log_service import record_login_log
+        record_login_log(user.id, ip, "login")
+
         return ResultUtil.success(
             camel_data=user_data,
             token=access_token

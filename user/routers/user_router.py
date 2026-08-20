@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, Header, HTTPException, File, UploadFile
+from fastapi import APIRouter, Depends, Query, Header, HTTPException, File, UploadFile, Request
 
 from user.models.user_model import LoginForm
 from common.schemas.user_schema import UserSchema
@@ -22,13 +22,15 @@ async def register(user: UserCreate, user_service: UserService = Depends()):
 
 
 @router.post("/user/login", response_model=ResultEntity)
-async def login(form_data: LoginForm, auth_service: AuthService = Depends(get_auth_service)):
-    return await auth_service.login(form_data.userAccount, form_data.password)
+async def login(form_data: LoginForm, request: Request, auth_service: AuthService = Depends(get_auth_service)):
+    from user.services.login_log_service import get_client_ip
+    return await auth_service.login(form_data.userAccount, form_data.password, get_client_ip(request))
 
 
 @router.get("/user/getUserData", response_model=ResultEntity)
 async def get_user_data(
     current_user_id: str = Depends(get_user_id_from_header),
+    request: Request = None,
     user_service: UserService = Depends()
 ):
     # 通过user_id获取用户信息
@@ -38,6 +40,11 @@ async def get_user_data(
     from common.utils.result_util import ResultUtil
     from common.utils.jwt_util import create_access_token
     token = create_access_token(data={"sub": user_data})
+
+    # 异步记录登录日志（进入 App 时首先调用 getUserData，成功即视为一次登录）
+    from user.services.login_log_service import record_login_log, get_client_ip
+    record_login_log(current_user_id, get_client_ip(request), "getUserData")
+
     return ResultUtil.success(data=user_data, token=token)
 
 

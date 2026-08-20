@@ -40,9 +40,9 @@ class UserService:
                 detail="Email already registered"
             )
 
-        user_data = self.user_repository.create_user(user)
+        db_user = self.user_repository.create_user(user)
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        user_data = UserSchema.model_validate(user_data).dict()
+        user_data = UserSchema.model_validate(db_user).dict()
         access_token = create_access_token(
             data={"sub": user_data},
             expires_delta=access_token_expires

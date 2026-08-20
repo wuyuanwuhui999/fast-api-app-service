@@ -104,7 +104,9 @@ class UserRepository:
         )
 
     def create_user(self, user: UserCreate) -> UserMode:
+        import uuid
         db_user = UserMode(
+            id=uuid.uuid4().hex,
             user_account=user.user_account,
             email=user.email,
             username=user.username,
