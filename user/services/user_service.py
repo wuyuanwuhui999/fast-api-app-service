@@ -28,7 +28,7 @@ class UserService:
         self.redis = redis.Redis.from_url(REDIS_URL)
 
     async def register_user(self, user: UserCreate) -> ResultEntity:
-        if self.user_repository.get_user_by_user_account(user.user_account):
+        if self.user_repository.verify_user(user.user_account):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Username already registered"
