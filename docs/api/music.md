@@ -37,6 +37,7 @@
 | PUT | /service/music/updateFavoriteDirectory | 更新收藏夹名称 | 需 |
 | GET | /service/music/isMusicFavorite/{musicId} | 是否已收藏 | 需 |
 | POST | /service/music/insertMusicFavorite/{musicId} | 添加到收藏夹 | 需 |
+| GET | /service/music/getRecommendMusic | 猜你喜欢（前5条） | 需 |
 
 > 差异（与 Spring Boot）：`deleteFavoriteDirectory/{favoriteId}` → `{directoryId}`；`getMusicListByAuthorId` 去掉 `authorName`；`getFavoriteAuthor` 去掉分页；`getMusicListByClassifyId` 去掉 `isRedis`；`insertMusicFavorite` body 为 `favoriteIds` int 数组。
 
@@ -159,6 +160,12 @@
 - 作用：先删除该音乐所有收藏，再批量插入（传空数组则清空收藏）
 - 入参：`X-User-Id`（Header）+ Path：`musicId` + Body：`favoriteIds`（int 数组，收藏夹 ID 列表）
 - 出参：ResultEntity，data 为新增收藏记录数
+
+### 24. 猜你喜欢
+- 接口：`GET /service/music/getRecommendMusic`
+- 作用：根据 musicId 或 authorId 推荐音乐（前5条）。传 musicId 时按该歌曲 label（逗号分隔多标签，任一命中）推荐、排除当前歌曲，label 为空则按该歌作者推荐；传 authorId 时按作者推荐。两者互斥。
+- 入参：`X-User-Id`（Header）+ Query：`musicId`（可选，与 authorId 互斥）、`authorId`（可选，与 musicId 互斥）
+- 出参：ResultEntity，data 为音乐列表（前5条，含 isLike），`total` 为条数
 
 ## 请求体实体字段
 

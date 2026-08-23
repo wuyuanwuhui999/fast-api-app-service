@@ -448,6 +448,122 @@ class MusicRepository:
             logger.error(f"根据歌手ID查询音乐列表失败: {str(e)}", exc_info=True)
             return [], 0
 
+    def get_recommend_music(
+            self,
+            music_id: Optional[int],
+            author_id: Optional[int],
+            user_id: str
+    ) -> List[Dict[str, Any]]:
+        """
+        猜你喜欢：根据 musicId 或 authorId 推荐音乐（前5条）
+
+        逻辑：
+        1. 传入 musicId：查出该歌曲的 label（逗号分隔多个值）
+           - label 有值：按 label 匹配（FIND_IN_SET 任一标签命中）取前5条（排除当前歌曲）
+           - label 无值：按该歌曲的 author_id 查询前5条（排除当前歌曲）
+        2. 传入 authorId：按 author_id 查询前5条
+
+        Args:
+            music_id: 音乐ID（与 author_id 互斥）
+            author_id: 歌手ID（与 music_id 互斥）
+            user_id: 当前用户ID
+
+        Returns:
+            List[Dict[str, Any]]: 音乐列表（含点赞状态）
+        """
+        try:
+            like_flag = func.if_(MusicLikeModel.id.isnot(None), 1, 0).label('is_like')
+
+            if music_id is not None:
+                music = self.db.query(MusicModel).filter(MusicModel.id == music_id).first()
+                if not music:
+                    return []
+                if music.label and music.label.strip():
+                    # label 有值：按标签匹配（任一标签命中），排除当前歌曲
+                    labels = [lbl.strip() for lbl in music.label.split(',') if lbl.strip()]
+                    conditions = [func.find_in_set(lbl, MusicModel.label) > 0 for lbl in labels]
+                    query = (
+                        self.db.query(MusicModel, like_flag)
+                        .outerjoin(
+                            MusicLikeModel,
+                            (MusicModel.id == MusicLikeModel.music_id) &
+                            (MusicLikeModel.user_id == user_id)
+                        )
+                        .filter(MusicModel.is_publish == 1, or_(*conditions), MusicModel.id != music_id)
+                    )
+                else:
+                    # label 无值：按该歌曲的作者查询，排除当前歌曲
+                    query = (
+                        self.db.query(MusicModel, like_flag)
+                        .outerjoin(
+                            MusicLikeModel,
+                            (MusicModel.id == MusicLikeModel.music_id) &
+                            (MusicLikeModel.user_id == user_id)
+                        )
+                        .filter(MusicModel.is_publish == 1, MusicModel.author_id == music.author_id, MusicModel.id != music_id)
+                    )
+            else:
+                # 传入 authorId：按作者查询
+                query = (
+                    self.db.query(MusicModel, like_flag)
+                    .outerjoin(
+                        MusicLikeModel,
+                        (MusicModel.id == MusicLikeModel.music_id) &
+                        (MusicLikeModel.user_id == user_id)
+                    )
+                    .filter(MusicModel.is_publish == 1, MusicModel.author_id == author_id)
+                )
+
+            results = (
+                query.order_by(
+                    func.coalesce(MusicModel.is_hot, 0).desc(),
+                    MusicModel.create_time.desc()
+                )
+                .limit(5)
+                .all()
+            )
+
+            # 构建返回数据
+            music_list = []
+            for music_obj, is_like in results:
+                music_list.append({
+                    "id": music_obj.id,
+                    "album_id": music_obj.album_id,
+                    "song_name": music_obj.song_name,
+                    "author_name": music_obj.author_name,
+                    "author_id": music_obj.author_id,
+                    "album_name": music_obj.album_name,
+                    "version": music_obj.version,
+                    "language": music_obj.language,
+                    "publish_date": music_obj.publish_date,
+                    "wide_audio_id": music_obj.wide_audio_id,
+                    "is_publish": music_obj.is_publish,
+                    "big_pack_id": music_obj.big_pack_id,
+                    "final_id": music_obj.final_id,
+                    "audio_id": music_obj.audio_id,
+                    "similar_audio_id": music_obj.similar_audio_id,
+                    "is_hot": music_obj.is_hot,
+                    "album_audio_id": music_obj.album_audio_id,
+                    "audio_group_id": music_obj.audio_group_id,
+                    "cover": music_obj.cover,
+                    "play_url": music_obj.play_url,
+                    "local_play_url": music_obj.local_play_url,
+                    "source_name": music_obj.source_name,
+                    "source_url": music_obj.source_url,
+                    "create_time": music_obj.create_time,
+                    "update_time": music_obj.update_time,
+                    "label": music_obj.label,
+                    "lyrics": music_obj.lyrics,
+                    "permission": music_obj.permission,
+                    "is_like": is_like,
+                    "times": 0
+                })
+            return music_list
+
+        except Exception as e:
+            logger.error(f"猜你喜欢查询失败: {str(e)}", exc_info=True)
+            return []
+
     def get_favorite_authors_by_user_id(
             self,
             user_id: str

@@ -48,6 +48,35 @@ class MusicService:
             logger.error(f"获取推荐音乐失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg=f"获取推荐音乐失败: {str(e)}", data=None)
 
+    async def get_recommend_music(
+            self,
+            music_id: Optional[int],
+            author_id: Optional[int],
+            user_id: str
+    ) -> ResultEntity:
+        """
+        猜你喜欢：根据 musicId 或 authorId 推荐音乐（前5条）
+
+        Args:
+            music_id: 音乐ID（与 author_id 互斥）
+            author_id: 歌手ID（与 music_id 互斥）
+            user_id: 当前用户ID
+
+        Returns:
+            ResultEntity: 音乐列表（含点赞状态）
+        """
+        try:
+            music_list = self.music_repository.get_recommend_music(
+                music_id=music_id,
+                author_id=author_id,
+                user_id=user_id
+            )
+            return ResultUtil.success(data=music_list, total=len(music_list))
+
+        except Exception as e:
+            logger.error(f"猜你喜欢查询失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(msg=f"猜你喜欢查询失败: {str(e)}", data=None)
+
     async def get_music_classify(self) -> ResultEntity:
         """
         获取音乐分类列表

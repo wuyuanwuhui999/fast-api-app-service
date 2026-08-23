@@ -48,6 +48,40 @@ async def get_keyword_music(
 # music/routers/music_router.py (追加部分)
 
 
+@router.get("/getRecommendMusic", response_model=ResultEntity)
+async def get_recommend_music(
+    musicId: Optional[int] = Query(None, description="音乐ID（与 authorId 互斥）"),
+    authorId: Optional[int] = Query(None, description="歌手ID（与 musicId 互斥）"),
+    current_user_id: str = Depends(get_user_id_from_header),
+    music_service: MusicService = Depends()
+) -> ResultEntity:
+    """
+    猜你喜欢：根据 musicId 或 authorId 推荐音乐（前5条）
+
+    传 musicId 时：按该歌曲 label 匹配（逗号分隔多标签任一命中）推荐；label 为空则按作者推荐
+    传 authorId 时：按作者推荐
+    两者互斥，必须且只能传一个
+
+    Args:
+        musicId: 音乐ID（与 authorId 互斥）
+        authorId: 歌手ID（与 musicId 互斥）
+        current_user_id: 当前登录用户ID（由网关透传）
+        music_service: 音乐服务实例
+
+    Returns:
+        ResultEntity: 推荐音乐列表（前5条，含 isLike 点赞状态）
+    """
+    if musicId is not None and authorId is not None:
+        raise HTTPException(status_code=400, detail="musicId 和 authorId 互斥，只能传一个")
+    if musicId is None and authorId is None:
+        raise HTTPException(status_code=400, detail="必须传入 musicId 或 authorId 其中一个")
+
+    return await music_service.get_recommend_music(
+        music_id=musicId,
+        author_id=authorId,
+        user_id=current_user_id
+    )
+
 @router.get("/getMusicClassify", response_model=ResultEntity)
 async def get_music_classify(
     music_service: MusicService = Depends()
