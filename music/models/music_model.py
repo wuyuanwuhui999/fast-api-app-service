@@ -16,7 +16,7 @@ class MusicModel(Base):
     id = Column(Integer, primary_key=True, autoincrement=True, comment="主键")
     album_id = Column(Integer, nullable=True, comment="专辑id")
     song_name = Column(String(1000), nullable=True, comment="歌曲名称")
-    author_id = Column(Integer, nullable=True, comment="歌手id")
+    author_id = Column(String(255), nullable=True, comment="歌手id")
     author_name = Column(String(255), nullable=True, comment="作者名称")
     album_name = Column(String(255), nullable=True, comment="专辑名称")
     version = Column(String(255), nullable=True, comment="版本")

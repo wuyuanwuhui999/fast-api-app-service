@@ -51,7 +51,7 @@ async def get_keyword_music(
 @router.get("/getRecommendMusic", response_model=ResultEntity)
 async def get_recommend_music(
     musicId: Optional[int] = Query(None, description="音乐ID（与 authorId 互斥）"),
-    authorId: Optional[int] = Query(None, description="歌手ID（与 musicId 互斥）"),
+    authorId: Optional[str] = Query(None, description="歌手ID（与 musicId 互斥）"),
     current_user_id: str = Depends(get_user_id_from_header),
     music_service: MusicService = Depends()
 ) -> ResultEntity:
@@ -168,7 +168,7 @@ async def get_music_author_list_by_category_id(
 
 @router.get("/getMusicListByAuthorId", response_model=ResultEntity)
 async def get_music_list_by_author_id(
-        authorId: int = Query(..., description="歌手ID（对应 music 表的 author_id）"),
+        authorId: str = Query(..., description="歌手ID（对应 music 表的 author_id）"),
         pageNum: int = Query(1, ge=1, description="页码，从1开始"),
         pageSize: int = Query(10, ge=1, le=100, description="每页数量，最大100"),
         current_user_id: str = Depends(get_user_id_from_header),

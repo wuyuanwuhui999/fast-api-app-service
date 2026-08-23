@@ -51,7 +51,7 @@ class MusicService:
     async def get_recommend_music(
             self,
             music_id: Optional[int],
-            author_id: Optional[int],
+            author_id: Optional[str],
             user_id: str
     ) -> ResultEntity:
         """
@@ -193,7 +193,7 @@ class MusicService:
 
     async def get_music_list_by_author_id(
             self,
-            author_id: int,
+            author_id: str,
             user_id: str,
             page_num: int = 1,
             page_size: int = 10
@@ -212,7 +212,7 @@ class MusicService:
         """
         try:
             # 参数校验
-            if author_id is None or author_id <= 0:
+            if not author_id:
                 return ResultUtil.fail(msg="歌手ID不能为空", data=None)
 
             if page_num < 1:

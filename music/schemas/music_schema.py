@@ -11,7 +11,7 @@ class MusicSchema(BaseModel):
     album_id: Optional[int] = Field(None, description="专辑id", alias="albumId")
     song_name: Optional[str] = Field(None, description="歌曲名称", alias="songName")
     author_name: Optional[str] = Field(None, description="作者名称", alias="authorName")
-    author_id: Optional[int] = Field(None, description="歌手id", alias="authorId")
+    author_id: Optional[str] = Field(None, description="歌手id", alias="authorId")
     album_name: Optional[str] = Field(None, description="专辑名称", alias="albumName")
     version: Optional[str] = Field(None, description="版本")
     language: Optional[str] = Field(None, description="语言")

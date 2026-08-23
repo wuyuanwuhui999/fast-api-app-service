@@ -346,7 +346,7 @@ class MusicRepository:
 
     def get_music_list_by_author_id(
             self,
-            author_id: int,
+            author_id: str,
             user_id: str,
             page_num: int = 1,
             page_size: int = 10
@@ -451,7 +451,7 @@ class MusicRepository:
     def get_recommend_music(
             self,
             music_id: Optional[int],
-            author_id: Optional[int],
+            author_id: Optional[str],
             user_id: str
     ) -> List[Dict[str, Any]]:
         """
