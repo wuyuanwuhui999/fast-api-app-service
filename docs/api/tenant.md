@@ -35,62 +35,182 @@
 - 接口：`GET /service/tenant/getTenantList`
 - 入参：`X-User-Id`（Header）+ Query：`companyId`
 - 出参：ResultEntity，data 为租户列表
+- 出参示例：
+```json
+{
+  "data": [{"id":"tenant-xxx","companyId":"company-xxx","name":"示例租户","code":"DEMO","description":"...","status":1}],
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 2. 当前租户用户信息
 - 接口：`GET /service/tenant/getTenantUser`
 - 入参：`X-User-Id`（Header）+ Query：`tenantId`
 - 出参：ResultEntity，data 为当前用户在租户中的信息
+- 出参示例：
+```json
+{
+  "data": {"id":"uuid","tenantId":"tenant-xxx","userId":"uuid","role":0,"joinDate":"2024-01-01 12:00:00","disabled":0},
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 3. 租户用户列表（分页）
 - 接口：`GET /service/tenant/getTenantUserList`
 - 入参：`X-User-Id`（Header）+ Query：`tenantId`、`pageNum`（默认 1）、`pageSize`（默认 10）、`keyword`（可选）
 - 出参：ResultEntity，data 为用户列表，`total` 为总数
+- 出参示例：
+```json
+{
+  "data": [{"id":"uuid","userAccount":"user123","username":"昵称","telephone":"13800138000","email":"user@example.com","avater":"https://example.com/avatar.jpg","birthday":"1990-01-01","sex":"0","role":"admin","sign":"个性签名","region":"广东","disabled":0,"permission":1}],
+  "status": "SUCCESS",
+  "msg": null,
+  "total": 100,
+  "token": null
+}
+```
 
 ### 4. 创建租户
 - 接口：`POST /service/tenant/create_tenant`
 - 作用：创建新租户（需管理员权限，必须携带 company_id）
 - 入参：`X-User-Id`（Header）+ Body（TenantCreateSchema）
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 5. 更新租户
 - 接口：`PUT /service/tenant/update_tenant/{tenant_id}`
 - 入参：`X-User-Id`（Header）+ Path：`tenant_id` + Body（TenantUpdateSchema）
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 6. 删除租户
 - 接口：`DELETE /service/tenant/delete_tenant/{tenant_id}`
 - 入参：`X-User-Id`（Header）+ Path：`tenant_id`
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 7. 添加租户用户
 - 接口：`POST /service/tenant/addTenantUser/{tenant_id}/{user_id}`
 - 入参：`X-User-Id`（Header）+ Path：`tenant_id`、`user_id`
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 8. 租户下所有用户
 - 接口：`GET /service/tenant/get_tenant_users/{tenant_id}`
 - 入参：`X-User-Id`（Header）+ Path：`tenant_id`
 - 出参：ResultEntity，data 为用户列表
+- 出参示例：
+```json
+{
+  "data": [{"id":"uuid","userAccount":"user123","username":"昵称","telephone":"13800138000","email":"user@example.com","avater":"https://example.com/avatar.jpg","birthday":"1990-01-01","sex":"0","role":"admin","sign":"个性签名","region":"广东","disabled":0,"permission":1}],
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 9. 设为管理员
 - 接口：`POST /service/tenant/addAdmin/{tenantId}/{userId}`
 - 入参：`X-User-Id`（Header，当前操作人）+ Path：`tenantId`、`userId`
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 10. 取消管理员
 - 接口：`PUT /service/tenant/cancelAdmin/{tenantId}/{userId}`
 - 入参：`X-User-Id`（Header）+ Path：`tenantId`、`userId`
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 11. 删除租户用户
 - 接口：`DELETE /service/tenant/deleteTenantUser/{tenantId}/{userId}`
 - 入参：`X-User-Id`（Header）+ Path：`tenantId`、`userId`
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 12. 搜索租户用户
 - 接口：`GET /service/tenant/searchTenantUsers`
 - 入参：`X-User-Id`（Header）+ Query：`companyId`、`tenantId`、`keyword`（可选）、`pageNum`、`pageSize`
 - 出参：ResultEntity，data 为用户列表（标记是否已在租户中），`total` 为总数
+- 出参示例：
+```json
+{
+  "data": [{"id":"uuid","userAccount":"user123","username":"昵称","telephone":"13800138000","email":"user@example.com","avater":"https://example.com/avatar.jpg","birthday":"1990-01-01","sex":"0","role":"admin","sign":"个性签名","region":"广东","disabled":0,"permission":1}],
+  "status": "SUCCESS",
+  "msg": null,
+  "total": 100,
+  "token": null
+}
+```
 
 ## 请求体实体字段
 

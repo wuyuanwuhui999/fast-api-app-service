@@ -36,66 +36,176 @@
 - 作用：注册新用户
 - 入参（Body，UserCreate）：`userAccount`、`password`、`username` 等
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 2. 登录
 - 接口：`POST /service/user/login`
 - 作用：账号密码登录
 - 入参（Body，LoginForm）：`userAccount`（账号）、`password`（密码）
 - 出参：ResultEntity，`token` 为登录凭证
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyMTIzIn0.xxx"
+}
+```
 
 ### 3. 查询用户信息
 - 接口：`GET /service/user/getUserData`
 - 作用：查询当前登录用户信息，并签发新 token
 - 入参：`X-User-Id`（Header）
 - 出参：ResultEntity，data 为用户信息，`token` 为新签发的凭证
+- 出参示例：
+```json
+{
+  "data": {"id":"uuid","userAccount":"user123","username":"昵称","telephone":"13800138000","email":"user@example.com","avater":"https://example.com/avatar.jpg","birthday":"1990-01-01","sex":"0","role":"admin","sign":"个性签名","region":"广东","disabled":0,"permission":1},
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyMTIzIn0.xxx"
+}
+```
 
 ### 4. 更新用户信息
 - 接口：`PUT /service/user/updateUser`
 - 作用：更新当前用户资料
 - 入参：`X-User-Id`（Header）+ Body（UserUpdate）
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 5. 修改密码
 - 接口：`PUT /service/user/updatePassword`
 - 作用：修改登录密码
 - 入参：`X-User-Id`（Header）+ Body（PasswordChange：`oldPassword`、`newPassword`）
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 6. 发送邮箱验证码
 - 接口：`POST /service/user/sendEmailVertifyCode`
 - 作用：找回密码/邮箱登录时发送验证码
 - 入参（Body，MailRequest）：`email` 等
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 7. 重置密码
 - 接口：`POST /service/user/resetPassword`
 - 作用：通过邮箱验证码重置密码
 - 入参（Body，ResetPasswordConfirm）：`email`、`code`（验证码）、`password`（新密码）
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 8. 邮箱登录
 - 接口：`POST /service/user/loginByEmail`
 - 作用：邮箱验证码登录
 - 入参（Body，MailRequest）：`email`、`code`（验证码）
 - 出参：ResultEntity，`token` 为登录凭证
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyMTIzIn0.xxx"
+}
+```
 
 ### 9. 校验用户是否存在
 - 接口：`POST /service/user/vertifyUser`
 - 作用：注册前校验账号/用户名是否已存在
 - 入参（Body，UserCreate）：`userAccount` 或 `username`
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 10. 搜索用户
 - 接口：`GET /service/user/searchUsers`
 - 作用：按关键字模糊搜索用户（分页）
 - 入参（Query）：`keyword`（必填）、`tenantId`（默认空）、`pageNum`（默认 1）、`pageSize`（默认 100）
 - 出参：ResultEntity，data 为用户列表，`total` 为总数
+- 出参示例：
+```json
+{
+  "data": [{"id":"uuid","userAccount":"user123","username":"昵称","telephone":"13800138000","email":"user@example.com","avater":"https://example.com/avatar.jpg","birthday":"1990-01-01","sex":"0","role":"admin","sign":"个性签名","region":"广东","disabled":0,"permission":1}],
+  "status": "SUCCESS",
+  "msg": null,
+  "total": 100,
+  "token": null
+}
+```
 
 ### 11. 头像上传
 - 接口：`POST /service/user/updateAvater`
 - 作用：上传头像图片
 - 入参：`X-User-Id`（Header）+ Form：`file`（multipart/form-data 文件，支持 jpg/jpeg/png/gif/bmp）
 - 出参：ResultEntity，data 为新头像 URL
+- 出参示例：
+```json
+{
+  "data": "https://example.com/avatar2.jpg",
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ## 请求体实体字段
 

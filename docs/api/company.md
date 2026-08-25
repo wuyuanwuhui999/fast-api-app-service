@@ -31,43 +31,123 @@
 - 接口：`GET /service/company/getCompanyList`
 - 入参：`X-User-Id`（Header）
 - 出参：ResultEntity，data 为公司列表
+- 出参示例：
+```json
+{
+  "data": [{"id":"company-xxx","name":"示例公司","code":"DEMO","description":"公司描述","status":1}],
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 2. 公司成员列表
 - 接口：`GET /service/company/getCompanyUsers`
 - 作用：分页查询企业成员（需企业管理员权限）
 - 入参：`X-User-Id`（Header）+ Query：`companyId`、`pageNum`（默认 1）、`pageSize`（默认 10）、`keyword`（可选）
 - 出参：ResultEntity，data 为成员列表，`total` 为总数
+- 出参示例：
+```json
+{
+  "data": [{"id":"uuid","userId":"uuid","companyId":"company-xxx","role":"1","positionId":"pos-xxx","isDefault":1,"status":1}],
+  "status": "SUCCESS",
+  "msg": null,
+  "total": 100,
+  "token": null
+}
+```
 
 ### 3. 搜索公司用户
 - 接口：`GET /service/company/searchUsers`
 - 入参：`X-User-Id`（Header）+ Query：`companyId`、`pageNum`、`pageSize`、`keyword`（可选）
 - 出参：ResultEntity，data 为用户列表，`total` 为总数
+- 出参示例：
+```json
+{
+  "data": [{"id":"uuid","userAccount":"user123","username":"昵称","telephone":"13800138000","email":"user@example.com","avater":"https://example.com/avatar.jpg","birthday":"1990-01-01","sex":"0","role":"admin","sign":"个性签名","region":"广东","disabled":0,"permission":1}],
+  "status": "SUCCESS",
+  "msg": null,
+  "total": 100,
+  "token": null
+}
+```
 
 ### 4. 添加用户到公司
 - 接口：`POST /service/company/addUser`
 - 入参：`X-User-Id`（Header）+ Body（AddCompanyUserSchema）
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 5. 修改用户角色
 - 接口：`PUT /service/company/updateUserRole`
 - 作用：修改用户在企业中的角色（role=2 超管可改 0/1，role=1 管理员可改 0）
 - 入参：`X-User-Id`（Header）+ Body（UpdateUserRoleSchema）
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 6. 移除用户
 - 接口：`DELETE /service/company/removeUser`
 - 入参：`X-User-Id`（Header）+ Body（RemoveUserSchema）
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 7. 查公司部门
 - 接口：`GET /service/company/getDepartments`
 - 入参：`X-User-Id`（Header）+ Query：`companyId`
 - 出参：ResultEntity，data 为部门列表
+- 出参示例：
+```json
+{
+  "data": [{"id":"dept-xxx","companyId":"company-xxx","departmentName":"研发部","role":0}],
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 8. 查部门职位
 - 接口：`GET /service/company/getPositions`
 - 入参（Query）：`departmentId`
 - 出参：ResultEntity，data 为职位列表
+- 出参示例：
+```json
+{
+  "data": [{"id":"pos-xxx","departmentId":"dept-xxx","positionName":"工程师"}],
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ## 请求体实体字段
 

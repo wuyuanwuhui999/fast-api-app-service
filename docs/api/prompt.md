@@ -29,26 +29,76 @@
 - 作用：根据租户查默认提示词（无则自动创建），或按 id 精确查询单条
 - 入参：`X-User-Id`（Header）+ Query：`tenantId`（必填）、`promptId`（可选）
 - 出参：ResultEntity，data 为提示词
+- 出参示例：
+```json
+{
+  "data": {"id":"prompt-xxx","prompt":"你是一个助手","tenantId":"tenant-xxx","userId":"uuid","createTime":"2024-01-01 12:00:00"},
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 2. 分页提示词列表
 - 接口：`GET /service/prompt/getPromptList`
 - 入参：`X-User-Id`（Header）+ Query：`tenantId`、`keyword`（可选）、`pageNum`（默认 1）、`pageSize`（默认 10，最大 100）
 - 出参：ResultEntity，data 为提示词列表，`total` 为总数
+- 出参示例：
+```json
+{
+  "data": [{"id":"prompt-xxx","prompt":"你是一个助手","tenantId":"tenant-xxx","userId":"uuid","createTime":"2024-01-01 12:00:00"}],
+  "status": "SUCCESS",
+  "msg": null,
+  "total": 100,
+  "token": null
+}
+```
 
 ### 3. 新增提示词
 - 接口：`POST /service/prompt/insertPrompt`
 - 入参：`X-User-Id`（Header）+ Body（InsertPromptSchema）
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 4. 删除提示词
 - 接口：`DELETE /service/prompt/deletePrompt/{promptId}/{tenantId}`
 - 入参：`X-User-Id`（Header）+ Path：`promptId`、`tenantId`
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ### 5. 更新提示词
 - 接口：`PUT /service/prompt/updatePrompt`
 - 入参：`X-User-Id`（Header）+ Body（UpdatePromptSchema）
 - 出参：ResultEntity
+- 出参示例：
+```json
+{
+  "data": null,
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
 
 ## 请求体实体字段
 
