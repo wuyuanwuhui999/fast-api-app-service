@@ -69,3 +69,29 @@ URL 格式 `/service/{模块名}/**`，按 `SERVICE_MAPPING` 映射到 `{模块�
 
 - `SECRET_KEY`、`ALGORITHM`（默认 HS256）
 - `ACCESS_TOKEN_EXPIRE_MINUTES`
+
+## 涉及的表结构
+
+> 数据库：MySQL `127.0.0.1:3306/play`（root）。以下为本模块接口读写涉及的表结构。
+
+### 1. log（网关请求日志表）
+
+| 字段 | 类型 | 空 | 键 | 说明 |
+|------|------|-----|------|------|
+| id | varbinary(32) | 否 | 主键 | 主键ID |
+| request_id | varchar(64) | 否 | 索引 | 请求唯一ID |
+| user_id | varchar(50) | 是 |  | 用户ID |
+| path | varchar(500) | 否 |  | 请求路径 |
+| method | varchar(10) | 否 |  | HTTP方法 |
+| query_params | text | 是 |  | 查询参数 |
+| request_body | longtext | 是 |  | 请求体 |
+| request_headers | text | 是 |  | 请求头 |
+| client_ip | varchar(50) | 是 |  | 客户端IP |
+| response_status | int | 是 |  | 响应状态码 |
+| response_body | longtext | 是 |  | 响应体 |
+| response_headers | text | 是 |  | 响应头 |
+| execute_time | bigint | 是 |  | 执行时间(毫秒) |
+| create_time | datetime | 否 |  | 创建时间 |
+| update_time | datetime | 是 |  | 更新时间 |
+| error_message | text | 是 |  | 错误信息 |
+
