@@ -1,0 +1,82 @@
+[
+  {
+    "name": "tgw_l7_route",
+    "value": "52ab087ce7e87363bbf8e6b38ff911ec",
+    "domain": "docs.qq.com",
+    "path": "/",
+    "expires": 1787246172.738048,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "traceid",
+    "value": "862f210847",
+    "domain": ".docs.qq.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "TOK",
+    "value": "862f2108475c4e0a",
+    "domain": ".docs.qq.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "hashkey",
+    "value": "862f2108",
+    "domain": ".docs.qq.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "pgv_pvid",
+    "value": "1728724549374188",
+    "domain": ".qq.com",
+    "path": "/",
+    "expires": 1821804374.188905,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "pgv_info",
+    "value": "ssid=s1785375244374188",
+    "domain": ".qq.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "fingerprint",
+    "value": "8132108a08b146088b16b9c440b9b4d775",
+    "domain": ".docs.qq.com",
+    "path": "/",
+    "expires": 1818784374.687451,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "tgw_l7_route",
+    "value": "fe20bc949ffa8f335f1c4ed9bcf5114c",
+    "domain": "h5.qzone.qq.com",
+    "path": "/",
+    "expires": 1787246175.846737,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  }
+]

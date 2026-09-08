@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Any, AsyncGenerator, Optional
 from fastapi import UploadFile, HTTPException, Depends
-from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.orm import Session
 from chat.repositories.chat_repository import ChatRepository
@@ -17,9 +17,9 @@ from common.utils.result_util import ResultEntity, ResultUtil
 import redis
 from pypdf import PdfReader
 from langchain_ollama import OllamaEmbeddings
-from langchain_ollama import OllamaLLM
+from langchain_ollama import ChatOllama
 from langchain_core.documents import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from io import BytesIO
 from chat.schemas.chat_schema import DirectorySchema
 from langchain_chroma import Chroma
@@ -295,7 +295,7 @@ class ChatService:
                         formatted_prompt,
                         config={"configurable": {"session_id": chat_params.chatId}},
                 ):
-                    chunk_str = str(chunk)
+                    chunk_str = chunk.content if hasattr(chunk, 'content') else str(chunk)
                     full_response += chunk_str
                     yield chunk_str
             else:
@@ -471,10 +471,10 @@ class ChatService:
         try:
             if model_config.type == "ollama":
                 logger.info(f"[ChatService] 创建Ollama模型: {model_config.model_name}")
-                return OllamaLLM(
+                return ChatOllama(
                     model=model_config.model_name,
                     base_url=model_config.base_url or "http://localhost:11434",
-                    model_kwargs={"options": {"think": show_think}}
+                    reasoning=show_think
                 )
 
             elif model_config.type in ["deepseek", "tongyi"]:

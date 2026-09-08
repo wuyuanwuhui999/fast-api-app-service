@@ -80,7 +80,7 @@
 - 出参示例：
 ```json
 {
-  "data": null,
+  "data": 1,
   "status": "SUCCESS",
   "msg": null,
   "total": null,
