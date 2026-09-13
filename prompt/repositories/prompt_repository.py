@@ -41,7 +41,6 @@ class PromptRepository:
     async def get_prompt_by_id(
             self,
             prompt_id: str,
-            tenant_id: str,
             user_id: Optional[str] = None
     ) -> Optional[PromptSchema]:
         """
@@ -49,7 +48,6 @@ class PromptRepository:
 
         Args:
             prompt_id: 提示词ID
-            tenant_id: 租户ID
             user_id: 用户ID（可选），用于权限校验
 
         Returns:
@@ -58,12 +56,8 @@ class PromptRepository:
         try:
             query = self.db.query(PromptModel).filter(
                 PromptModel.id == prompt_id,
-                PromptModel.tenant_id == tenant_id
+                PromptModel.user_id == user_id
             )
-
-            # 如果传入了 user_id，校验用户权限
-            if user_id:
-                query = query.filter(PromptModel.user_id == user_id)
 
             prompt = query.first()
 
@@ -97,6 +91,38 @@ class PromptRepository:
 
         except Exception as e:
             logger.error(f"根据ID查询提示词失败: {str(e)}", exc_info=True)
+            return None
+
+    async def get_prompt_by_id_tenant_user(
+            self,
+            prompt_id: str,
+            tenant_id: Optional[str],
+            user_id: str
+    ) -> Optional[PromptSchema]:
+        """
+        根据 ID、租户ID、用户ID 精确查询提示词（chat 模块 WebSocket 调用）
+
+        Args:
+            prompt_id: 提示词ID
+            tenant_id: 租户ID
+            user_id: 用户ID
+
+        Returns:
+            Optional[PromptSchema]: 提示词记录，不存在返回 None
+        """
+        try:
+            prompt = self.db.query(PromptModel).filter(
+                PromptModel.id == prompt_id,
+                PromptModel.tenant_id == tenant_id,
+                PromptModel.user_id == user_id
+            ).first()
+
+            if prompt:
+                return PromptSchema.model_validate(prompt)
+            return None
+
+        except Exception as e:
+            logger.error(f"根据ID/租户/用户查询提示词失败: {str(e)}", exc_info=True)
             return None
 
     async def get_prompt_list_by_tenant(

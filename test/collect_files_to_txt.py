@@ -181,7 +181,7 @@ if __name__ == "__main__":
     source_directory = "/Users/wuwenqiang/Documents/code/python/fast-api-app-service"
     output_txt = "fast api多模块项目源代码.txt"
     excluded_files = [".gitignore", "__init__.py","提示词.txt"]
-    excluded_dirs = [".git", 'docs', "__pycache__", "test", "node_modules", "res", '.qtcreator', 'build', ".venv",
+    excluded_dirs = ["chroma_db",".git", 'docs', "__pycache__", "test", "node_modules", "res", '.qtcreator', 'build', ".venv",
                      ".idea", "venv"]
     excluded_extensions = ['.sh','.md','.sql','.bat','.pptx',".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".svg",'.txt','.lock','.ttf','.sqlite3','.properties','.DS_Store']  # 过滤图片文件
 

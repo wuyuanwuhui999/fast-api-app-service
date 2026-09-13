@@ -234,7 +234,7 @@ class PromptService:
             # 验证提示词是否存在且有权限修改
             existing_prompt = await self.repository.get_prompt_by_id(
                 prompt_data.id,
-                prompt_data.tenant_id
+                current_user_id
             )
 
             if not existing_prompt:

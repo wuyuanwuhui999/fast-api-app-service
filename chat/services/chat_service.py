@@ -9,6 +9,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.orm import Session
 from chat.repositories.chat_repository import ChatRepository
+from prompt.repositories.prompt_repository import PromptRepository
 from chat.schemas.chat_schema import ChatDocSchema, ChatParamsEntity, ChatSchema, ChatModelSchema
 from chat.schemas.chat_schema import AddModelSchema, UpdateModelSchema  # 新增导入
 from chat.utils.chat_util import PromptUtil
@@ -55,6 +56,7 @@ class ChatService:
         self.redis = redis.Redis.from_url(REDIS_URL)
         self.upload_dir = UPLOAD_DIR
         self.chat_repository = ChatRepository(db)
+        self.prompt_repository = PromptRepository(db)
         self.db = db
         self._chroma_client = None
         self._embedding_model = None
@@ -206,14 +208,30 @@ class ChatService:
         logger.info(f"[ChatService] modelId={chat_params.modelId}")
         logger.info(f"[ChatService] tenant_id={chat_params.tenantId}")
         logger.info(f"[ChatService] docIds={chat_params.docIds}")
-        logger.info(f"[ChatService] prompt={chat_params.prompt[:50] if chat_params.prompt else 'None'}...")
+        logger.info(f"[ChatService] promptId={chat_params.promptId}")
+
+        # 解析 promptId → 用户提示词（传了 promptId 则查 prompt 表取 prompt 字段作为用户提示词）
+        user_prompt = ""
+        if chat_params.promptId:
+            prompt_record = await self.prompt_repository.get_prompt_by_id_tenant_user(
+                chat_params.promptId,
+                chat_params.tenantId,
+                user_id
+            )
+            if not prompt_record:
+                logger.error(f"[ChatService] 未找到提示词: promptId={chat_params.promptId}")
+                yield "找不到提示词"
+                yield "[completed]"
+                return
+            user_prompt = prompt_record.prompt
+            logger.info(f"[ChatService] 根据 promptId 查到提示词，长度: {len(user_prompt)}")
 
         chat_entity = ChatSchema(
             user_id=user_id,
             tenant_id=chat_params.tenantId,
             files=None,
             chat_id=chat_params.chatId,
-            prompt=chat_params.prompt,
+            prompt=user_prompt,
             system_prompt=chat_params.systemPrompt,
             model_id=chat_params.modelId,
             content="",
@@ -260,15 +278,15 @@ class ChatService:
                 except Exception as e:
                     logger.warning(f"Failed to parse chat history from Redis: {str(e)}")
 
-            messages.append(("human", chat_params.prompt))
+            messages.append(("human", user_prompt))
 
             chat_template = ChatPromptTemplate.from_messages(messages)
 
-            prompt = chat_params.prompt
+            prompt = user_prompt
             if chat_params.type == "document":
                 # 使用 docIds 数组调用 build_context
                 context = await self.build_context(
-                    query=chat_params.prompt,
+                    query=user_prompt,
                     user_id=user_id,
                     doc_ids=chat_params.docIds,
                     tenant_id=chat_params.tenantId
@@ -276,7 +294,7 @@ class ChatService:
                 logger.info(f"[ChatService] 查询到相关文档，长度: {len(context) if context else 0}")
 
                 if context:
-                    prompt = f"请参考以下内容\n: {context}\n\n回答问题: {chat_params.prompt}"
+                    prompt = f"请参考以下内容\n: {context}\n\n回答问题: {user_prompt}"
                     logger.info(f"[ChatService] 已添加文档上下文，长度: {len(context)}")
                 else:
                     yield "对不起，没有查询到相关文档！"

@@ -36,7 +36,7 @@
 ### 1. AI 对话（HTTP 流式）
 - 接口：`POST /service/chat/chat`
 - 作用：发起 AI 对话，流式返回文本（与 WebSocket 聊天逻辑一致）
-- 入参：`X-User-Id`（Header）+ Body（ChatParamsEntity：`prompt`、`chatId`、`modelId`、`companyId`、`systemPrompt`、`docIds`、`showThink`、`type`、`language`、`tenantId`）
+- 入参：`X-User-Id`（Header）+ Body（ChatParamsEntity：`promptId`、`chatId`、`modelId`、`companyId`、`systemPrompt`、`docIds`、`showThink`、`type`、`language`、`tenantId`）
 - 出参：流式文本（`text/plain;charset=utf-8`，非 ResultEntity）
 - 出参示例：
 （流式文本，非 ResultEntity）示例输出：`你好！我是 AI 助手，很高兴为您服务。`
@@ -170,7 +170,8 @@
 ### 5. WebSocket 聊天
 - 接口：`WS /service/chat/ws/chat`
 - 作用：WebSocket 方式 AI 对话（流式）
-- 入参：`?token=<token>`（网关注入 `X-User-Id`）；消息体通过 send 发送 JSON（prompt、chatId、modelId、docIds、showThink、type、language、companyId、tenantId 等）
+- 入参：`?token=<token>`（网关注入 `X-User-Id`）；消息体通过 send 发送 JSON（promptId、chatId、modelId、docIds、showThink、type、language、companyId、tenantId 等）
+- promptId 说明：可选参数；传了则按 promptId、tenantId、userId 查 prompt 表，取 prompt 字段作为用户提示词；未查到记录时返回「找不到提示词」
 - 出参：流式文本消息
 - 出参示例：
 （流式文本，非 ResultEntity）示例输出：`你好！我是 AI 助手。`
