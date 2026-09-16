@@ -22,6 +22,7 @@
 | PUT | /service/chat/updateModel | 更新模型 | 需 |
 | DELETE | /service/chat/deleteModel/{modelId} | 删除模型（软删除） | 需 |
 | WS | /service/chat/ws/chat | WebSocket 聊天 | 需（token 参数） |
+| GET | /service/chat/getSplitMethods | 分割方式枚举 | 否 |
 | POST | /service/chat/uploadDoc/{tenantId}/{directoryId} | 上传文档 | 需 |
 | GET | /service/chat/getDocListByDirId | 按目录查文档 | 需 |
 | GET | /service/chat/getDocList | 按租户查文档 | 需 |
@@ -178,7 +179,7 @@
 
 ### 6. 上传文档
 - 接口：`POST /service/chat/uploadDoc/{tenantId}/{directoryId}`
-- 入参：`X-User-Id`（Header）+ Path：`tenantId`、`directoryId` + Form：`file`（文件）
+- 入参：`X-User-Id`（Header）+ Path：`tenantId`、`directoryId` + Form：`file`（文件，支持 pdf/docx/doc/txt）+ Query：`splitMethod`（可选，分割方式，默认 recursive）
 - 出参：ResultEntity
 - 出参示例：
 ```json
@@ -188,6 +189,24 @@
   "msg": null,
   "total": null,
   "token": null
+}
+```
+
+### 获取分割方式枚举
+- 接口：`GET /service/chat/getSplitMethods`
+- 作用：返回 RAG 文档转向量的分割方式枚举（前端通过此接口获取枚举，上传文档时把 splitMethod 传回）
+- 入参：无
+- 出参：ResultEntity，data 为分割方式列表
+- 出参示例：
+```json
+{
+  "data": [
+    {"value":"recursive","label":"递归字符分割（推荐）","description":"按段落、句子、字符递归切分，兼顾语义完整性"},
+    {"value":"paragraph","label":"按段落分割","description":"按空行/段落边界切分"},
+    {"value":"sentence","label":"按句子分割","description":"按句号、感叹号、问号等句子边界切分"},
+    {"value":"fixed","label":"固定长度分割","description":"按固定字符数切分"}
+  ],
+  "status":"SUCCESS","msg":null,"total":null,"token":null
 }
 ```
 

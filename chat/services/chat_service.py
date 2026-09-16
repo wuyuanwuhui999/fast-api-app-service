@@ -20,10 +20,13 @@ from pypdf import PdfReader
 from langchain_ollama import OllamaEmbeddings
 from langchain_ollama import ChatOllama
 from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter, CharacterTextSplitter
 from io import BytesIO
 from chat.schemas.chat_schema import DirectorySchema
 from langchain_chroma import Chroma
+from docx import Document as DocxDocument
+import subprocess
+import tempfile
 
 # ========== 彻底禁用 ChromaDB 遥测（通过环境变量） ==========
 _os = os
@@ -46,6 +49,14 @@ CHROMA_PORT = int(os.getenv("CHROMA_PORT"))
 CHROMA_COLLECTION_NAME = os.getenv("CHROMA_COLLECTION_NAME")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
+
+# RAG 文档转向量的分割方式枚举（前端通过 getSplitMethods 接口获取，上传时通过 splitMethod 参数传入）
+SPLIT_METHODS = [
+    {"value": "recursive", "label": "递归字符分割（推荐）", "description": "按段落、句子、字符递归切分，兼顾语义完整性"},
+    {"value": "paragraph", "label": "按段落分割", "description": "按空行/段落边界切分"},
+    {"value": "sentence", "label": "按句子分割", "description": "按句号、感叹号、问号等句子边界切分"},
+    {"value": "fixed", "label": "固定长度分割", "description": "按固定字符数切分"},
+]
 
 
 class ChatService:
@@ -710,23 +721,42 @@ class ChatService:
             # 返回空字符串而不是抛出异常，让调用方处理
             return ""
 
+    def _create_splitter(self, split_method: str = "recursive"):
+        """根据分割方式创建文本分割器"""
+        if split_method == "paragraph":
+            return RecursiveCharacterTextSplitter(
+                chunk_size=1000, chunk_overlap=100,
+                separators=["\n\n", "\n", "。", "！", "？", " "]
+            )
+        elif split_method == "sentence":
+            return RecursiveCharacterTextSplitter(
+                chunk_size=800, chunk_overlap=100,
+                separators=["。", "！", "？", "；", "\n", " "]
+            )
+        elif split_method == "fixed":
+            return CharacterTextSplitter(
+                chunk_size=1000, chunk_overlap=0, separator=""
+            )
+        else:  # recursive 默认
+            return RecursiveCharacterTextSplitter(
+                chunk_size=1000, chunk_overlap=200
+            )
+
     def process_text_content(
             self,
             content: str,
             filename: str,
             user_id: str,
             doc_id: str,
-            tenant_id: str = None
+            tenant_id: str = None,
+            split_method: str = "recursive"
     ):
         """处理文本内容并存储到向量数据库"""
         try:
             if not content.strip():
                 raise ValueError("内容不能为空")
 
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000,
-                chunk_overlap=200
-            )
+            text_splitter = self._create_splitter(split_method)
 
             texts = text_splitter.split_text(content)
             if not texts:
@@ -762,7 +792,8 @@ class ChatService:
             filename: str,
             user_id: str,
             doc_id: str,
-            tenant_id: str
+            tenant_id: str,
+            split_method: str = "recursive"
     ):
         """处理PDF文件"""
         try:
@@ -789,7 +820,8 @@ class ChatService:
                 filename,
                 user_id,
                 doc_id,
-                tenant_id
+                tenant_id,
+                split_method
             )
 
         except HTTPException:
@@ -804,7 +836,8 @@ class ChatService:
             filename: str,
             user_id: str,
             doc_id: str,
-            tenant_id: str = None
+            tenant_id: str = None,
+            split_method: str = "recursive"
     ):
         """处理TXT文件"""
         try:
@@ -814,11 +847,80 @@ class ChatService:
                 filename,
                 user_id,
                 doc_id,
-                tenant_id
+                tenant_id,
+                split_method
             )
         except Exception as e:
             logger.error(f"TXT processing failed: {str(e)}")
             raise HTTPException(status_code=500, detail=f"TXT处理失败: {str(e)}")
+
+    def process_docx(
+            self,
+            content: bytes,
+            filename: str,
+            user_id: str,
+            doc_id: str,
+            tenant_id: str = None,
+            split_method: str = "recursive"
+    ):
+        """处理DOCX文件"""
+        try:
+            doc = DocxDocument(BytesIO(content))
+            full_text = "\n\n".join(p.text for p in doc.paragraphs if p.text.strip())
+            if not full_text.strip():
+                raise HTTPException(status_code=400, detail="无法从DOCX提取文本内容")
+            self.process_text_content(
+                full_text,
+                filename,
+                user_id,
+                doc_id,
+                tenant_id,
+                split_method
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"DOCX processing failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"DOCX处理失败: {str(e)}")
+
+    def process_doc(
+            self,
+            content: bytes,
+            filename: str,
+            user_id: str,
+            doc_id: str,
+            tenant_id: str = None,
+            split_method: str = "recursive"
+    ):
+        """处理DOC文件（老格式，通过 macOS textutil 转文本）"""
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".doc", delete=False) as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+            result = subprocess.run(
+                ["textutil", "-convert", "txt", "-stdout", tmp_path],
+                capture_output=True, timeout=60
+            )
+            full_text = result.stdout.decode("utf-8", errors="ignore")
+            if not full_text.strip():
+                raise HTTPException(status_code=400, detail="无法从DOC提取文本内容")
+            self.process_text_content(
+                full_text,
+                filename,
+                user_id,
+                doc_id,
+                tenant_id,
+                split_method
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"DOC processing failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"DOC处理失败: {str(e)}")
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
 
     async def delete_document(self, doc_id: str, user_id: str):
         """删除文档"""
@@ -907,13 +1009,17 @@ class ChatService:
             return ResultUtil.fail(data=None, msg=f"删除目录失败: {str(e)}")
 
 
-    async def upload_doc(self, file: UploadFile, user_id: str, directory_id: str, tenant_id: str) -> ResultEntity:
+    def get_split_methods(self) -> ResultEntity:
+        """获取文档分割方式枚举列表（发给前端）"""
+        return ResultUtil.success(data=SPLIT_METHODS)
+
+    async def upload_doc(self, file: UploadFile, user_id: str, directory_id: str, tenant_id: str, split_method: str = "recursive") -> ResultEntity:
         """上传文档"""
         if not file.filename:
             raise HTTPException(status_code=400, detail="文件名不能为空")
 
         ext = PromptUtil.get_file_extension(file.filename)
-        if ext.lower() not in ["pdf", "txt"]:
+        if ext.lower() not in ["pdf", "txt", "docx","doc"]:
             raise HTTPException(status_code=400, detail="只能上传pdf和txt的文档")
 
         doc_id = str(uuid.uuid4()).replace("-", "")
@@ -922,9 +1028,13 @@ class ChatService:
             content = await file.read()
 
             if ext.lower() == "pdf":
-                self.process_pdf(content, file.filename, user_id, doc_id, tenant_id)
+                self.process_pdf(content, file.filename, user_id, doc_id, tenant_id, split_method)
+            elif ext.lower() == "docx":
+                self.process_docx(content, file.filename, user_id, doc_id, tenant_id, split_method)
+            elif ext.lower() == "doc":
+                self.process_doc(content, file.filename, user_id, doc_id, tenant_id, split_method)
             else:
-                self.process_txt(content, file.filename, user_id, doc_id, tenant_id)
+                self.process_txt(content, file.filename, user_id, doc_id, tenant_id, split_method)
 
             file_path = os.path.join(self.upload_dir, file.filename)
             os.makedirs(os.path.dirname(file_path), exist_ok=True)

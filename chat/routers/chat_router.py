@@ -206,15 +206,24 @@ async def websocket_chat(
             pass
 
 
+@router.get("/getSplitMethods")
+async def get_split_methods(
+        chat_service: ChatService = Depends()
+):
+    """获取文档分割方式枚举列表（发给前端）"""
+    return chat_service.get_split_methods()
+
+
 @router.post("/uploadDoc/{tenantId}/{directoryId}")
 async def upload_doc(
         file: UploadFile,
         directoryId: str = "public",
         tenantId: str = "personal",
+        splitMethod: str = Query("recursive", description="分割方式：recursive/paragraph/sentence/fixed"),
         current_user_id: str = Depends(get_user_id_from_header),
         chat_service: ChatService = Depends()
 ):
-    return await chat_service.upload_doc(file, current_user_id, directoryId, tenantId)
+    return await chat_service.upload_doc(file, current_user_id, directoryId, tenantId, splitMethod)
 
 
 @router.delete("/deleteDoc/{doc_id}")
