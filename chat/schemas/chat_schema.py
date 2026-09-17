@@ -54,6 +54,7 @@ class ChatParamsEntity(BaseModel):
     showThink: bool = False
     type: Optional[str] = None
     language: Optional[str] = None
+    useTool: Optional[bool] = None
     companyId: str
     tenantId: Optional[str] = None
 

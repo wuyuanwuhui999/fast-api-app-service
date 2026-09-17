@@ -13,6 +13,8 @@ from prompt.repositories.prompt_repository import PromptRepository
 from chat.schemas.chat_schema import ChatDocSchema, ChatParamsEntity, ChatSchema, ChatModelSchema
 from chat.schemas.chat_schema import AddModelSchema, UpdateModelSchema  # 新增导入
 from chat.utils.chat_util import PromptUtil
+from langchain_core.messages import ToolMessage
+from chat.tools.chat_tool import build_chat_tools
 from common.config.common_database import get_db
 from common.utils.result_util import ResultEntity, ResultUtil
 import redis
@@ -318,7 +320,15 @@ class ChatService:
 
             full_response = ""
 
-            if model_config.type == "ollama":
+            # 是否使用工具调用（useTool=true 时绑定租户/公司管理工具）
+            if chat_params.useTool:
+                logger.info(f"[ChatService] 启用工具调用")
+                tools = build_chat_tools(self.db, user_id, chat_params.tenantId, chat_params.companyId)
+                tool_model = chat_model.bind_tools(tools)
+                async for chunk_str in self._stream_with_tools(tool_model, formatted_prompt, tools):
+                    full_response += chunk_str
+                    yield chunk_str
+            elif model_config.type == "ollama":
                 logger.info(f"[ChatService] 使用Ollama模型流式响应")
                 async for chunk in chat_model.astream(
                         formatted_prompt,
@@ -541,6 +551,39 @@ class ChatService:
         except Exception as e:
             logger.error(f"在线大模型流式处理失败: {str(e)}")
             yield f"模型响应错误: {str(e)}"
+
+    async def _stream_with_tools(self, tool_model, messages, tools):
+        """带工具的流式对话：先循环解析工具调用，最终答案流式输出。"""
+        tools_by_name = {t.name: t for t in tools}
+        max_iterations = 8
+        try:
+            for _ in range(max_iterations):
+                response = await tool_model.ainvoke(messages)
+                tool_calls = getattr(response, "tool_calls", None)
+                if not tool_calls:
+                    # 最终答案：流式输出
+                    async for chunk in tool_model.astream(messages):
+                        content = getattr(chunk, "content", None)
+                        if content:
+                            yield content
+                    return
+                messages.append(response)
+                for tool_call in tool_calls:
+                    tool_name = tool_call.get("name", "")
+                    tool_args = tool_call.get("args", {}) or {}
+                    tool = tools_by_name.get(tool_name)
+                    if tool is None:
+                        result = f"未知工具: {tool_name}"
+                    else:
+                        try:
+                            result = await tool.ainvoke(tool_args)
+                        except Exception as e:
+                            result = f"工具执行失败: {e}"
+                    messages.append(ToolMessage(content=str(result), tool_call_id=tool_call.get("id", "")))
+            yield "工具调用次数过多，已停止处理。"
+        except Exception as e:
+            logger.error(f"工具调用处理失败: {str(e)}", exc_info=True)
+            yield f"工具调用处理失败: {str(e)}"
 
     async def save_chat_history_async(self, chat_entity: ChatSchema, content: str):
         """异步保存聊天记录的辅助方法"""

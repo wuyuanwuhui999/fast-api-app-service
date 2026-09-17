@@ -180,6 +180,7 @@ async def websocket_chat(
                     showThink=chat_params_data.get("showThink", False),
                     type=chat_params_data.get("type", None),
                     language=chat_params_data.get("language", None),
+                    useTool=chat_params_data.get("useTool", None),
                     companyId=chat_params_data.get("companyId", None),
                     tenantId=chat_params_data.get("tenantId", None)
                 )
