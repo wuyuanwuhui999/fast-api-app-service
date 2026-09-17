@@ -220,10 +220,11 @@ async def upload_doc(
         directoryId: str = "public",
         tenantId: str = "personal",
         splitMethod: str = Query("recursive", description="分割方式：recursive/paragraph/sentence/fixed"),
+        chunkSize: int = Query(None, description="fixed 分割方式的块大小（splitMethod=fixed 时必填）"),
         current_user_id: str = Depends(get_user_id_from_header),
         chat_service: ChatService = Depends()
 ):
-    return await chat_service.upload_doc(file, current_user_id, directoryId, tenantId, splitMethod)
+    return await chat_service.upload_doc(file, current_user_id, directoryId, tenantId, splitMethod, chunkSize)
 
 
 @router.delete("/deleteDoc/{doc_id}")

@@ -179,7 +179,7 @@
 
 ### 6. 上传文档
 - 接口：`POST /service/chat/uploadDoc/{tenantId}/{directoryId}`
-- 入参：`X-User-Id`（Header）+ Path：`tenantId`、`directoryId` + Form：`file`（文件，支持 pdf/docx/doc/txt）+ Query：`splitMethod`（可选，分割方式，默认 recursive）
+- 入参：`X-User-Id`（Header）+ Path：`tenantId`、`directoryId` + Form：`file`（文件，支持 pdf/docx/doc/txt）+ Query：`splitMethod`（可选，分割方式，默认 recursive）、`chunkSize`（可选，splitMethod=fixed 时必填，自定义块大小）
 - 出参：ResultEntity
 - 出参示例：
 ```json

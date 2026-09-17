@@ -721,7 +721,7 @@ class ChatService:
             # 返回空字符串而不是抛出异常，让调用方处理
             return ""
 
-    def _create_splitter(self, split_method: str = "recursive"):
+    def _create_splitter(self, split_method: str = "recursive", chunk_size: int = None):
         """根据分割方式创建文本分割器"""
         if split_method == "paragraph":
             return RecursiveCharacterTextSplitter(
@@ -734,8 +734,9 @@ class ChatService:
                 separators=["。", "！", "？", "；", "\n", " "]
             )
         elif split_method == "fixed":
+            cs = chunk_size if (chunk_size and chunk_size > 0) else 1000
             return CharacterTextSplitter(
-                chunk_size=1000, chunk_overlap=0, separator=""
+                chunk_size=cs, chunk_overlap=0, separator=""
             )
         else:  # recursive 默认
             return RecursiveCharacterTextSplitter(
@@ -749,14 +750,15 @@ class ChatService:
             user_id: str,
             doc_id: str,
             tenant_id: str = None,
-            split_method: str = "recursive"
+            split_method: str = "recursive",
+            chunk_size: int = None
     ):
         """处理文本内容并存储到向量数据库"""
         try:
             if not content.strip():
                 raise ValueError("内容不能为空")
 
-            text_splitter = self._create_splitter(split_method)
+            text_splitter = self._create_splitter(split_method, chunk_size)
 
             texts = text_splitter.split_text(content)
             if not texts:
@@ -793,7 +795,8 @@ class ChatService:
             user_id: str,
             doc_id: str,
             tenant_id: str,
-            split_method: str = "recursive"
+            split_method: str = "recursive",
+            chunk_size: int = None
     ):
         """处理PDF文件"""
         try:
@@ -821,7 +824,8 @@ class ChatService:
                 user_id,
                 doc_id,
                 tenant_id,
-                split_method
+                split_method,
+                chunk_size
             )
 
         except HTTPException:
@@ -837,7 +841,8 @@ class ChatService:
             user_id: str,
             doc_id: str,
             tenant_id: str = None,
-            split_method: str = "recursive"
+            split_method: str = "recursive",
+            chunk_size: int = None
     ):
         """处理TXT文件"""
         try:
@@ -848,7 +853,8 @@ class ChatService:
                 user_id,
                 doc_id,
                 tenant_id,
-                split_method
+                split_method,
+                chunk_size
             )
         except Exception as e:
             logger.error(f"TXT processing failed: {str(e)}")
@@ -861,7 +867,8 @@ class ChatService:
             user_id: str,
             doc_id: str,
             tenant_id: str = None,
-            split_method: str = "recursive"
+            split_method: str = "recursive",
+            chunk_size: int = None
     ):
         """处理DOCX文件"""
         try:
@@ -875,7 +882,8 @@ class ChatService:
                 user_id,
                 doc_id,
                 tenant_id,
-                split_method
+                split_method,
+                chunk_size
             )
         except HTTPException:
             raise
@@ -890,7 +898,8 @@ class ChatService:
             user_id: str,
             doc_id: str,
             tenant_id: str = None,
-            split_method: str = "recursive"
+            split_method: str = "recursive",
+            chunk_size: int = None
     ):
         """处理DOC文件（老格式，通过 macOS textutil 转文本）"""
         tmp_path = None
@@ -911,7 +920,8 @@ class ChatService:
                 user_id,
                 doc_id,
                 tenant_id,
-                split_method
+                split_method,
+                chunk_size
             )
         except HTTPException:
             raise
@@ -1013,14 +1023,18 @@ class ChatService:
         """获取文档分割方式枚举列表（发给前端）"""
         return ResultUtil.success(data=SPLIT_METHODS)
 
-    async def upload_doc(self, file: UploadFile, user_id: str, directory_id: str, tenant_id: str, split_method: str = "recursive") -> ResultEntity:
+    async def upload_doc(self, file: UploadFile, user_id: str, directory_id: str, tenant_id: str, split_method: str = "recursive", chunk_size: int = None) -> ResultEntity:
         """上传文档"""
         if not file.filename:
             raise HTTPException(status_code=400, detail="文件名不能为空")
 
         ext = PromptUtil.get_file_extension(file.filename)
-        if ext.lower() not in ["pdf", "txt", "docx","doc"]:
-            raise HTTPException(status_code=400, detail="只能上传pdf和txt的文档")
+        if ext.lower() not in ["pdf", "txt", "docx", "doc"]:
+            raise HTTPException(status_code=400, detail="只能上传 pdf、docx、doc、txt 格式的文档")
+
+        # fixed 分割方式需要用户提供 chunkSize 参数
+        if split_method == "fixed" and (not chunk_size or chunk_size <= 0):
+            raise HTTPException(status_code=400, detail="fixed 分割方式需要提供有效的 chunkSize 参数")
 
         doc_id = str(uuid.uuid4()).replace("-", "")
 
@@ -1028,13 +1042,13 @@ class ChatService:
             content = await file.read()
 
             if ext.lower() == "pdf":
-                self.process_pdf(content, file.filename, user_id, doc_id, tenant_id, split_method)
+                self.process_pdf(content, file.filename, user_id, doc_id, tenant_id, split_method, chunk_size)
             elif ext.lower() == "docx":
-                self.process_docx(content, file.filename, user_id, doc_id, tenant_id, split_method)
+                self.process_docx(content, file.filename, user_id, doc_id, tenant_id, split_method, chunk_size)
             elif ext.lower() == "doc":
-                self.process_doc(content, file.filename, user_id, doc_id, tenant_id, split_method)
+                self.process_doc(content, file.filename, user_id, doc_id, tenant_id, split_method, chunk_size)
             else:
-                self.process_txt(content, file.filename, user_id, doc_id, tenant_id, split_method)
+                self.process_txt(content, file.filename, user_id, doc_id, tenant_id, split_method, chunk_size)
 
             file_path = os.path.join(self.upload_dir, file.filename)
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
