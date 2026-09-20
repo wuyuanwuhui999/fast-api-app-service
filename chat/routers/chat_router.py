@@ -1,7 +1,7 @@
 # chat/routers/chat_router.py
 from typing import Optional
 
-from fastapi import APIRouter, Depends, UploadFile, Header, HTTPException, WebSocket, WebSocketDisconnect, Query, Body, Path
+from fastapi import APIRouter, Depends, UploadFile, Header, HTTPException, WebSocket, WebSocketDisconnect, Query, Body, Path, Form
 from fastapi.responses import StreamingResponse
 from chat.schemas.chat_schema import ChatParamsEntity, CreateDirectoryShema, RenameDirectorySchema
 from chat.schemas.chat_schema import AddModelSchema, UpdateModelSchema  # 新增导入
@@ -219,11 +219,11 @@ async def get_split_methods(
 @router.post("/uploadDoc")
 async def upload_doc(
         file: UploadFile,
-        directoryId: str = Query("public", description="目录ID"),
-        tenantId: str = Query("personal", description="租户ID"),
-        splitMethod: str = Query("recursive", description="分割方式：recursive/paragraph/sentence/fixed"),
-        chunkSize: int = Query(None, description="fixed 分割方式的块大小（splitMethod=fixed 时必填）"),
-        permission: str = Query("private", description="文档权限：private-私密，tenant-租户内公开，company-公司内公开"),
+        directoryId: str = Form("public", description="目录ID"),
+        tenantId: str = Form("personal", description="租户ID"),
+        splitMethod: str = Form("recursive", description="分割方式：recursive/paragraph/sentence/fixed"),
+        chunkSize: int = Form(None, description="fixed 分割方式的块大小（splitMethod=fixed 时必填）"),
+        permission: str = Form("private", description="文档权限：private-私密，tenant-租户内公开，company-公司内公开"),
         current_user_id: str = Depends(get_user_id_from_header),
         chat_service: ChatService = Depends()
 ):

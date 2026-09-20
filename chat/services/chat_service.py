@@ -29,6 +29,8 @@ from langchain_chroma import Chroma
 from docx import Document as DocxDocument
 import subprocess
 import tempfile
+import zipfile
+from xml.etree import ElementTree as ET
 
 # ========== 彻底禁用 ChromaDB 遥测（通过环境变量） ==========
 _os = os
@@ -951,8 +953,7 @@ class ChatService:
     ):
         """处理DOCX文件"""
         try:
-            doc = DocxDocument(BytesIO(content))
-            full_text = "\n\n".join(p.text for p in doc.paragraphs if p.text.strip())
+            full_text = self._extract_docx_text(content)
             if not full_text.strip():
                 raise HTTPException(status_code=400, detail="无法从DOCX提取文本内容")
             self.process_text_content(
@@ -971,6 +972,32 @@ class ChatService:
         except Exception as e:
             logger.error(f"DOCX processing failed: {str(e)}")
             raise HTTPException(status_code=500, detail=f"DOCX处理失败: {str(e)}")
+
+    def _extract_docx_text(self, content: bytes) -> str:
+        """提取DOCX文本。
+
+        优先用 python-docx 解析；解析失败（例如 WPS 等工具生成的文档 [Content_Types].xml
+        里存在 image/.jpg 这类畸形 ContentType，导致 python-docx 抛「NULL in archive」）时，
+        回退到直接解析 word/document.xml 提取 <w:t> 文本，保证兼容性。
+        """
+        try:
+            doc = DocxDocument(BytesIO(content))
+            return "\n\n".join(p.text for p in doc.paragraphs if p.text.strip())
+        except Exception as e:
+            logger.warning(f"python-docx 解析失败，回退到直接解析 word/document.xml: {str(e)}")
+            try:
+                with zipfile.ZipFile(BytesIO(content)) as zf:
+                    xml_bytes = zf.read('word/document.xml')
+            except Exception as ze:
+                raise ValueError(f"无法读取 DOCX 内容: {str(ze)}")
+            root = ET.fromstring(xml_bytes.decode('utf-8', errors='ignore'))
+            ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+            paragraphs = []
+            for p in root.iter(f'{{{ns}}}p'):
+                texts = [t.text for t in p.iter(f'{{{ns}}}t') if t.text]
+                if texts:
+                    paragraphs.append(''.join(texts))
+            return "\n\n".join(paragraphs)
 
     def process_doc(
             self,
