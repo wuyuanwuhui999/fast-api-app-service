@@ -1071,6 +1071,41 @@ class ChatService:
 
         return ResultUtil.success(msg="文档删除成功")
 
+    async def update_doc_permission(self, doc_id: str, user_id: str, permission: str) -> ResultEntity:
+        """修改文档权限（仅限自己的文档），并同步更新向量库 metadata 的 permission 字段"""
+        # 校验权限值
+        if permission not in ("private", "tenant", "company"):
+            return ResultUtil.fail(data=None, msg="无效的文档权限")
+
+        # 校验文档属于当前用户（防止越权修改他人文档）
+        doc = self.chat_repository.get_doc_by_id(doc_id, user_id)
+        if not doc:
+            return ResultUtil.fail(data=None, msg="文档不存在或无权修改")
+
+        # 更新数据库
+        rows = self.chat_repository.update_doc_permission(doc_id, user_id, permission)
+        if not rows:
+            return ResultUtil.fail(data=None, msg="文档不存在或无权修改")
+
+        # 同步更新向量库 metadata 中的 permission 字段
+        try:
+            vector_store = self._get_chroma_store()
+            collection = vector_store._collection
+            result = collection.get(where={"doc_id": doc_id}, include=["metadatas"])
+            ids = result.get("ids") or []
+            if ids:
+                metadatas = []
+                for m in (result.get("metadatas") or []):
+                    mm = dict(m)
+                    mm["permission"] = permission
+                    metadatas.append(mm)
+                collection.update(ids=ids, metadatas=metadatas)
+                logger.info(f"[ChatService] 更新向量库文档权限: {doc_id} -> {permission}（{len(ids)} 个分块）")
+        except Exception as e:
+            logger.error(f"更新向量库文档权限失败: {str(e)}")
+
+        return ResultUtil.success(msg="文档权限更新成功")
+
     async def get_chat_history(
             self,
             user_id: str,

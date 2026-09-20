@@ -239,6 +239,16 @@ async def delete_document(
     return await chat_service.delete_document(doc_id, current_user_id)
 
 
+@router.put("/updateDocPermission/{doc_id}")
+async def update_doc_permission(
+        doc_id: str,
+        permission: str = Query(..., description="文档权限：private-私密，tenant-租户内公开，company-公司内公开"),
+        current_user_id: str = Depends(get_user_id_from_header),
+        chat_service: ChatService = Depends()
+):
+    return await chat_service.update_doc_permission(doc_id, current_user_id, permission)
+
+
 @router.get("/getChatHistory")
 async def get_history(
         pageNum: int = Query(1, ge=1, description="页码"),

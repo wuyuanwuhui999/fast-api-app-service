@@ -355,6 +355,29 @@ class ChatRepository:
             logger.error(f"Failed to delete document {doc_id}: {str(e)}")
             raise
 
+    def update_doc_permission(
+            self,
+            doc_id: str,
+            user_id: str,
+            permission: str,
+    ) -> int:
+        """更新文档权限（仅限自己的文档）"""
+        try:
+            doc = self.db.query(ChatDocModel).filter(
+                ChatDocModel.id == doc_id,
+                ChatDocModel.user_id == user_id,
+            ).first()
+            if not doc:
+                return 0
+            doc.permission = permission
+            doc.update_time = datetime.now()
+            self.db.commit()
+            return 1
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Failed to update doc permission {doc_id}: {str(e)}")
+            raise
+
     def get_doc_List(self, user_id: str, directory_id: Optional[str] = None) -> List[ChatDocSchema]:
         query = self.db.query(ChatDocModel).filter(
             ChatDocModel.user_id == user_id,
