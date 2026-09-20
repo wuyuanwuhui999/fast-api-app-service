@@ -216,11 +216,11 @@ async def get_split_methods(
     return chat_service.get_split_methods()
 
 
-@router.post("/uploadDoc/{tenantId}/{directoryId}")
+@router.post("/uploadDoc")
 async def upload_doc(
         file: UploadFile,
-        directoryId: str = "public",
-        tenantId: str = "personal",
+        directoryId: str = Query("public", description="目录ID"),
+        tenantId: str = Query("personal", description="租户ID"),
         splitMethod: str = Query("recursive", description="分割方式：recursive/paragraph/sentence/fixed"),
         chunkSize: int = Query(None, description="fixed 分割方式的块大小（splitMethod=fixed 时必填）"),
         permission: str = Query("private", description="文档权限：private-私密，tenant-租户内公开，company-公司内公开"),

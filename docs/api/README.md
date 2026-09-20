@@ -96,7 +96,7 @@
 | PUT | /service/chat/updateModel | 更新模型 |
 | DELETE | /service/chat/deleteModel/{modelId} | 删除模型 |
 | WS | /service/chat/ws/chat | WebSocket 聊天 |
-| POST | /service/chat/uploadDoc/{tenantId}/{directoryId} | 上传文档 |
+| POST | /service/chat/uploadDoc | 上传文档 |
 | GET | /service/chat/getDocListByDirId | 按目录查文档 |
 | GET | /service/chat/getDocList | 按租户查文档 |
 | DELETE | /service/chat/deleteDoc/{doc_id} | 删除文档 |

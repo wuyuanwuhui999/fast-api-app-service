@@ -34,8 +34,12 @@ def upload_document(
         print(f"❌ 错误：只支持 PDF 和 TXT 文件，当前文件: {file_ext}")
         return None
     
-    # 构建URL
-    url = f"{gateway_url}/service/chat/uploadDoc/{tenant_id}/{directory_id}"
+    # 构建URL（tenantId/directoryId 作为 Query 参数传递）
+    url = f"{gateway_url}/service/chat/uploadDoc"
+    params = {
+        "tenantId": tenant_id,
+        "directoryId": directory_id,
+    }
 
     # 构建请求头
     headers = {
@@ -61,6 +65,7 @@ def upload_document(
                 url,
                 headers=headers,
                 files=files,
+                params=params,
                 timeout=60
             )
             
