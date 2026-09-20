@@ -107,6 +107,7 @@ class ChatDocSchema(BaseModel):
     ext: Optional[str] = None
     user_id: Optional[str] = None
     tenant_id: Optional[str] = None
+    permission: Optional[str] = 'private'
     create_time: Optional[datetime] = None
     update_time: Optional[datetime] = None
 

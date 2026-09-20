@@ -54,11 +54,12 @@ async def get_chat_history_by_chat_id(
 @router.get("/getDocList")
 async def get_doc_list(
         tenantId: str = Query(..., description="租户ID"),
+        permission: Optional[str] = Query(None, description="文档权限筛选：private-私密，tenant-租户内公开，company-公司内公开"),
         current_user_id: str = Depends(get_user_id_from_header),
         chat_service: ChatService = Depends()
 ):
-    """获取指定租户下的文档列表"""
-    return await chat_service.get_doc_list_by_tenant(current_user_id, tenantId)
+    """获取指定租户下的文档列表，可按权限筛选"""
+    return await chat_service.get_doc_list_by_tenant(current_user_id, tenantId, permission)
 
 
 @router.put("/renameDir")
@@ -222,10 +223,11 @@ async def upload_doc(
         tenantId: str = "personal",
         splitMethod: str = Query("recursive", description="分割方式：recursive/paragraph/sentence/fixed"),
         chunkSize: int = Query(None, description="fixed 分割方式的块大小（splitMethod=fixed 时必填）"),
+        permission: str = Query("private", description="文档权限：private-私密，tenant-租户内公开，company-公司内公开"),
         current_user_id: str = Depends(get_user_id_from_header),
         chat_service: ChatService = Depends()
 ):
-    return await chat_service.upload_doc(file, current_user_id, directoryId, tenantId, splitMethod, chunkSize)
+    return await chat_service.upload_doc(file, current_user_id, directoryId, tenantId, splitMethod, chunkSize, permission)
 
 
 @router.delete("/deleteDoc/{doc_id}")

@@ -302,7 +302,8 @@ class ChatService:
                     query=user_prompt,
                     user_id=user_id,
                     doc_ids=chat_params.docIds,
-                    tenant_id=chat_params.tenantId
+                    tenant_id=chat_params.tenantId,
+                    company_id=chat_params.companyId
                 )
                 logger.info(f"[ChatService] 查询到相关文档，长度: {len(context) if context else 0}")
 
@@ -605,7 +606,7 @@ class ChatService:
         except Exception as e:
             logger.error(f"后台保存聊天记录失败: {str(e)}", exc_info=True)
 
-    def _build_where_filter(self, user_id: str, tenant_id: Optional[str] = None, doc_ids: Optional[List[str]] = None):
+    def _build_where_filter(self, user_id: str, tenant_id: Optional[str] = None, doc_ids: Optional[List[str]] = None, company_id: Optional[str] = None):
         """
         构建 ChromaDB 查询过滤条件
 
@@ -615,15 +616,26 @@ class ChatService:
         - 多个条件（OR）：{"$or": [{"field1": "value1"}, {"field2": "value2"}]}
 
         【重要】$and 和 $or 的值必须是包含至少两个表达式的列表
+
+        可访问范围（OR）：当前用户的文档 / 租户内公开 / 公司内公开
         """
-        conditions = []
-
-        # 用户ID条件（必填）
-        conditions.append({"user_id": user_id})
-
-        # 租户ID条件（可选）
+        # 可访问文档条件（OR）
+        access_conditions = []
+        # 自己的文档（该租户下）
         if tenant_id:
-            conditions.append({"tenant_id": tenant_id})
+            access_conditions.append({"$and": [{"user_id": user_id}, {"tenant_id": tenant_id}]})
+        else:
+            access_conditions.append({"user_id": user_id})
+        # 租户内公开
+        if tenant_id:
+            access_conditions.append({"$and": [{"permission": "tenant"}, {"tenant_id": tenant_id}]})
+        # 公司内公开
+        if company_id:
+            access_conditions.append({"$and": [{"permission": "company"}, {"company_id": company_id}]})
+
+        access_filter = access_conditions[0] if len(access_conditions) == 1 else {"$or": access_conditions}
+
+        conditions = [access_filter]
 
         # 文档ID条件（可选）
         if doc_ids and isinstance(doc_ids, list) and len(doc_ids) > 0:
@@ -644,12 +656,27 @@ class ChatService:
             # 多个条件：使用 $and（至少两个表达式）
             return {"$and": conditions}
 
+    def _is_doc_accessible(self, metadata: dict, user_id: str, tenant_id: Optional[str], company_id: Optional[str]) -> bool:
+        """判断文档元数据对当前用户是否可见：自己的文档 / 租户内公开 / 公司内公开"""
+        # 自己的文档（该租户下）
+        if metadata.get("user_id") == user_id:
+            if not tenant_id or metadata.get("tenant_id") == tenant_id:
+                return True
+        # 租户内公开
+        if metadata.get("permission") == "tenant" and tenant_id and metadata.get("tenant_id") == tenant_id:
+            return True
+        # 公司内公开
+        if metadata.get("permission") == "company" and company_id and metadata.get("company_id") == company_id:
+            return True
+        return False
+
     async def build_context(
             self,
             query: str,
             user_id: str,
             doc_ids: Optional[List[str]] = None,
-            tenant_id: str = None
+            tenant_id: str = None,
+            company_id: Optional[str] = None
     ) -> str:
         """
         执行 Chroma 向量相似度查询，返回字符串结果
@@ -667,7 +694,7 @@ class ChatService:
             vector_store = self._get_chroma_store()
 
             # 构建过滤条件 - 使用正确的格式
-            filter_conditions = self._build_where_filter(user_id, tenant_id, doc_ids)
+            filter_conditions = self._build_where_filter(user_id, tenant_id, doc_ids, company_id)
             logger.info(f"[build_context] 过滤条件: {filter_conditions}")
 
             # 执行相似度搜索
@@ -695,11 +722,8 @@ class ChatService:
                     filtered_results = []
                     for doc, score in results:
                         metadata = doc.metadata
-                        # 检查 user_id
-                        if metadata.get("user_id") != user_id:
-                            continue
-                        # 检查 tenant_id
-                        if tenant_id and metadata.get("tenant_id") != tenant_id:
+                        # 检查文档权限可见性（自己的 / 租户内公开 / 公司内公开）
+                        if not self._is_doc_accessible(metadata, user_id, tenant_id, company_id):
                             continue
                         # 检查 doc_ids
                         if doc_ids and len(doc_ids) > 0:
@@ -724,9 +748,7 @@ class ChatService:
                         filtered_results = []
                         for doc, score in results:
                             metadata = doc.metadata
-                            if metadata.get("user_id") != user_id:
-                                continue
-                            if tenant_id and metadata.get("tenant_id") != tenant_id:
+                            if not self._is_doc_accessible(metadata, user_id, tenant_id, company_id):
                                 continue
                             if doc_ids and len(doc_ids) > 0:
                                 doc_id = metadata.get("doc_id")
@@ -794,7 +816,9 @@ class ChatService:
             doc_id: str,
             tenant_id: str = None,
             split_method: str = "recursive",
-            chunk_size: int = None
+            chunk_size: int = None,
+            permission: str = "private",
+            company_id: str = None
     ):
         """处理文本内容并存储到向量数据库"""
         try:
@@ -817,6 +841,8 @@ class ChatService:
                         "page": i + 1,
                         "user_id": user_id,
                         "doc_id": doc_id,
+                        "permission": permission,
+                        "company_id": company_id,
                     }
                 ))
 
@@ -839,7 +865,9 @@ class ChatService:
             doc_id: str,
             tenant_id: str,
             split_method: str = "recursive",
-            chunk_size: int = None
+            chunk_size: int = None,
+            permission: str = "private",
+            company_id: str = None
     ):
         """处理PDF文件"""
         try:
@@ -868,7 +896,9 @@ class ChatService:
                 doc_id,
                 tenant_id,
                 split_method,
-                chunk_size
+                chunk_size,
+                permission,
+                company_id
             )
 
         except HTTPException:
@@ -885,7 +915,9 @@ class ChatService:
             doc_id: str,
             tenant_id: str = None,
             split_method: str = "recursive",
-            chunk_size: int = None
+            chunk_size: int = None,
+            permission: str = "private",
+            company_id: str = None
     ):
         """处理TXT文件"""
         try:
@@ -897,7 +929,9 @@ class ChatService:
                 doc_id,
                 tenant_id,
                 split_method,
-                chunk_size
+                chunk_size,
+                permission,
+                company_id
             )
         except Exception as e:
             logger.error(f"TXT processing failed: {str(e)}")
@@ -911,7 +945,9 @@ class ChatService:
             doc_id: str,
             tenant_id: str = None,
             split_method: str = "recursive",
-            chunk_size: int = None
+            chunk_size: int = None,
+            permission: str = "private",
+            company_id: str = None
     ):
         """处理DOCX文件"""
         try:
@@ -926,7 +962,9 @@ class ChatService:
                 doc_id,
                 tenant_id,
                 split_method,
-                chunk_size
+                chunk_size,
+                permission,
+                company_id
             )
         except HTTPException:
             raise
@@ -942,7 +980,9 @@ class ChatService:
             doc_id: str,
             tenant_id: str = None,
             split_method: str = "recursive",
-            chunk_size: int = None
+            chunk_size: int = None,
+            permission: str = "private",
+            company_id: str = None
     ):
         """处理DOC文件（老格式，通过 macOS textutil 转文本）"""
         tmp_path = None
@@ -964,7 +1004,9 @@ class ChatService:
                 doc_id,
                 tenant_id,
                 split_method,
-                chunk_size
+                chunk_size,
+                permission,
+                company_id
             )
         except HTTPException:
             raise
@@ -1024,10 +1066,10 @@ class ChatService:
             logger.error(f"获取聊天历史失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(data=None, msg=f"获取聊天历史失败: {str(e)}")
 
-    async def get_doc_list_by_tenant(self, user_id: str, tenant_id: str) -> ResultEntity:
-        """获取指定租户下的文档列表"""
+    async def get_doc_list_by_tenant(self, user_id: str, tenant_id: str, permission: Optional[str] = None) -> ResultEntity:
+        """获取指定租户下的文档列表（可按权限筛选）"""
         try:
-            doc_list = self.chat_repository.get_doc_list_by_tenant(user_id, tenant_id)
+            doc_list = self.chat_repository.get_doc_list_by_tenant(user_id, tenant_id, permission)
             return ResultUtil.success(data=doc_list)
         except Exception as e:
             logger.error(f"获取文档列表失败: {str(e)}", exc_info=True)
@@ -1066,7 +1108,19 @@ class ChatService:
         """获取文档分割方式枚举列表（发给前端）"""
         return ResultUtil.success(data=SPLIT_METHODS)
 
-    async def upload_doc(self, file: UploadFile, user_id: str, directory_id: str, tenant_id: str, split_method: str = "recursive", chunk_size: int = None) -> ResultEntity:
+    def _get_company_id_by_tenant(self, tenant_id: str) -> Optional[str]:
+        """根据租户ID查询所属公司ID（用于「公司内公开」文档的向量检索过滤）"""
+        if not tenant_id:
+            return None
+        try:
+            from tenant.models.tenants_model import TenantModel
+            tenant = self.db.query(TenantModel).filter(TenantModel.id == tenant_id).first()
+            return tenant.company_id if tenant else None
+        except Exception as e:
+            logger.warning(f"查询租户所属公司ID失败: {str(e)}")
+            return None
+
+    async def upload_doc(self, file: UploadFile, user_id: str, directory_id: str, tenant_id: str, split_method: str = "recursive", chunk_size: int = None, permission: str = "private") -> ResultEntity:
         """上传文档"""
         if not file.filename:
             raise HTTPException(status_code=400, detail="文件名不能为空")
@@ -1079,26 +1133,33 @@ class ChatService:
         if split_method == "fixed" and (not chunk_size or chunk_size <= 0):
             raise HTTPException(status_code=400, detail="fixed 分割方式需要提供有效的 chunkSize 参数")
 
+        # 文档权限只能是 private/tenant/company，非法值回退为 private（私密）
+        if permission not in ("private", "tenant", "company"):
+            permission = "private"
+
+        # 根据租户查询所属公司ID（用于「公司内公开」文档的向量检索过滤）
+        company_id = self._get_company_id_by_tenant(tenant_id)
+
         doc_id = str(uuid.uuid4()).replace("-", "")
 
         try:
             content = await file.read()
 
             if ext.lower() == "pdf":
-                self.process_pdf(content, file.filename, user_id, doc_id, tenant_id, split_method, chunk_size)
+                self.process_pdf(content, file.filename, user_id, doc_id, tenant_id, split_method, chunk_size, permission, company_id)
             elif ext.lower() == "docx":
-                self.process_docx(content, file.filename, user_id, doc_id, tenant_id, split_method, chunk_size)
+                self.process_docx(content, file.filename, user_id, doc_id, tenant_id, split_method, chunk_size, permission, company_id)
             elif ext.lower() == "doc":
-                self.process_doc(content, file.filename, user_id, doc_id, tenant_id, split_method, chunk_size)
+                self.process_doc(content, file.filename, user_id, doc_id, tenant_id, split_method, chunk_size, permission, company_id)
             else:
-                self.process_txt(content, file.filename, user_id, doc_id, tenant_id, split_method, chunk_size)
+                self.process_txt(content, file.filename, user_id, doc_id, tenant_id, split_method, chunk_size, permission, company_id)
 
             file_path = os.path.join(self.upload_dir, file.filename)
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, "wb") as f:
                 f.write(content)
 
-            # 创建文档记录 - 包含 directory_id
+            # 创建文档记录 - 包含 directory_id + permission
             doc = ChatDocSchema(
                 id=doc_id,
                 directory_id=directory_id,
@@ -1106,7 +1167,8 @@ class ChatService:
                 user_id=user_id,
                 name=file.filename,
                 ext=ext,
-                tenant_id=tenant_id
+                tenant_id=tenant_id,
+                permission=permission
             )
             self.chat_repository.save_doc(doc)
             return ResultUtil.success(msg="文件上传成功")

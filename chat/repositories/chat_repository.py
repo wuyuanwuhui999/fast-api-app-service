@@ -292,6 +292,7 @@ class ChatRepository:
                 ext=doc.ext,
                 tenant_id=doc.tenant_id,
                 user_id=doc.user_id,
+                permission=doc.permission or 'private',
                 create_time=datetime.now(),
                 update_time=datetime.now()
             )
@@ -458,8 +459,8 @@ class ChatRepository:
             ) for chat in chat_history_list
         ]
 
-    def get_doc_list_by_tenant(self, user_id: str, tenant_id: str) -> List[dict]:
-        """获取指定租户下的文档列表（含目录名称）"""
+    def get_doc_list_by_tenant(self, user_id: str, tenant_id: str, permission: Optional[str] = None) -> List[dict]:
+        """获取指定租户下的文档列表（含目录名称，可按权限筛选）"""
         from sqlalchemy import text
 
         sql = """
@@ -470,6 +471,7 @@ class ChatRepository:
                 cd.ext,
                 cd.user_id,
                 cd.tenant_id,
+                cd.permission,
                 cd.create_time,
                 cd.update_time,
                 CASE WHEN cd.directory_id = 'default' THEN '默认文件夹' ELSE cdd.directory END AS directory_name
@@ -477,7 +479,12 @@ class ChatRepository:
             LEFT JOIN chat_doc_directory cdd ON cd.directory_id = cdd.id
             WHERE cd.user_id = :user_id AND cd.tenant_id = :tenant_id
         """
-        rows = self.db.execute(text(sql), {"user_id": user_id, "tenant_id": tenant_id}).mappings().all()
+        params = {"user_id": user_id, "tenant_id": tenant_id}
+        if permission:
+            sql += " AND cd.permission = :permission"
+            params["permission"] = permission
+
+        rows = self.db.execute(text(sql), params).mappings().all()
 
         result = []
         for row in rows:
