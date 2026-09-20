@@ -179,3 +179,13 @@ class UpdateModelSchema(BaseModel):
             }
         }
     )
+
+
+# ==================== 文档权限 Schema ====================
+
+class UpdateDocPermissionRequest(BaseModel):
+    """修改文档权限请求 Schema（docId + permission 放在 body 中）"""
+    docId: str = Field(..., description="文档ID")
+    permission: str = Field(..., description="文档权限：private/tenant/company")
+
+    model_config = ConfigDict(populate_by_name=True)
