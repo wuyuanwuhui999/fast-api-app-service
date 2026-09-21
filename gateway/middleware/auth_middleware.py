@@ -1,6 +1,7 @@
 # gateway/middleware/auth_middleware.py
 import os
 import json
+import base64
 import logging
 from typing import Optional, Set
 from urllib.parse import parse_qs, urlparse
@@ -14,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 # 直接从环境变量读取配置，增加默认值
 SECRET_KEY = os.getenv("SECRET_KEY", "WCdTBej2ZRhIBXafQbALbAwpJ5A+v1PR4A4IN6+OhnM=")
+# 与 Spring Boot (jjwt) 保持一致：SECRET_KEY 是 Base64 编码的 32 字节密钥，需解码后再作为 HMAC 密钥
+SECRET_KEY = base64.b64decode(SECRET_KEY)
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 
 # 打印配置信息以便调试

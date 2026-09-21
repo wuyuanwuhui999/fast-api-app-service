@@ -9,7 +9,7 @@ from common.schemas.token_schema import TokenData
 from user.repositories.user_repository import UserRepository
 from common.schemas.user_schema import UserSchema
 from common.utils.result_util import ResultUtil
-from common.utils.jwt_util import create_access_token
+from common.utils.jwt_util import create_access_token, get_secret_key
 
 # 直接从环境变量读取配置
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -57,7 +57,7 @@ class AuthService:
             headers={"Authorization": "Bearer"},
         )
         try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            payload = jwt.decode(token, get_secret_key(), algorithms=[ALGORITHM])
             username: str = payload.get("sub")
             if username is None:
                 raise credentials_exception

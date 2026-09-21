@@ -1,6 +1,7 @@
 # common/utils/jwt_util.py
 import os
 import json
+import base64
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import jwt
@@ -8,6 +9,22 @@ import jwt
 # 直接从环境变量读取配置，增加默认值
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
+
+
+def get_secret_key():
+    """返回与 Spring Boot (jjwt) 一致的 HMAC 签名密钥。
+
+    .env 中 SECRET_KEY 是 Base64 编码的 32 字节密钥字符串；
+    Spring 侧 jjwt 会先 Base64 解码再作为 HMAC 密钥，这里保持一致，
+    否则两项目用同一 SECRET_KEY 生成的 token 也无法相互验证。
+    """
+    raw = SECRET_KEY
+    if not raw:
+        raise ValueError("SECRET_KEY 未配置")
+    try:
+        return base64.b64decode(raw)
+    except Exception as e:
+        raise ValueError(f"SECRET_KEY 不是合法的 Base64 字符串: {e}")
 
 
 def custom_json_serializer(obj: Any) -> str:
@@ -51,7 +68,7 @@ def create_access_token(
     # 生成 token - 显式指定算法
     encoded_jwt = jwt.encode(
         to_encode,
-        SECRET_KEY,
+        get_secret_key(),
         algorithm=ALGORITHM  # 使用 ALGORITHM 变量
     )
     return encoded_jwt
@@ -62,7 +79,7 @@ def verify_token(token: str) -> Optional[Dict[str, Any]]:
     try:
         payload = jwt.decode(
             token,
-            SECRET_KEY,
+            get_secret_key(),
             algorithms=[ALGORITHM],  # 使用与创建相同的算法列表
             leeway=timedelta(seconds=60)
         )
