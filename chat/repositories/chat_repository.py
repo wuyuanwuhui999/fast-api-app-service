@@ -387,6 +387,14 @@ class ChatRepository:
 
         doc_list = query.all()
 
+        doc_list = query.all()
+        for doc in doc_list:
+            print(f"id={doc.id}, name={doc.name}, user_id={doc.user_id}, "
+                  f"directory_id={doc.directory_id}, ext={doc.ext}, "
+                  f"tenant_id={doc.tenant_id}, create_time={doc.create_time}, "
+                  f"permission={doc.permission}, "
+                  f"update_time={doc.update_time}")
+
         return [
             ChatDocSchema(
                 id=doc.id,
@@ -395,6 +403,7 @@ class ChatRepository:
                 ext=doc.ext,
                 user_id=doc.user_id,
                 tenant_id=doc.tenant_id,
+                permission=doc.permission,
                 create_time=doc.create_time,
                 update_time=doc.update_time
             ) for doc in doc_list

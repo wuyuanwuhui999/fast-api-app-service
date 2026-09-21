@@ -1104,7 +1104,7 @@ class ChatService:
         except Exception as e:
             logger.error(f"更新向量库文档权限失败: {str(e)}")
 
-        return ResultUtil.success(msg="文档权限更新成功")
+        return ResultUtil.success(data=1,msg="文档权限更新成功")
 
     async def get_chat_history(
             self,
