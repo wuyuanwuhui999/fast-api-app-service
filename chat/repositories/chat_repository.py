@@ -293,6 +293,7 @@ class ChatRepository:
                 tenant_id=doc.tenant_id,
                 user_id=doc.user_id,
                 permission=doc.permission or 'private',
+                company_id=doc.company_id,
                 create_time=datetime.now(),
                 update_time=datetime.now()
             )
@@ -539,16 +540,16 @@ class ChatRepository:
                 cd.ext,
                 cd.user_id,
                 cd.tenant_id,
+                cd.company_id,
                 cd.permission,
                 cd.create_time,
                 cd.update_time,
                 CASE WHEN cd.directory_id = 'default' THEN '默认文件夹' ELSE cdd.directory END AS directory_name
             FROM chat_doc cd
             LEFT JOIN chat_doc_directory cdd ON cd.directory_id = cdd.id
-            LEFT JOIN tenant dt ON dt.id = cd.tenant_id COLLATE utf8mb4_unicode_ci
             WHERE (
                 (cd.permission = 'tenant' AND cd.tenant_id = :tenant_id)
-                OR (cd.permission = 'company' AND dt.company_id = :company_id)
+                OR (cd.permission = 'company' AND cd.company_id = :company_id)
             )
             ORDER BY cd.create_time DESC
         """
@@ -563,6 +564,20 @@ class ChatRepository:
                     item[key] = value.strftime("%Y-%m-%d %H:%M:%S")
             result.append(item)
         return result
+
+    def check_tenant_member(self, tenant_id: str, user_id: str) -> int:
+        """检查用户是否为指定租户的成员（未禁用），返回数量"""
+        from sqlalchemy import text
+        return self.db.execute(text(
+            "SELECT COUNT(*) FROM tenant_user WHERE tenant_id = :tenant_id AND user_id = :user_id AND disabled = 0"
+        ), {"tenant_id": tenant_id, "user_id": user_id}).scalar()
+
+    def check_company_member(self, company_id: str, user_id: str) -> int:
+        """检查用户是否为指定公司的成员（status=1 正常），返回数量"""
+        from sqlalchemy import text
+        return self.db.execute(text(
+            "SELECT COUNT(*) FROM company_user WHERE company_id = :company_id AND user_id = :user_id AND status = 1"
+        ), {"company_id": company_id, "user_id": user_id}).scalar()
 
     def rename_directory(self, directory_id: str, user_id: str, new_name: str) -> bool:
         """重命名目录（校验归属）"""

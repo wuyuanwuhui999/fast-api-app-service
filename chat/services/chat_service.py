@@ -1137,10 +1137,15 @@ class ChatService:
             logger.error(f"获取文档列表失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(data=None, msg=f"获取文档列表失败: {str(e)}")
 
-    async def get_public_doc_list(self, tenant_id: str) -> ResultEntity:
-        """查询公开文档列表（租户内公开 + 公司内公开）"""
+    async def get_public_doc_list(self, tenant_id: str, company_id: str, user_id: str) -> ResultEntity:
+        """查询公开文档列表（租户内公开 + 公司内公开），校验用户租户/公司成员身份防越权"""
         try:
-            company_id = self._get_company_id_by_tenant(tenant_id)
+            # 校验用户是否在该租户内（防止越权查询该租户文档）
+            if not self.chat_repository.check_tenant_member(tenant_id, user_id):
+                return ResultUtil.fail(data=None, msg="无权查询：当前用户不在该租户内")
+            # 校验用户是否在该公司内（防止越权查询公司文档）
+            if not self.chat_repository.check_company_member(company_id, user_id):
+                return ResultUtil.fail(data=None, msg="无权查询：当前用户不在该公司内")
             doc_list = self.chat_repository.get_public_doc_list(tenant_id, company_id)
             return ResultUtil.success(data=doc_list)
         except Exception as e:
@@ -1192,7 +1197,7 @@ class ChatService:
             logger.warning(f"查询租户所属公司ID失败: {str(e)}")
             return None
 
-    async def upload_doc(self, file: UploadFile, user_id: str, directory_id: str, tenant_id: str, split_method: str = "recursive", chunk_size: int = None, permission: str = "private") -> ResultEntity:
+    async def upload_doc(self, file: UploadFile, user_id: str, directory_id: str, tenant_id: str, split_method: str = "recursive", chunk_size: int = None, permission: str = "private", company_id: Optional[str] = None) -> ResultEntity:
         """上传文档"""
         if not file.filename:
             raise HTTPException(status_code=400, detail="文件名不能为空")
@@ -1209,8 +1214,9 @@ class ChatService:
         if permission not in ("private", "tenant", "company"):
             permission = "private"
 
-        # 根据租户查询所属公司ID（用于「公司内公开」文档的向量检索过滤）
-        company_id = self._get_company_id_by_tenant(tenant_id)
+        # 使用传入的 companyId，为空时回退为按租户查询所属公司ID（用于「公司内公开」文档的向量检索过滤）
+        if not company_id:
+            company_id = self._get_company_id_by_tenant(tenant_id)
 
         doc_id = str(uuid.uuid4()).replace("-", "")
 
@@ -1240,7 +1246,8 @@ class ChatService:
                 name=file.filename,
                 ext=ext,
                 tenant_id=tenant_id,
-                permission=permission
+                permission=permission,
+                company_id=company_id
             )
             self.chat_repository.save_doc(doc)
             return ResultUtil.success(msg="文件上传成功")

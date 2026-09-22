@@ -65,10 +65,12 @@ async def get_doc_list(
 @router.get("/getPublicDocList")
 async def get_public_doc_list(
         tenantId: str = Query(..., description="租户ID"),
+        companyId: str = Query(..., description="公司ID"),
+        current_user_id: str = Depends(get_user_id_from_header),
         chat_service: ChatService = Depends()
 ):
-    """查询公开文档列表（permission=tenant 租户内公开 或 permission=company 公司内公开）"""
-    return await chat_service.get_public_doc_list(tenantId)
+    """查询公开文档列表（permission=tenant 租户内公开 或 permission=company 公司内公开），校验成员身份防越权"""
+    return await chat_service.get_public_doc_list(tenantId, companyId, current_user_id)
 
 
 @router.put("/renameDir")
@@ -233,10 +235,11 @@ async def upload_doc(
         splitMethod: str = Form("recursive", description="分割方式：recursive/paragraph/sentence/fixed"),
         chunkSize: int = Form(None, description="fixed 分割方式的块大小（splitMethod=fixed 时必填）"),
         permission: str = Form("private", description="文档权限：private-私密，tenant-租户内公开，company-公司内公开"),
+        companyId: str = Form(None, description="所属公司ID（permission=company 时使用）"),
         current_user_id: str = Depends(get_user_id_from_header),
         chat_service: ChatService = Depends()
 ):
-    return await chat_service.upload_doc(file, current_user_id, directoryId, tenantId, splitMethod, chunkSize, permission)
+    return await chat_service.upload_doc(file, current_user_id, directoryId, tenantId, splitMethod, chunkSize, permission, companyId)
 
 
 @router.delete("/deleteDoc/{doc_id}")

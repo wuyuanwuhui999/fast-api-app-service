@@ -19,6 +19,7 @@ class ChatDocModel(Base):
     user_id = Column(String(32), comment='用户id')
     tenant_id = Column(String(32), comment='租户id')
     permission = Column(String(20), nullable=False, default='private', comment='文档权限：private-私密，tenant-租户内公开，company-公司内公开')
+    company_id = Column(String(32), nullable=True, comment='所属公司ID（permission=company 时使用）')
     create_time = Column(DateTime, server_default=func.now(), comment='创建时间')
     update_time = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment='修改时间')
 
