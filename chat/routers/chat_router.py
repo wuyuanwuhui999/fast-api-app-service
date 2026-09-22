@@ -62,6 +62,15 @@ async def get_doc_list(
     return await chat_service.get_doc_list_by_tenant(current_user_id, tenantId, permission)
 
 
+@router.get("/getPublicDocList")
+async def get_public_doc_list(
+        tenantId: str = Query(..., description="租户ID"),
+        chat_service: ChatService = Depends()
+):
+    """查询公开文档列表（permission=tenant 租户内公开 或 permission=company 公司内公开）"""
+    return await chat_service.get_public_doc_list(tenantId)
+
+
 @router.put("/renameDir")
 async def rename_dir(
         directory_data: RenameDirectorySchema = Body(..., description="重命名目录参数"),

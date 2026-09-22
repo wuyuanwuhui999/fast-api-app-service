@@ -527,6 +527,43 @@ class ChatRepository:
             result.append(item)
         return result
 
+    def get_public_doc_list(self, tenant_id: str, company_id: Optional[str] = None) -> List[dict]:
+        """查询公开文档列表（permission=tenant 租户内公开 或 permission=company 公司内公开）"""
+        from sqlalchemy import text
+
+        sql = """
+            SELECT
+                cd.id,
+                cd.directory_id,
+                cd.name,
+                cd.ext,
+                cd.user_id,
+                cd.tenant_id,
+                cd.permission,
+                cd.create_time,
+                cd.update_time,
+                CASE WHEN cd.directory_id = 'default' THEN '默认文件夹' ELSE cdd.directory END AS directory_name
+            FROM chat_doc cd
+            LEFT JOIN chat_doc_directory cdd ON cd.directory_id = cdd.id
+            LEFT JOIN tenant dt ON dt.id = cd.tenant_id COLLATE utf8mb4_unicode_ci
+            WHERE (
+                (cd.permission = 'tenant' AND cd.tenant_id = :tenant_id)
+                OR (cd.permission = 'company' AND dt.company_id = :company_id)
+            )
+            ORDER BY cd.create_time DESC
+        """
+        params = {"tenant_id": tenant_id, "company_id": company_id}
+        rows = self.db.execute(text(sql), params).mappings().all()
+
+        result = []
+        for row in rows:
+            item = dict(row)
+            for key, value in item.items():
+                if isinstance(value, datetime):
+                    item[key] = value.strftime("%Y-%m-%d %H:%M:%S")
+            result.append(item)
+        return result
+
     def rename_directory(self, directory_id: str, user_id: str, new_name: str) -> bool:
         """重命名目录（校验归属）"""
         db_directory = self.db.query(ChatDocDirectory).filter(

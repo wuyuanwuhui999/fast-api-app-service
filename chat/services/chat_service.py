@@ -1137,6 +1137,16 @@ class ChatService:
             logger.error(f"获取文档列表失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(data=None, msg=f"获取文档列表失败: {str(e)}")
 
+    async def get_public_doc_list(self, tenant_id: str) -> ResultEntity:
+        """查询公开文档列表（租户内公开 + 公司内公开）"""
+        try:
+            company_id = self._get_company_id_by_tenant(tenant_id)
+            doc_list = self.chat_repository.get_public_doc_list(tenant_id, company_id)
+            return ResultUtil.success(data=doc_list)
+        except Exception as e:
+            logger.error(f"获取公开文档列表失败: {str(e)}", exc_info=True)
+            return ResultUtil.fail(data=None, msg=f"获取公开文档列表失败: {str(e)}")
+
     async def rename_directory(self, user_id: str, directory_id: str, new_name: str) -> ResultEntity:
         """重命名目录"""
         try:
