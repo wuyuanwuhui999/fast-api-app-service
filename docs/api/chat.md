@@ -27,6 +27,7 @@
 | GET | /service/chat/getDocListByDirId | 按目录查文档 | 需 |
 | GET | /service/chat/getDocList | 按租户查文档 | 需 |
 | GET | /service/chat/getPublicDocList | 查询公开文档列表 | 需 |
+| PUT | /service/chat/updateDocPermission | 修改文档权限 | 需 |
 | DELETE | /service/chat/deleteDoc/{doc_id} | 删除文档 | 需 |
 | GET | /service/chat/getDirectoryList | 目录列表 | 需 |
 | POST | /service/chat/createDir | 创建目录 | 需 |
@@ -91,7 +92,23 @@
 }
 ```
 
-### 5. 重命名目录
+### 5. 修改文档权限
+- 接口：`PUT /service/chat/updateDocPermission`
+- 作用：修改文档权限（private-私密 / tenant-租户内公开 / company-公司内公开），仅限自己的文档，并同步更新向量库 metadata 的 permission 字段
+- 入参：`X-User-Id`（Header）+ Body：`docId`（文档ID）、`permission`（private/tenant/company）
+- 出参：ResultEntity，data 为受影响行数
+- 出参示例：
+```json
+{
+  "data": 1,
+  "status": "SUCCESS",
+  "msg": "文档权限更新成功",
+  "total": null,
+  "token": null
+}
+```
+
+### 6. 重命名目录
 - 接口：`PUT /service/chat/renameDir`
 - 作用：重命名目录
 - 入参：`X-User-Id`（Header）+ Body（RenameDirectorySchema：`id`、`directory`、`tenantId`）
@@ -107,7 +124,7 @@
 }
 ```
 
-### 6. 删除目录
+### 7. 删除目录
 - 接口：`PUT /service/chat/deleteDir/{directoryId}`
 - 作用：删除指定目录
 - 入参：`X-User-Id`（Header）+ Path：`directoryId`
