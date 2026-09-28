@@ -26,6 +26,7 @@
 | POST | /service/chat/uploadDoc | 上传文档 | 需 |
 | GET | /service/chat/getDocListByDirId | 按目录查文档 | 需 |
 | GET | /service/chat/getDocList | 按租户查文档 | 需 |
+| GET | /service/chat/getPublicDocList | 查询公开文档列表 | 需 |
 | DELETE | /service/chat/deleteDoc/{doc_id} | 删除文档 | 需 |
 | GET | /service/chat/getDirectoryList | 目录列表 | 需 |
 | POST | /service/chat/createDir | 创建目录 | 需 |
@@ -74,7 +75,23 @@
 }
 ```
 
-### 4. 重命名目录
+### 4. 查询公开文档列表
+- 接口：`GET /service/chat/getPublicDocList`
+- 作用：查询公开文档列表（permission=tenant 租户内公开 或 permission=company 公司内公开），并校验用户租户/公司成员身份防越权
+- 入参：`X-User-Id`（Header）+ Query：`tenantId`、`companyId`
+- 出参：ResultEntity，data 为文档列表
+- 出参示例：
+```json
+{
+  "data": [{"id":"doc-xxx","directoryId":"default","directoryName":"默认文件夹","name":"文档.pdf","ext":"pdf","userId":"uuid","tenantId":"tenant-xxx","companyId":"company-xxx","permission":"tenant","createTime":"2024-01-01 12:00:00","updateTime":"2024-01-01 12:00:00"}],
+  "status": "SUCCESS",
+  "msg": null,
+  "total": null,
+  "token": null
+}
+```
+
+### 5. 重命名目录
 - 接口：`PUT /service/chat/renameDir`
 - 作用：重命名目录
 - 入参：`X-User-Id`（Header）+ Body（RenameDirectorySchema：`id`、`directory`、`tenantId`）
@@ -90,7 +107,7 @@
 }
 ```
 
-### 5. 删除目录
+### 6. 删除目录
 - 接口：`PUT /service/chat/deleteDir/{directoryId}`
 - 作用：删除指定目录
 - 入参：`X-User-Id`（Header）+ Path：`directoryId`
