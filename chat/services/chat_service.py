@@ -2,6 +2,7 @@ import os
 import asyncio
 import uuid
 import logging
+import json
 from datetime import datetime, timedelta
 from typing import List, Any, AsyncGenerator, Optional
 from fastapi import UploadFile, HTTPException, Depends
@@ -17,7 +18,7 @@ from langchain_core.messages import ToolMessage
 from chat.tools.chat_tool import build_chat_tools
 from common.config.common_database import get_db
 from common.utils.result_util import ResultEntity, ResultUtil
-import redis
+from pymongo import MongoClient
 from pypdf import PdfReader
 from langchain_ollama import OllamaEmbeddings
 from langchain_ollama import ChatOllama
@@ -46,13 +47,21 @@ warnings.filterwarnings("ignore", message=".*capture.*")
 logger = logging.getLogger(__name__)
 
 # 直接从环境变量读取配置
-REDIS_URL = os.getenv("REDIS_URL")
+MONGODB_HOST = os.getenv("MONGODB_HOST", "localhost")
+MONGODB_PORT = int(os.getenv("MONGODB_PORT", "27017"))
+MONGODB_DATABASE = os.getenv("MONGODB_DATABASE", "chat")
+CHAT_MEMORY_COLLECTION = "chat_memory"
+CHAT_MEMORY_TTL_SECONDS = 180 * 24 * 3600
 UPLOAD_DIR = os.getenv("UPLOAD_DIR")
 CHROMA_HOST = os.getenv("CHROMA_HOST")
 CHROMA_PORT = int(os.getenv("CHROMA_PORT"))
 CHROMA_COLLECTION_NAME = os.getenv("CHROMA_COLLECTION_NAME")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
+
+# 全局 MongoDB 客户端（懒连接：首个操作时才真正建立连接）
+_mongo_client = MongoClient(MONGODB_HOST, MONGODB_PORT, serverSelectionTimeoutMS=3000)
+_chat_memory_collection = _mongo_client[MONGODB_DATABASE][CHAT_MEMORY_COLLECTION]
 
 # RAG 文档转向量的分割方式枚举（前端通过 getSplitMethods 接口获取，上传时通过 splitMethod 参数传入）
 SPLIT_METHODS = [
@@ -68,7 +77,12 @@ class ChatService:
             self,
             db: Session = Depends(get_db)
     ):
-        self.redis = redis.Redis.from_url(REDIS_URL)
+        self.mongo_chat_memory = _chat_memory_collection
+        # 幂等创建 TTL 索引（180 天过期，已存在则跳过）
+        try:
+            self.mongo_chat_memory.create_index("update_time", expireAfterSeconds=CHAT_MEMORY_TTL_SECONDS)
+        except Exception as e:
+            logger.warning(f"[ChatService] 创建 MongoDB TTL 索引失败: {e}")
         self.upload_dir = UPLOAD_DIR
         self.chat_repository = ChatRepository(db)
         self.prompt_repository = PromptRepository(db)
@@ -76,6 +90,32 @@ class ChatService:
         self._chroma_client = None
         self._embedding_model = None
         self._vector_store = None
+
+    def _get_chat_history_from_mongo(self, key: str) -> Optional[str]:
+        """从 MongoDB 读取会话上下文（返回 JSON 字符串，不存在则返回 None）"""
+        try:
+            doc = self.mongo_chat_memory.find_one({"_id": key})
+            if doc:
+                return doc.get("messages")
+        except Exception as e:
+            logger.error(f"[ChatService] 从 MongoDB 读取会话失败: {e}")
+        return None
+
+    def _save_chat_history_to_mongo(self, key: str, user_id: str, chat_id: str, messages_json: str):
+        """保存会话上下文到 MongoDB（upsert，TTL 由 update_time 索引控制）"""
+        try:
+            self.mongo_chat_memory.update_one(
+                {"_id": key},
+                {"$set": {
+                    "user_id": user_id,
+                    "chat_id": chat_id,
+                    "messages": messages_json,
+                    "update_time": datetime.utcnow(),
+                }},
+                upsert=True,
+            )
+        except Exception as e:
+            logger.error(f"[ChatService] 保存会话到 MongoDB 失败: {e}")
 
     def _get_chroma_client(self):
         """获取或创建 Chroma 客户端（修复配置问题）"""
@@ -279,7 +319,7 @@ class ChatService:
                 return
 
             chat_history_key = f"chat_history:{user_id}:{chat_params.chatId}"
-            chat_history = self.redis.get(chat_history_key)
+            chat_history = self._get_chat_history_from_mongo(chat_history_key)
 
             system_prompt = chat_params.systemPrompt if chat_params.systemPrompt and chat_params.systemPrompt != '' else "你叫小吴同学，是一个无所不能的AI助手，上知天文下知地理，请用小吴同学的身份回答问题。"
             messages = [
@@ -288,10 +328,11 @@ class ChatService:
 
             if chat_history:
                 try:
-                    messages.extend(eval(chat_history.decode('utf-8')))
+                    history_messages = json.loads(chat_history)
+                    messages.extend([(role, content) for role, content in history_messages])
                     logger.info(f"[ChatService] 加载了历史会话，共{len(messages)}条消息")
                 except Exception as e:
-                    logger.warning(f"Failed to parse chat history from Redis: {str(e)}")
+                    logger.warning(f"Failed to parse chat history from MongoDB: {str(e)}")
 
             messages.append(("human", user_prompt))
 
@@ -353,14 +394,15 @@ class ChatService:
                 if len(updated_messages) > 20:
                     updated_messages = updated_messages[-20:]
 
-                self.redis.setex(
+                self._save_chat_history_to_mongo(
                     chat_history_key,
-                    timedelta(days=180),
-                    str(updated_messages)
+                    user_id,
+                    chat_params.chatId,
+                    json.dumps(updated_messages, ensure_ascii=False)
                 )
-                logger.info(f"[ChatService] 会话已保存到Redis")
+                logger.info(f"[ChatService] 会话已保存到MongoDB")
             except Exception as e:
-                logger.error(f"Failed to save chat history to Redis: {str(e)}")
+                logger.error(f"Failed to save chat history to MongoDB: {str(e)}")
 
             chat_entity.content = full_response
             chat_entity.set_content(chat_entity.content)
@@ -1069,7 +1111,7 @@ class ChatService:
 
         self.chat_repository.delete_doc(doc_id, user_id)
 
-        return ResultUtil.success(msg="文档删除成功")
+        return ResultUtil.success(data=1,msg="文档删除成功")
 
     async def update_doc_permission(self, doc_id: str, user_id: str, permission: str) -> ResultEntity:
         """修改文档权限（仅限自己的文档），并同步更新向量库 metadata 的 permission 字段"""
