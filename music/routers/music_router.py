@@ -104,7 +104,7 @@ async def get_music_classify(
 async def get_music_list_by_classify_id(
         classifyId: int = Query(..., description="分类ID"),
         pageNum: int = Query(1, ge=1, description="页码，从1开始"),
-        pageSize: int = Query(10, ge=1, le=100, description="每页数量，最大100"),
+        pageSize: int = Query(10, ge=1, le=500, description="每页数量，最大500"),
         current_user_id: str = Depends(get_user_id_from_header),
         music_service: MusicService = Depends()
 ) -> ResultEntity:
@@ -118,7 +118,7 @@ async def get_music_list_by_classify_id(
     Args:
         classifyId: 分类ID
         pageNum: 页码，从1开始
-        pageSize: 每页数量，最大100
+        pageSize: 每页数量，最大500
         current_user_id: 当前登录用户ID（由网关透传）
         music_service: 音乐服务实例
 
@@ -136,7 +136,7 @@ async def get_music_list_by_classify_id(
 async def get_music_author_list_by_category_id(
         categoryId: int = Query(..., description="分类ID"),
         pageNum: int = Query(1, ge=1, description="页码，从1开始"),
-        pageSize: int = Query(10, ge=1, le=100, description="每页数量，最大100"),
+        pageSize: int = Query(10, ge=1, le=500, description="每页数量，最大500"),
         current_user_id: str = Depends(get_user_id_from_header),
         music_service: MusicService = Depends()
 ) -> ResultEntity:
@@ -150,7 +150,7 @@ async def get_music_author_list_by_category_id(
     Args:
         categoryId: 分类ID
         pageNum: 页码，从1开始
-        pageSize: 每页数量，最大100
+        pageSize: 每页数量，最大500
         current_user_id: 当前登录用户ID（由网关透传）
         music_service: 音乐服务实例
 
@@ -170,7 +170,7 @@ async def get_music_author_list_by_category_id(
 async def get_music_list_by_author_id(
         authorId: str = Query(..., description="歌手ID（对应 music 表的 author_id）"),
         pageNum: int = Query(1, ge=1, description="页码，从1开始"),
-        pageSize: int = Query(10, ge=1, le=100, description="每页数量，最大100"),
+        pageSize: int = Query(10, ge=1, le=500, description="每页数量，最大500"),
         current_user_id: str = Depends(get_user_id_from_header),
         music_service: MusicService = Depends()
 ) -> ResultEntity:
@@ -183,7 +183,7 @@ async def get_music_list_by_author_id(
     Args:
         authorId: 歌手ID
         pageNum: 页码，从1开始
-        pageSize: 每页数量，最大100
+        pageSize: 每页数量，最大500
         current_user_id: 当前登录用户ID（由网关透传）
         music_service: 音乐服务实例
 

@@ -126,8 +126,8 @@ class MusicService:
 
             if page_size < 1:
                 page_size = 10
-            if page_size > 100:
-                page_size = 100
+            if page_size > 500:
+                page_size = 500
 
             # 查询音乐列表
             music_list, total = self.music_repository.get_music_list_by_classify_id(
@@ -173,8 +173,8 @@ class MusicService:
 
             if page_size < 1:
                 page_size = 10
-            if page_size > 100:
-                page_size = 100
+            if page_size > 500:
+                page_size = 500
 
             # 查询歌手列表
             author_list, total = self.music_repository.get_author_list_by_category_id(
@@ -220,8 +220,8 @@ class MusicService:
 
             if page_size < 1:
                 page_size = 10
-            if page_size > 100:
-                page_size = 100
+            if page_size > 500:
+                page_size = 500
 
             # 查询音乐列表
             music_list, total = self.music_repository.get_music_list_by_author_id(
