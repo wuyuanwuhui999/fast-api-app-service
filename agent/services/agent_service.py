@@ -2,19 +2,28 @@ import asyncio
 import uuid
 import json
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Optional, AsyncGenerator, Any, List, Dict
 
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
-from langchain_community.chat_models import ChatOpenAI
-from langchain_ollama import OllamaLLM
-from langchain.prompts.chat import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from langchain_ollama import ChatOllama
 
 from common.config.common_database import get_db
 from common.utils.result_util import ResultUtil
 from agent.repositories.agent_repository import AgentRepository
 from agent.schemas.agent_schema import AgentParamsEntity, ChatHistorySchema, ChatModelSchema, MusicSchema
+from agent.services.llm_logger import (
+    LlmTraceCallback,
+    log_llm_request,
+    log_llm_response,
+    log_model_instance,
+    log_tool_plan,
+    log_tool_sql,
+    log_tool_user_status,
+)
 import os
 import redis
 
@@ -116,11 +125,12 @@ class AgentService:
             chat_params: 聊天参数
         """
         logger.info(f"[AgentService] ========== 开始处理聊天请求 ==========")
-        logger.info(f"[AgentService] user_id={user_id}")
-        logger.info(f"[AgentService] chatId={chat_params.chatId}")
-        logger.info(f"[AgentService] modelId={chat_params.modelId}")
-        logger.info(f"[AgentService] tenant_id={chat_params.tenant_id}")
-        logger.info(f"[AgentService] prompt={chat_params.prompt[:50] if chat_params.prompt else 'None'}...")
+        logger.info(
+            f"[AgentService] WS请求参数: user_id={user_id}, chatId={chat_params.chatId}, "
+            f"modelId={chat_params.modelId}, directoryId={chat_params.directoryId}, "
+            f"tenant_id={chat_params.tenant_id}, showThink={chat_params.showThink}"
+        )
+        logger.info(f"[AgentService] 用户prompt(全文)={chat_params.prompt}")
 
         # 创建聊天记录实体
         chat_entity = ChatHistorySchema(
@@ -216,15 +226,39 @@ class AgentService:
         """
         try:
             chat_model = await self._create_chat_model(model_config, show_think)
-            
+
             messages = [
                 ("system", self.get_music_system_prompt(user_id)),
                 ("human", f"用户输入: {prompt}")
             ]
-            
-            response = await chat_model.ainvoke(messages)
+
+            # ---- 观测：打印发给大模型的参数 + 完整提示词 ----
+            log_llm_request(
+                stage="_extract_music_intent（音乐意图提取）",
+                request_params={
+                    "user_id": user_id,
+                    "prompt(用户输入)": prompt,
+                    "showThink": show_think,
+                    "modelId": getattr(model_config, "id", None),
+                    "messages条数": len(messages),
+                    "system_prompt字符数": len(messages[0][1]),
+                },
+                model_config=model_config,
+                show_think=show_think,
+                messages=messages,
+            )
+
+            started = time.perf_counter()
+            response = await chat_model.ainvoke(
+                messages,
+                config={"callbacks": [LlmTraceCallback(stage="_extract_music_intent")]},
+            )
+            elapsed_ms = (time.perf_counter() - started) * 1000
             response_text = response.content if hasattr(response, 'content') else str(response)
-            
+
+            # ---- 观测：打印模型原始返回 ----
+            log_llm_response("_extract_music_intent（音乐意图提取）", response, elapsed_ms)
+
             if "```json" in response_text:
                 response_text = response_text.split("```json")[1].split("```")[0]
             elif "```" in response_text:
@@ -232,6 +266,8 @@ class AgentService:
             
             result = json.loads(response_text.strip())
             logger.info(f"[AgentService] 意图提取结果: {result}")
+            # ---- 观测：LLM 生成的「工具计划」（意图 + 待执行 SQL 条件） ----
+            log_tool_plan(result)
             return result
             
         except Exception as e:
@@ -270,22 +306,40 @@ class AgentService:
     ) -> List[Dict[str, Any]]:
         """执行音乐查询并获取点赞/收藏状态"""
         try:
+            # ---- 观测：工具调用（数据库查询），带上 LLM 生成的 SQL 条件 ----
+            log_tool_sql(
+                sql=(f"SELECT id, song_name, author_name, album_name, cover, play_url, label "
+                     f"FROM music WHERE {sql_condition or '<空条件，走默认 LIKE 查询>'} LIMIT 20"),
+                params={"keyword": f"%{keyword}%", "limit": 20},
+            )
+
             music_list = await self.agent_repository.execute_music_query(
                 sql_condition, 
                 keyword, 
                 limit=20
             )
-            
+
+            logger.info(f"[AgentLLM] 工具调用(数据库查询) 实际返回 {len(music_list)} 行")
+
             if not music_list:
                 return []
-            
+
             result = []
-            for music in music_list:
+            status_calls = 0
+            for i, music in enumerate(music_list):
                 music_dict = dict(music)
                 music_dict['is_like'] = await self.agent_repository.get_user_like_status(user_id, music['id'])
                 music_dict['is_favorite'] = await self.agent_repository.get_user_favorite_status(user_id, music['id'])
                 result.append(music_dict)
-            
+                status_calls += 2
+                # 只打印前 5 条明细，避免刷屏
+                if i < 5:
+                    log_tool_user_status(music.get('id'), music_dict['is_like'], music_dict['is_favorite'])
+
+            logger.info(
+                f"[AgentLLM] 工具调用汇总: 查询命中 {len(result)} 首音乐, "
+                f"用户状态查询 {status_calls} 次 (user_id={user_id})"
+            )
             return result
             
         except Exception as e:
@@ -327,26 +381,26 @@ class AgentService:
         try:
             if model_config.type == "ollama":
                 logger.info(f"[AgentService] 创建Ollama模型: {model_config.model_name}")
-                return OllamaLLM(
+                model = ChatOllama(
                     model=model_config.model_name,
-                    base_url=model_config.base_url or "http://localhost:11434",
-                    model_kwargs={"options": {"think": show_think}}
+                    base_url=model_config.base_url,
+                    reasoning=show_think
                 )
-            elif model_config.type in ["deepseek", "tongyi"]:
+                log_model_instance(model, stage="_create_chat_model")
+                return model
+            elif model_config.type == "online":
                 base_url = model_config.base_url
-                if model_config.type == "deepseek":
-                    base_url = base_url or "https://api.deepseek.com/v1"
-                elif model_config.type == "tongyi":
-                    base_url = base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1"
                 
                 logger.info(f"[AgentService] 创建在线模型: {model_config.type}, base_url={base_url}")
-                return ChatOpenAI(
+                model = ChatOpenAI(
                     model=model_config.model_name,
                     api_key=model_config.api_key,
                     base_url=base_url,
                     streaming=True,
                     temperature=0.7
                 )
+                log_model_instance(model, stage="_create_chat_model")
+                return model
             else:
                 logger.error(f"[AgentService] 不支持的模型类型: {model_config.type}")
                 return None
