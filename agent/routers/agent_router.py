@@ -1,5 +1,6 @@
 # agent/routers/agent_router.py
-from fastapi import APIRouter, Depends, Query, Header, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Body, Depends, Query, Header, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import StreamingResponse
 import json
 import logging
 
@@ -17,6 +18,28 @@ def get_user_id_from_header(x_user_id: str = Header(None, alias="X-User-Id")):
     if not x_user_id:
         raise HTTPException(status_code=401, detail="未提供用户标识")
     return x_user_id
+
+
+# ==================== 流式对话接口 ====================
+
+@router.post("/chat")
+async def chat(
+        chat_params: AgentParamsEntity = Body(..., description="聊天参数（与 WebSocket 接口一致）"),
+        current_user_id: str = Depends(get_user_id_from_header),
+        agent_service: AgentService = Depends()
+):
+    """
+    Agent 对话（HTTP 流式）
+
+    入参与 WebSocket 接口 /service/agent/ws/chat 的 send 消息完全一致：
+    prompt / chatId / modelId / showThink / tenant_id；
+    用户身份同样由网关解析 token 后通过 X-User-Id 透传（WebSocket 是 query 参数）。
+    响应为 text/plain 流式文本，最后带 [completed] 结束标记。
+    """
+    return StreamingResponse(
+        agent_service.chat_with_websocket(current_user_id, chat_params),
+        media_type="text/plain;charset=utf-8"
+    )
 
 
 @router.websocket("/ws/chat")

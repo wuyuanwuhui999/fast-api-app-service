@@ -4,7 +4,7 @@
 
 ## 概述
 
-智能体模块：AI 智能体对话（WebSocket 流式）+ 聊天历史查询。
+智能体模块：AI 智能体对话（HTTP 流式 / WebSocket 流式）+ 聊天历史查询。
 
 ## 鉴权
 
@@ -14,12 +14,21 @@
 
 | 方法 | 接口 | 作用 | 鉴权 |
 |------|------|------|------|
+| POST | /service/agent/chat | 智能体对话（HTTP 流式） | 需 |
 | GET | /service/agent/getChatHistory | 分页聊天历史 | 需 |
 | WS | /service/agent/ws/chat | WebSocket 智能体对话 | 需（token 参数） |
 
 ## 接口详情
 
-### 1. 分页聊天历史
+### 1. HTTP 流式智能体对话
+- 接口：`POST /service/agent/chat`（`StreamingResponse`，`text/plain;charset=utf-8` 流式）
+- 作用：HTTP 流式方式与智能体对话；**入参与 WebSocket 接口的 send 消息完全一致**（prompt、chatId、modelId、showThink、tenant_id），只是用户身份从 query 参数改为网关透传的 `X-User-Id` 头
+- 入参：`X-User-Id`（Header）+ Body（AgentParamsEntity：`prompt`、`chatId`、`modelId`、`showThink`、`tenant_id`）；`prompt`/`chatId`/`modelId` 必填
+- 出参：流式文本（非 ResultEntity），结尾带 `[completed]` 结束标记
+- 出参示例：
+（流式文本，非 ResultEntity）示例输出：`用户想查询歌手为周杰伦的歌曲\n\n1. 《稻香》 - 周杰伦 ... [completed]`
+
+### 2. 分页聊天历史
 - 接口：`GET /service/agent/getChatHistory`
 - 作用：查询当前用户的智能体聊天历史
 - 入参：`X-User-Id`（Header）+ Query：`pageNum`、`pageSize`
@@ -35,11 +44,11 @@
 }
 ```
 
-### 2. WebSocket 智能体对话
+### 3. WebSocket 智能体对话
 - 接口：`WS /service/agent/ws/chat`
 - 作用：WebSocket 方式智能体对话（流式）
-- 入参：`?token=<token>`（网关注入 `X-User-Id`）；消息体通过 send 发送 JSON（prompt、directoryId、chatId、modelId、showThink 等）
-- 出参：流式文本消息
+- 入参：`?token=<token>`（网关注入 `X-User-Id`）；消息体通过 send 发送 JSON（prompt、chatId、modelId、showThink、tenant_id）
+- 出参：流式文本消息，结尾带 `[completed]` 结束标记
 - 出参示例：
 （流式文本，非 ResultEntity）示例输出：`你好！我是 AI 助手。`
 
