@@ -2,7 +2,7 @@
 import os
 from fastapi import FastAPI, Request, HTTPException, status, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 import httpx
 from typing import Optional, Callable, Awaitable
 import logging
@@ -300,8 +300,106 @@ async def websocket_gateway_circle(
     )
 
 
+# ==================== HTTP 流式接口透传（不缓冲） ====================
+# 业务模块的流式接口（text/plain 分片）必须原样透传：
+# 1) 普通代理逻辑会把响应体读完整再返回 -> 流式失效；
+# 2) httpx 会把上游的 Transfer-Encoding 头一起复制回来，uvicorn 再补一个 Content-Length，
+#    nginx 收到「Content-Length 与 Transfer-Encoding 同时存在」会直接 502。
+STREAMING_PATHS = {
+    "/service/agent/chat",  # agent 智能体对话（HTTP 流式）
+    "/service/chat/chat",   # chat 对话（HTTP 流式）
+}
+# 逐跳头（hop-by-hop）：透传时不能原样复制
+HOP_BY_HOP_HEADERS = {
+    "connection", "keep-alive", "transfer-encoding", "upgrade",
+    "proxy-authenticate", "proxy-authorization", "te", "trailer",
+}
+
+
+def _is_streaming_path(path: str) -> bool:
+    return f"/{path.lstrip('/')}" in STREAMING_PATHS
+
+
+async def streaming_gateway(request: Request, path: str):
+    """流式透传：边读上游分片边写给客户端，并过滤逐跳头"""
+    service_name = route_service.get_service_name_from_path(path)
+    if not service_name:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"无法识别的服务路径: {path}"
+        )
+
+    instance = await route_service.get_service_instance(service_name)
+    if not instance:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"服务 {service_name} 暂时不可用"
+        )
+
+    target_url = f"http://{instance['ip']}:{instance['port']}/{path}"
+
+    # 转发头：去掉逐跳头、host、content-length（由 httpx 重新计算）
+    drop = HOP_BY_HOP_HEADERS | {"host", "content-length"}
+    forward_headers = {k: v for k, v in request.headers.items() if k.lower() not in drop}
+    forward_headers["x-forwarded-host"] = request.headers.get("host", "")
+    forward_headers["x-forwarded-proto"] = request.url.scheme
+    forward_headers["x-forwarded-for"] = request.client.host if request.client else ""
+    if hasattr(request.state, "user_id") and request.state.user_id:
+        forward_headers["X-User-Id"] = request.state.user_id
+
+    body = await request.body()
+
+    # 长连接：LLM 首包可能较慢，读超时放宽
+    timeout = httpx.Timeout(connect=10.0, read=600.0, write=60.0, pool=10.0)
+    client = httpx.AsyncClient(timeout=timeout)
+    try:
+        upstream = await client.send(
+            client.build_request(
+                method=request.method,
+                url=target_url,
+                headers=forward_headers,
+                content=body,
+                params=request.query_params,
+            ),
+            stream=True,
+        )
+    except Exception as e:
+        await client.aclose()
+        logger.error(f"[StreamingGateway] 连接上游失败: {path} -> {target_url}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"上游服务连接失败: {str(e)}"
+        )
+
+    # 只保留非逐跳头（尤其是不能带 transfer-encoding，交给 Starlette 自己按需设置）
+    response_headers = {
+        k: v for k, v in upstream.headers.items() if k.lower() not in HOP_BY_HOP_HEADERS | {"content-length"}
+    }
+    # 流式响应体长度不定，不进网关请求日志，只记标记
+    request.state.response_body = b"[streaming response]"
+    logger.info(f"[StreamingGateway] 流式转发: {path} -> {target_url} (status={upstream.status_code})")
+
+    async def body_iterator():
+        try:
+            async for chunk in upstream.aiter_raw():
+                yield chunk
+        finally:
+            await upstream.aclose()
+            await client.aclose()
+
+    return StreamingResponse(
+        body_iterator(),
+        status_code=upstream.status_code,
+        headers=response_headers,
+    )
+
+
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
 async def gateway(request: Request, path: str):
+    # 流式接口（HTTP 流式对话）：必须流式透传，不能缓冲
+    if _is_streaming_path(path):
+        return await streaming_gateway(request, path)
+
     service_name = route_service.get_service_name_from_path(path)
     if not service_name:
         raise HTTPException(
