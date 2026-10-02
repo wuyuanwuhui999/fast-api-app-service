@@ -47,6 +47,9 @@ _agent_memory_collection = _mongo_client[MONGODB_DATABASE][AGENT_MEMORY_COLLECTI
 class AgentService:
     """Agent服务业务逻辑层"""
 
+    # <music> 标签内的字段（与音乐模块接口返回的音乐对象同名，前端可复用同一类型）
+    MUSIC_TAG_FIELDS = ("id", "songName", "authorName", "albumName", "cover", "playUrl", "label", "isLike", "isFavorite")
+
     def __init__(self, db: Session = Depends(get_db)):
         self.agent_repository = AgentRepository(db)
         self.mongo_agent_memory = _agent_memory_collection
@@ -162,7 +165,7 @@ class AgentService:
 
             # SQL Generation Rules
             1. 模糊查询使用 LIKE :keyword，精确查询使用 = :keyword。
-            2. 默认查询逻辑为 SELECT * FROM music LEFT JOIN ... WHERE [sql_condition]。
+            2. 默认查询逻辑为 SELECT 音乐字段（SELECT 列表会给下划线字段起驼峰别名，如 song_name AS songName） FROM music WHERE [sql_condition]。
             3. 如果用户未指定具体条件（如"推荐热门歌曲"），sql_condition 可为 "1=1"。
             4. 涉及用户状态的过滤（如"我收藏的歌"），请在 sql_condition 中显式使用 user_id = :user_id（注意使用 :user_id 占位符）。
 
@@ -415,8 +418,10 @@ class AgentService:
         """执行音乐查询并获取点赞/收藏状态"""
         try:
             # ---- 观测：工具调用（数据库查询），带上 LLM 生成的 SQL 条件 ----
+            # 与 agent_repository 里实际执行的 SQL 保持一致：SELECT 列表用驼峰别名
             log_tool_sql(
-                sql=(f"SELECT id, song_name, author_name, album_name, cover, play_url, label "
+                sql=(f"SELECT id, song_name AS songName, author_name AS authorName, album_name AS albumName, "
+                     f"cover, play_url AS playUrl, label "
                      f"FROM music WHERE {sql_condition or '<空条件，走默认 LIKE 查询>'} LIMIT 20"),
                 params={"keyword": f"%{keyword}%", "limit": 20},
             )
@@ -436,13 +441,14 @@ class AgentService:
             status_calls = 0
             for i, music in enumerate(music_list):
                 music_dict = dict(music)
-                music_dict['is_like'] = await self.agent_repository.get_user_like_status(user_id, music['id'])
-                music_dict['is_favorite'] = await self.agent_repository.get_user_favorite_status(user_id, music['id'])
+                # 行内字段已是驼峰（SQL 别名），用户状态字段同样用驼峰，保持一致
+                music_dict['isLike'] = await self.agent_repository.get_user_like_status(user_id, music['id'])
+                music_dict['isFavorite'] = await self.agent_repository.get_user_favorite_status(user_id, music['id'])
                 result.append(music_dict)
                 status_calls += 2
                 # 只打印前 5 条明细，避免刷屏
                 if i < 5:
-                    log_tool_user_status(music.get('id'), music_dict['is_like'], music_dict['is_favorite'])
+                    log_tool_user_status(music.get('id'), music_dict['isLike'], music_dict['isFavorite'])
 
             logger.info(
                 f"[AgentLLM] 工具调用汇总: 查询命中 {len(result)} 首音乐, "
@@ -457,26 +463,14 @@ class AgentService:
     def _format_music_tag(self, music_list: List[Dict[str, Any]]) -> str:
         """把 SQL 查询结果以 JSON 列表放进 <music></music> 标签，供前端解析生成音乐列表。
 
+        - SQL 已给下划线字段起驼峰别名（SELECT song_name AS songName ...），行内字段本身就是驼峰，直接取用
         - 无数据（空列表）时返回空串 —— 调用方拼接到响应末尾，因此「查不到数据就不输出 <music> 标签」
-        - 字段用 camelCase，与音乐模块接口（getMusicList 等）返回的音乐对象保持一致，前端可复用同一个类型
+        - 字段与音乐模块接口（getMusicList 等）返回的音乐对象保持一致，前端可复用同一个类型
         """
         if not music_list:
             return ""
 
-        items = [
-            {
-                "id": music.get("id"),
-                "songName": music.get("song_name"),
-                "authorName": music.get("author_name"),
-                "albumName": music.get("album_name"),
-                "cover": music.get("cover"),
-                "playUrl": music.get("play_url"),
-                "label": music.get("label"),
-                "isLike": music.get("is_like", 0),
-                "isFavorite": music.get("is_favorite", 0),
-            }
-            for music in music_list
-        ]
+        items = [{field: music.get(field) for field in self.MUSIC_TAG_FIELDS} for music in music_list]
 
         try:
             tag = "<music>" + json.dumps(items, ensure_ascii=False) + "</music>"
@@ -494,13 +488,14 @@ class AgentService:
         response_lines = [explanation if explanation else "为您找到以下音乐：", ""]
         
         for i, music in enumerate(music_list[:10], 1):
-            song_name = music.get('song_name', '未知歌曲')
-            author_name = music.get('author_name', '未知歌手')
-            album_name = music.get('album_name', '')
+            # 行内字段已是驼峰（SQL 别名），无需再转换
+            song_name = music.get('songName', '未知歌曲')
+            author_name = music.get('authorName', '未知歌手')
+            album_name = music.get('albumName', '')
             label = music.get('label', '')
             
-            like_status = "❤️ 已点赞" if music.get('is_like') else "🤍 未点赞"
-            fav_status = "⭐ 已收藏" if music.get('is_favorite') else "☆ 未收藏"
+            like_status = "❤️ 已点赞" if music.get('isLike') else "🤍 未点赞"
+            fav_status = "⭐ 已收藏" if music.get('isFavorite') else "☆ 未收藏"
             
             line = f"{i}. 《{song_name}》 - {author_name}"
             if album_name:

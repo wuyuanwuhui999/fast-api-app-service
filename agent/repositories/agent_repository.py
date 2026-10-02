@@ -148,10 +148,12 @@ class AgentRepository:
             like_keyword = f"%{keyword}%"
             
             # 如果没有提供有效的 SQL 条件，使用默认查询
+            # 注意：下划线字段统一起驼峰别名（song_name AS songName），查询结果直接就是驼峰字段
             if not sql_condition or sql_condition.strip() == "":
                 full_sql = """
                     SELECT 
-                        id, song_name, author_name, album_name, cover, play_url, label
+                        id, song_name AS songName, author_name AS authorName, album_name AS albumName,
+                        cover, play_url AS playUrl, label
                     FROM music 
                     WHERE song_name LIKE :keyword 
                        OR author_name LIKE :keyword 
@@ -177,10 +179,11 @@ class AgentRepository:
                 processed_condition = re.sub(r'"%s"', ":keyword", processed_condition)
                 processed_condition = re.sub(r"%s", ":keyword", processed_condition)
                 
-                # 构建完整 SQL
+                # 构建完整 SQL（SELECT 列表用驼峰别名，WHERE 里仍是数据库真实列名）
                 full_sql = f"""
                     SELECT 
-                        id, song_name, author_name, album_name, cover, play_url, label
+                        id, song_name AS songName, author_name AS authorName, album_name AS albumName,
+                        cover, play_url AS playUrl, label
                     FROM music 
                     WHERE {processed_condition}
                     LIMIT :limit
@@ -197,19 +200,9 @@ class AgentRepository:
                     {"keyword": like_keyword, "limit": limit}
                 )
             
-            rows = result.fetchall()
-            return [
-                {
-                    "id": row[0],
-                    "song_name": row[1],
-                    "author_name": row[2],
-                    "album_name": row[3],
-                    "cover": row[4],
-                    "play_url": row[5],
-                    "label": row[6]
-                }
-                for row in rows
-            ]
+            # 结果 key 直接用 SQL 里的驼峰别名（SELECT song_name AS songName ...），无需再手工映射
+            rows = result.mappings().all()
+            return [dict(row) for row in rows]
         except Exception as e:
             logger.error(f"音乐查询失败: {str(e)}", exc_info=True)
             return []
