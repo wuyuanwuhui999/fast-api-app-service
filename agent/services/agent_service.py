@@ -25,18 +25,104 @@ from agent.services.llm_logger import (
     log_tool_user_status,
 )
 import os
-import redis
+from pymongo import MongoClient
 
 logger = logging.getLogger(__name__)
-REDIS_URL = os.getenv("REDIS_URL")
+
+# ==================== 会话记忆（MongoDB） ====================
+# 会话上下文（对话记忆）存 MongoDB：库 chat / 集合 chat_memory，
+# 通过 update_time 字段 + TTL 索引实现 180 天过期；MySQL 的 chat_history 仍保留双写。
+MONGODB_HOST = os.getenv("MONGODB_HOST", "localhost")
+MONGODB_PORT = int(os.getenv("MONGODB_PORT", "27017"))
+MONGODB_DATABASE = os.getenv("MONGODB_DATABASE", "chat")
+AGENT_MEMORY_COLLECTION = "chat_memory"
+AGENT_MEMORY_TTL_SECONDS = 180 * 24 * 3600
+AGENT_MEMORY_MAX_MESSAGES = 20
+
+# 全局 MongoDB 客户端（懒连接：首个操作时才真正建立连接）
+_mongo_client = MongoClient(MONGODB_HOST, MONGODB_PORT, serverSelectionTimeoutMS=3000)
+_agent_memory_collection = _mongo_client[MONGODB_DATABASE][AGENT_MEMORY_COLLECTION]
+
 
 class AgentService:
     """Agent服务业务逻辑层"""
 
     def __init__(self, db: Session = Depends(get_db)):
         self.agent_repository = AgentRepository(db)
-        self.redis = redis.Redis.from_url(REDIS_URL)
+        self.mongo_agent_memory = _agent_memory_collection
+        # 幂等创建 TTL 索引（180 天过期，已存在则跳过）
+        try:
+            self.mongo_agent_memory.create_index("update_time", expireAfterSeconds=AGENT_MEMORY_TTL_SECONDS)
+        except Exception as e:
+            logger.warning(f"[AgentService] 创建 MongoDB TTL 索引失败: {e}")
         self.db = db
+
+    @staticmethod
+    def get_history_key(user_id: str, chat_id: str) -> str:
+        """会话记忆在 MongoDB 中的文档 _id"""
+        return f"agent_history:{user_id}:{chat_id}"
+
+    def _get_agent_history_from_mongo(self, key: str) -> Optional[str]:
+        """从 MongoDB 读取会话上下文（返回 JSON 字符串，不存在则返回 None）"""
+        try:
+            doc = self.mongo_agent_memory.find_one({"_id": key})
+            if doc:
+                return doc.get("messages")
+        except Exception as e:
+            logger.error(f"[AgentService] 从 MongoDB 读取会话失败: {e}")
+        return None
+
+    def _save_agent_history_to_mongo(self, key: str, user_id: str, chat_id: str, messages_json: str):
+        """保存会话上下文到 MongoDB（upsert，TTL 由 update_time 索引控制）"""
+        try:
+            self.mongo_agent_memory.update_one(
+                {"_id": key},
+                {"$set": {
+                    "user_id": user_id,
+                    "chat_id": chat_id,
+                    "messages": messages_json,
+                    "update_time": datetime.utcnow(),
+                }},
+                upsert=True,
+            )
+        except Exception as e:
+            logger.error(f"[AgentService] 保存会话到 MongoDB 失败: {e}")
+
+    def load_agent_history(self, user_id: str, chat_id: str) -> List[tuple]:
+        """读取历史会话上下文，返回 [(role, content), ...]（无历史或解析失败返回空列表）"""
+        key = self.get_history_key(user_id, chat_id)
+        raw = self._get_agent_history_from_mongo(key)
+        if not raw:
+            return []
+        try:
+            loaded = json.loads(raw)
+            history = [(item[0], item[1]) for item in loaded if isinstance(item, (list, tuple)) and len(item) == 2]
+            logger.info(f"[AgentService] 已从 MongoDB 加载历史会话: key={key}, 消息数={len(history)}")
+            return history
+        except Exception as e:
+            logger.warning(f"[AgentService] 解析 MongoDB 会话上下文失败: {e}")
+            return []
+
+    def append_and_save_agent_history(
+            self,
+            user_id: str,
+            chat_id: str,
+            history: List[tuple],
+            prompt: str,
+            reply: str
+    ) -> None:
+        """把本轮问答追加到会话上下文并写入 MongoDB（最多保留最近 N 条）"""
+        try:
+            updated = list(history) + [("human", prompt), ("ai", reply)]
+            if len(updated) > AGENT_MEMORY_MAX_MESSAGES:
+                updated = updated[-AGENT_MEMORY_MAX_MESSAGES:]
+            key = self.get_history_key(user_id, chat_id)
+            self._save_agent_history_to_mongo(
+                key, user_id, chat_id, json.dumps(updated, ensure_ascii=False)
+            )
+            logger.info(f"[AgentService] 会话已保存到 MongoDB: key={key}, 消息数={len(updated)}")
+        except Exception as e:
+            logger.error(f"[AgentService] 保存会话上下文失败: {e}")
 
     def get_music_system_prompt(self, user_id: str) -> str:
         """获取音乐查询系统提示词（包含当前用户ID）"""
@@ -127,7 +213,7 @@ class AgentService:
         logger.info(f"[AgentService] ========== 开始处理聊天请求 ==========")
         logger.info(
             f"[AgentService] WS请求参数: user_id={user_id}, chatId={chat_params.chatId}, "
-            f"modelId={chat_params.modelId}, directoryId={chat_params.directoryId}, "
+            f"modelId={chat_params.modelId}, "
             f"tenant_id={chat_params.tenant_id}, showThink={chat_params.showThink}"
         )
         logger.info(f"[AgentService] 用户prompt(全文)={chat_params.prompt}")
@@ -157,43 +243,56 @@ class AgentService:
 
             logger.info(f"[AgentService] 获取到模型配置: id={model_config.id}, type={model_config.type}, model_name={model_config.model_name}")
 
-            # 2. 使用AI提取音乐意图并生成SQL
+            # 2. 读取历史会话上下文（MongoDB），用于多轮对话
+            history = self.load_agent_history(user_id, chat_params.chatId)
+
+            # 3. 使用AI提取音乐意图并生成SQL
             intent_result = await self._extract_music_intent(
                 chat_params.prompt,
                 model_config,
                 chat_params.showThink,
-                user_id
+                user_id,
+                history=history
             )
 
             if not intent_result.get("is_music_related", False):
-                yield "抱歉，我只能回答与音乐相关的问题。请尝试询问关于歌曲、歌手、专辑或音乐标签的问题。"
+                reply = "抱歉，我只能回答与音乐相关的问题。请尝试询问关于歌曲、歌手、专辑或音乐标签的问题。"
+                self.append_and_save_agent_history(
+                    user_id, chat_params.chatId, history, chat_params.prompt, reply
+                )
+                yield reply
                 yield "[completed]"
                 return
 
-            # 3. 执行音乐查询
+            # 4. 执行音乐查询
             music_list = await self._execute_music_query(
                 intent_result.get("sql_condition", ""),
                 intent_result.get("search_keyword", ""),
                 user_id
             )
 
-            # 4. 格式化返回结果
+            # 5. 格式化返回结果
             if music_list:
                 response_text = self._format_music_response(music_list, intent_result.get("explanation", ""))
             else:
                 response_text = "抱歉，没有找到符合您要求的音乐。请尝试其他关键词或描述。"
 
-            # 5. 流式返回结果
+            # 6. 流式返回结果
             chunk_size = 50
             for i in range(0, len(response_text), chunk_size):
                 chunk = response_text[i:i + chunk_size]
                 yield chunk
                 await asyncio.sleep(0.01)
 
+            # 7. 会话上下文写入 MongoDB（MySQL chat_history 仍保留双写）
+            self.append_and_save_agent_history(
+                user_id, chat_params.chatId, history, chat_params.prompt, response_text
+            )
+
             # 发送完成标识
             yield "[completed]"
 
-            # 6. 保存聊天记录
+            # 8. 保存聊天记录（MySQL）
             chat_entity.content = response_text
             chat_entity.response_content = response_text
             chat_entity.create_time = datetime.now()
@@ -210,11 +309,15 @@ class AgentService:
             prompt: str,
             model_config: ChatModelSchema,
             show_think: bool,
-            user_id: str
+            user_id: str,
+            history: Optional[List[tuple]] = None
     ) -> Dict[str, Any]:
         """
         使用AI提取音乐意图并生成查询SQL条件
-        
+
+        Args:
+            history: 历史会话上下文 [(role, content), ...]（来自 MongoDB，用于多轮对话）
+
         Returns:
             {
                 "is_music_related": bool,
@@ -228,9 +331,11 @@ class AgentService:
             chat_model = await self._create_chat_model(model_config, show_think)
 
             messages = [
-                ("system", self.get_music_system_prompt(user_id)),
-                ("human", f"用户输入: {prompt}")
+                ("system", self.get_music_system_prompt(user_id))
             ]
+            if history:
+                messages.extend(history)
+            messages.append(("human", f"用户输入: {prompt}"))
 
             # ---- 观测：打印发给大模型的参数 + 完整提示词 ----
             log_llm_request(

@@ -54,7 +54,6 @@ async def websocket_chat(
                 
                 chat_params = AgentParamsEntity(
                     prompt=chat_params_data.get("prompt", ""),
-                    directoryId=chat_params_data.get("directoryId", "default"),
                     chatId=chat_params_data.get("chatId", ""),
                     modelId=chat_params_data.get("modelId", ""),
                     showThink=chat_params_data.get("showThink", False),

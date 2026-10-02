@@ -6,7 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field
 class AgentParamsEntity(BaseModel):
     """WebSocket消息参数 - 通过send方法传递"""
     prompt: str = Field(..., description="用户输入的提示词")
-    directoryId: str = Field(default="default", description="目录ID")
     chatId: str = Field(..., description="会话ID")
     modelId: str = Field(..., description="模型ID")
     showThink: bool = Field(default=False, description="是否显示思考过程")
