@@ -274,6 +274,9 @@ class AgentService:
             # 5. 格式化返回结果
             if music_list:
                 response_text = self._format_music_response(music_list, intent_result.get("explanation", ""))
+                # 5.1 末尾追加 <music> 标签：把 SQL 查询结果以 JSON 列表形式给前端，用于生成音乐列表
+                #     （查询不到数据时 music_list 为空，不输出该标签）
+                response_text += self._format_music_tag(music_list)
             else:
                 response_text = "抱歉，没有找到符合您要求的音乐。请尝试其他关键词或描述。"
 
@@ -450,6 +453,38 @@ class AgentService:
         except Exception as e:
             logger.error(f"[AgentService] 音乐查询失败: {str(e)}", exc_info=True)
             return []
+
+    def _format_music_tag(self, music_list: List[Dict[str, Any]]) -> str:
+        """把 SQL 查询结果以 JSON 列表放进 <music></music> 标签，供前端解析生成音乐列表。
+
+        - 无数据（空列表）时返回空串 —— 调用方拼接到响应末尾，因此「查不到数据就不输出 <music> 标签」
+        - 字段用 camelCase，与音乐模块接口（getMusicList 等）返回的音乐对象保持一致，前端可复用同一个类型
+        """
+        if not music_list:
+            return ""
+
+        items = [
+            {
+                "id": music.get("id"),
+                "songName": music.get("song_name"),
+                "authorName": music.get("author_name"),
+                "albumName": music.get("album_name"),
+                "cover": music.get("cover"),
+                "playUrl": music.get("play_url"),
+                "label": music.get("label"),
+                "isLike": music.get("is_like", 0),
+                "isFavorite": music.get("is_favorite", 0),
+            }
+            for music in music_list
+        ]
+
+        try:
+            tag = "<music>" + json.dumps(items, ensure_ascii=False) + "</music>"
+            logger.info(f"[AgentService] 输出 <music> 标签: {len(items)} 首音乐")
+            return tag
+        except Exception as e:
+            logger.error(f"[AgentService] 生成 <music> 标签失败: {str(e)}")
+            return ""
 
     def _format_music_response(self, music_list: List[Dict[str, Any]], explanation: str = "") -> str:
         """格式化音乐查询结果为用户友好的文本"""
