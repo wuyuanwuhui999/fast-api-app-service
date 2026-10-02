@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
 
-from common.config.common_database import get_db
+from common.config.common_database import get_db, SessionLocal
 from common.utils.result_util import ResultUtil
 from agent.repositories.agent_repository import AgentRepository
 from agent.schemas.agent_schema import AgentParamsEntity, ChatHistorySchema, ChatModelSchema, MusicSchema
@@ -514,15 +514,22 @@ class AgentService:
             return None
 
     async def save_chat_history_async(self, chat_entity: ChatHistorySchema):
-        """异步保存聊天记录"""
+        """异步保存聊天记录（MySQL 双写）。
+
+        注意：必须用独立的 SessionLocal，不能用请求作用域的 self.agent_repository ——
+        WebSocket 关闭后请求 Session 会被回收，后台任务再写就会失败丢记录。
+        """
+        db = SessionLocal()
         try:
-            success = await self.agent_repository.save_chat_history(chat_entity)
+            success = await AgentRepository(db).save_chat_history(chat_entity)
             if success:
-                logger.info(f"[AgentService] 聊天记录保存成功: user_id={chat_entity.user_id}, chat_id={chat_entity.chat_id}")
+                logger.info(f"[AgentService] 聊天记录保存成功(MySQL): user_id={chat_entity.user_id}, chat_id={chat_entity.chat_id}")
             else:
                 logger.error("保存聊天记录返回False")
         except Exception as e:
             logger.error(f"后台保存聊天记录失败: {str(e)}", exc_info=True)
+        finally:
+            db.close()
 
     async def get_chat_history(
             self,
