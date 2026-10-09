@@ -92,14 +92,18 @@
 ### 4. 按分类取歌手
 - 接口：`GET /service/music/getMusicAuthorListByCategoryId`
 - 入参：`X-User-Id`（Header）+ Query：`categoryId`、`pageNum`、`pageSize`
-- 出参：ResultEntity，data 为歌手列表
+- 出参：ResultEntity，data 为歌手列表（`total` 字段是该歌手的歌曲数量）
+- SQL 与 Spring 项目 `MusicMapper.xml#getMusicAuthorListByCategoryId` 保持一致：
+  - 歌手子查询只按 `category_id` 过滤，**不额外过滤 `is_publish`**（`music_authors` 里有 `is_publish IS NULL` 的歌手，如 `category_id=0` 的周杰伦，加 `is_publish = 1` 会漏查）；
+  - 歌曲数量用 `LEFT JOIN music` 统计（**不按 `music.is_publish` 过滤**）；
+  - 点赞状态 `LEFT JOIN music_author_like ON t3.author_id = t1.author_id AND t3.user_id = :user_id`（关联键是 `author_id`，不是歌手主键 `id`）。
 - 出参示例：
 ```json
 {
-  "data": [{"id":1,"authorId":6051570,"authorName":"周杰伦","avatar":"https://example.com/avatar.jpg","categoryId":1,"rank":1,"isLike":0}],
+  "data": [{"id":1,"authorId":6051570,"authorName":"周杰伦","avatar":"https://example.com/avatar.jpg","categoryId":1,"rank":1,"isPublish":1,"total":8,"isLike":0}],
   "status": "SUCCESS",
   "msg": null,
-  "total": null,
+  "total": 313,
   "token": null
 }
 ```

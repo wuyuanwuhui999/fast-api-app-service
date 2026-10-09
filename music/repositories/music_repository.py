@@ -249,6 +249,14 @@ class MusicRepository:
         """
         根据分类ID分页查询歌手列表，并获取每个歌手的歌曲数量和当前用户的点赞状态
 
+        SQL 与 Spring 项目 music/src/main/resources/mapper/MusicMapper.xml 的
+        getMusicAuthorListByCategoryId 保持一致：
+        1. 歌手子查询只按 category_id 过滤（**不额外过滤 is_publish**）——
+           music_authors 里存在 is_publish 为 NULL 的歌剧（如 category_id=0 的周杰伦），
+           加了 is_publish = 1 会把这类歌手漏掉；
+        2. 歌曲数量用 LEFT JOIN music 统计 COUNT(t2.author_id)，**不按 music.is_publish 过滤**；
+        3. 点赞状态 LEFT JOIN music_author_like，关联条件是 **t3.author_id = t1.author_id**（不是歌手主键 id）+ user_id。
+
         Args:
             category_id: 分类ID
             user_id: 当前用户ID
@@ -262,81 +270,56 @@ class MusicRepository:
 
             offset = (page_num - 1) * page_size
 
-            # ==================== 查询总数 ====================
-            total_stmt = (
-                self.db.query(func.count(MusicAuthorModel.id))
-                .filter(
-                    MusicAuthorModel.category_id == category_id,
-                    MusicAuthorModel.is_publish == 1
-                )
-            )
-            total = total_stmt.scalar() or 0
+            # ==================== 查询总数（对应 Spring getMusicAuthorTotal）====================
+            if category_id is None:
+                total = self.db.execute(text("SELECT COUNT(*) FROM music_authors")).scalar() or 0
+            else:
+                total = self.db.execute(
+                    text("SELECT COUNT(*) FROM music_authors WHERE category_id = :category_id"),
+                    {"category_id": category_id}
+                ).scalar() or 0
 
             if total == 0:
                 return [], 0
 
-            # ==================== 子查询：统计每个歌手的歌曲数量 ====================
-            # 按 author_id 分组统计 music 表中的歌曲数量
-            music_count_subquery = (
-                self.db.query(
-                    MusicModel.author_id,
-                    func.count(MusicModel.id).label('song_count')
-                )
-                .filter(MusicModel.is_publish == 1)
-                .group_by(MusicModel.author_id)
-                .subquery()
-            )
-
             # ==================== 主查询：歌手列表 + 歌曲数量 + 点赞状态 ====================
-            results = (
-                self.db.query(
-                    MusicAuthorModel,
-                    func.coalesce(music_count_subquery.c.song_count, 0).label('total'),
-                    func.if_(MusicAuthorLikeModel.id.isnot(None), 1, 0).label('is_like')
-                )
-                .outerjoin(
-                    music_count_subquery,
-                    MusicAuthorModel.author_id == music_count_subquery.c.author_id
-                )
-                .outerjoin(
-                    MusicAuthorLikeModel,
-                    (MusicAuthorModel.id == MusicAuthorLikeModel.author_id) &
-                    (MusicAuthorLikeModel.user_id == user_id)
-                )
-                .filter(
-                    MusicAuthorModel.category_id == category_id,
-                    MusicAuthorModel.is_publish == 1
-                )
-                .order_by(
-                    func.coalesce(MusicAuthorModel.rank, 0).desc(),
-                    MusicAuthorModel.author_name.asc()
-                )
-                .offset(offset)
-                .limit(page_size)
-                .all()
-            )
+            params: Dict[str, Any] = {"offset": offset, "page_size": page_size, "user_id": user_id}
+            author_where = ""
+            if category_id is not None:
+                params["category_id"] = category_id
+                author_where = "WHERE category_id = :category_id"
 
-            # 构建返回数据
-            author_list = []
-            for author_obj, total_songs, is_like in results:
-                author_dict = {
-                    "id": author_obj.id,
-                    "author_id": author_obj.author_id,
-                    "author_name": author_obj.author_name,
-                    "category_id": author_obj.category_id,
-                    "is_publish": author_obj.is_publish,
-                    "avatar": author_obj.avatar,
-                    "type": author_obj.type,
-                    "country": author_obj.country,
-                    "birthday": author_obj.birthday,
-                    "identity": author_obj.identity,
-                    "rank": author_obj.rank,
-                    "create_time": author_obj.create_time,
-                    "update_time": author_obj.update_time,
-                    "total": total_songs,  # 歌曲数量
-                    "is_like": is_like  # 点赞状态：1-已点赞，0-未点赞
-                }
-                author_list.append(author_dict)
+            sql = text(f"""
+                SELECT
+                    t1.id,
+                    t1.author_id,
+                    t1.author_name,
+                    t1.category_id,
+                    t1.is_publish,
+                    t1.avatar,
+                    t1.type,
+                    t1.country,
+                    t1.birthday,
+                    t1.identity,
+                    t1.`rank`,
+                    t1.create_time,
+                    t1.update_time,
+                    COUNT(t2.author_id) AS total,
+                    (CASE WHEN t3.author_id IS NOT NULL THEN 1 ELSE 0 END) AS is_like
+                FROM (
+                    SELECT * FROM music_authors
+                    {author_where}
+                    ORDER BY `rank` DESC
+                    LIMIT :offset, :page_size
+                ) t1
+                LEFT JOIN music_author_like t3 ON t3.author_id = t1.author_id AND t3.user_id = :user_id
+                LEFT JOIN music t2 ON t1.author_id = t2.author_id
+                GROUP BY t2.author_id, t1.id
+                ORDER BY t1.`rank` DESC
+            """)
+
+            rows = self.db.execute(sql, params).mappings().all()
+            author_list = [dict(row) for row in rows]
 
             return author_list, total
 
