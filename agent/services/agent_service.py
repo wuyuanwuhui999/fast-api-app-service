@@ -15,6 +15,12 @@ from common.config.common_database import get_db, SessionLocal
 from common.utils.result_util import ResultUtil
 from agent.repositories.agent_repository import AgentRepository
 from agent.schemas.agent_schema import AgentParamsEntity, ChatHistorySchema, ChatModelSchema, MusicSchema
+from agent.tools.agent_tool import (
+    TOOL_NAMES,
+    build_tool_selection_system_prompt,
+    execute_tool,
+    parse_tool_selection,
+)
 from agent.services.llm_logger import (
     LlmTraceCallback,
     log_llm_request,
@@ -49,6 +55,9 @@ class AgentService:
 
     # <music> 标签内的字段（与音乐模块接口返回的音乐对象同名，前端可复用同一类型）
     MUSIC_TAG_FIELDS = ("id", "songName", "authorName", "albumName", "cover", "playUrl", "label", "isLike", "isFavorite")
+
+    # 无法提取查询 SQL、也没有匹配到工具时的统一回复
+    APOLOGY_TEXT = "抱歉，我只能回答与音乐相关的问题。请尝试询问关于歌曲、歌手、专辑或音乐标签的问题。"
 
     def __init__(self, db: Session = Depends(get_db)):
         self.agent_repository = AgentRepository(db)
@@ -155,6 +164,7 @@ class AgentService:
             # Output Format
             请严格返回以下 JSON 结构：
             {{
+                "action": "search | tool | none",
                 "is_music_related": true/false,
                 "explanation": "简短说明用户的意图或与音乐无关的原因",
                 "search_type": "song_name | author_name | album_name | label | hot | none",
@@ -162,6 +172,12 @@ class AgentService:
                 "sql_condition": "生成的SQL WHERE条件字符串（使用 :keyword 作为参数占位符）",
                 "join_tables": ["music_favorite_list", "music_like"]
             }}
+
+            # Action Rules（先判断 action）
+            1. 用户想「查询/搜索/推荐」音乐信息 -> action = "search"，并给出 sql_condition。
+            2. 用户想做「操作」类事情（把歌加入收藏夹、创建/删除/重命名收藏夹、把歌分享到音乐圈等）-> action = "tool"，
+               sql_condition 为空字符串 ""（这类请求由工具完成，不要生成查询 SQL）。
+            3. 与音乐完全无关（如问天气、写代码）-> action = "none"，is_music_related = false。
 
             # SQL Generation Rules
             1. 模糊查询使用 LIKE :keyword，精确查询使用 = :keyword。
@@ -174,6 +190,7 @@ class AgentService:
             User Input: "我想听周杰伦的歌"
             Output:
             {{
+                "action": "search",
                 "is_music_related": true,
                 "explanation": "用户想查询歌手为周杰伦的歌曲",
                 "search_type": "author_name",
@@ -185,6 +202,7 @@ class AgentService:
             User Input: "帮我找一下我收藏的关于夏天的歌"
             Output:
             {{
+                "action": "search",
                 "is_music_related": true,
                 "explanation": "用户查询当前用户收藏列表中歌名或标签包含'夏天'的歌曲",
                 "search_type": "song_name",
@@ -193,9 +211,70 @@ class AgentService:
                 "join_tables": ["music_favorite_list", "music_like"]
             }}
 
+            User Input: "把周杰伦的歌曲添加到大陆男歌手收藏夹中"
+            Output:
+            {{
+                "action": "tool",
+                "is_music_related": true,
+                "explanation": "用户要求把歌曲加入收藏夹，属操作类请求，交给工具处理",
+                "search_type": "none",
+                "search_keyword": "",
+                "sql_condition": "",
+                "join_tables": []
+            }}
+
+            User Input: "帮我创建大陆男歌手收藏夹"
+            Output:
+            {{
+                "action": "tool",
+                "is_music_related": true,
+                "explanation": "用户要求创建收藏夹，属操作类请求，交给工具处理",
+                "search_type": "none",
+                "search_keyword": "",
+                "sql_condition": "",
+                "join_tables": []
+            }}
+
+            User Input: "帮我把大陆男歌手收藏夹删除掉"
+            Output:
+            {{
+                "action": "tool",
+                "is_music_related": true,
+                "explanation": "用户要求删除收藏夹，属操作类请求，交给工具处理",
+                "search_type": "none",
+                "search_keyword": "",
+                "sql_condition": "",
+                "join_tables": []
+            }}
+
+            User Input: "帮我把大陆男歌手收藏夹名称改成大陆歌手"
+            Output:
+            {{
+                "action": "tool",
+                "is_music_related": true,
+                "explanation": "用户要求修改收藏夹名称，属操作类请求，交给工具处理",
+                "search_type": "none",
+                "search_keyword": "",
+                "sql_condition": "",
+                "join_tables": []
+            }}
+
+            User Input: "帮我把这首歌分享到音乐圈"
+            Output:
+            {{
+                "action": "tool",
+                "is_music_related": true,
+                "explanation": "用户要求把歌曲分享到音乐圈，属操作类请求，交给工具处理",
+                "search_type": "none",
+                "search_keyword": "",
+                "sql_condition": "",
+                "join_tables": []
+            }}
+
             User Input: "今天天气怎么样"
             Output:
             {{
+                "action": "none",
                 "is_music_related": false,
                 "explanation": "用户询问天气，与音乐查询无关"
             }}
@@ -258,12 +337,28 @@ class AgentService:
                 history=history
             )
 
-            if not intent_result.get("is_music_related", False):
-                reply = "抱歉，我只能回答与音乐相关的问题。请尝试询问关于歌曲、歌手、专辑或音乐标签的问题。"
+            # 3.5 判断是否能转成音乐查询 SQL（action=search 且有 sql_condition）；
+            #     不能（收藏夹/音乐圈等操作类请求、与音乐无关的请求）就先尝试调用工具，
+            #     没有匹配到对应工具时统一回复「只能回答与音乐相关的问题」
+            action = str(
+                intent_result.get("action")
+                or ("search" if intent_result.get("is_music_related", False) else "none")
+            ).strip().lower()
+            sql_condition = (intent_result.get("sql_condition") or "").strip()
+
+            if action != "search" or not sql_condition:
+                tool_reply = await self._handle_tool_intent(
+                    chat_params.prompt, model_config, chat_params.showThink, user_id, history
+                )
+                reply = tool_reply or self.APOLOGY_TEXT
+                yield reply
                 self.append_and_save_agent_history(
                     user_id, chat_params.chatId, history, chat_params.prompt, reply
                 )
-                yield reply
+                chat_entity.content = reply
+                chat_entity.response_content = reply
+                chat_entity.create_time = datetime.now()
+                asyncio.create_task(self.save_chat_history_async(chat_entity))
                 yield "[completed]"
                 return
 
@@ -282,7 +377,6 @@ class AgentService:
                 response_text += self._format_music_tag(music_list)
             else:
                 response_text = "抱歉，没有找到符合您要求的音乐。请尝试其他关键词或描述。"
-
             # 6. 流式返回结果
             chunk_size = 50
             for i in range(0, len(response_text), chunk_size):
@@ -408,6 +502,77 @@ class AgentService:
             "search_keyword": keyword,
             "sql_condition": "(song_name LIKE '%%s%%' OR author_name LIKE '%%s%%' OR label LIKE '%%s%%')"
         }
+
+    async def _handle_tool_intent(
+            self,
+            prompt: str,
+            model_config: ChatModelSchema,
+            show_think: bool,
+            user_id: str,
+            history: Optional[List[tuple]] = None
+    ) -> Optional[str]:
+        """操作类请求的工具调用：让大模型从工具清单里选一个工具 -> 服务端执行 -> 返回话术。
+
+        返回 None 表示没有匹配到任何工具，调用方据此回复「只能回答与音乐相关的问题」。
+        """
+        try:
+            chat_model = await self._create_chat_model(model_config, show_think)
+            if chat_model is None:
+                return None
+
+            messages = [("system", build_tool_selection_system_prompt())]
+            if history:
+                messages.extend(history)
+            messages.append(("human", f"用户输入: {prompt}"))
+
+            # ---- 观测：打印发给大模型的参数 + 完整提示词 + 工具清单 ----
+            log_llm_request(
+                stage="_handle_tool_intent（工具选择）",
+                request_params={
+                    "user_id": user_id,
+                    "prompt(用户输入)": prompt,
+                    "showThink": show_think,
+                    "modelId": getattr(model_config, "id", None),
+                    "messages条数": len(messages),
+                    "可用工具": TOOL_NAMES,
+                },
+                model_config=model_config,
+                show_think=show_think,
+                messages=messages,
+            )
+
+            started = time.perf_counter()
+            response = await chat_model.ainvoke(
+                messages,
+                config={"callbacks": [LlmTraceCallback(stage="_handle_tool_intent")]},
+            )
+            log_llm_response(
+                stage="_handle_tool_intent（工具选择）",
+                response=response,
+                elapsed_ms=(time.perf_counter() - started) * 1000,
+            )
+
+            tool_name, params = parse_tool_selection(getattr(response, "content", "") or "")
+
+            # ---- 观测：工具计划（LLM 选中的工具 + 参数） ----
+            log_tool_plan({
+                "explanation": f"非查询类请求 -> 工具选择（可用 {len(TOOL_NAMES)} 个工具）",
+                "search_type": tool_name or "none（没有匹配的工具）",
+                "search_keyword": json.dumps(params, ensure_ascii=False) if params else "",
+                "sql_condition": "（本次不生成 SQL，走工具调用）",
+                "join_tables": TOOL_NAMES,
+            })
+
+            if not tool_name:
+                logger.info("[AgentService] 没有匹配到工具，回复统一提示")
+                return None
+
+            logger.info(f"[AgentService] 调用工具: {tool_name}, 参数={params}")
+            return execute_tool(self.db, user_id, tool_name, params)
+
+        except Exception as e:
+            logger.error(f"[AgentService] 工具调用处理失败: {str(e)}", exc_info=True)
+            return None
 
     async def _execute_music_query(
             self,
