@@ -51,14 +51,12 @@ class MusicQueryParams(BaseModel):
     page_num: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=1, le=100, description="每页数量")
 
-class MusicClassifySchema(BaseModel):
-    """音乐分类响应Schema（驼峰命名）"""
+class MusicCategorySchema(BaseModel):
+    """音乐分类响应Schema（驼峰命名，对应 music_category 表）"""
     id: int = Field(..., description="主键")
-    classify_name: Optional[str] = Field(None, description="标签", alias="classifyName")
-    permission: Optional[int] = Field(None, description="权限")
-    classify_rank: Optional[int] = Field(None, description="分类排序，数值越大越靠前", alias="classifyRank")
-    cover: Optional[str] = Field(None, description="图标")
-    disabled: Optional[int] = Field(None, description="是否启用")
+    img: Optional[str] = Field(None, description="类型图片")
+    category: Optional[str] = Field(None, description="小分类")
+    classify: Optional[str] = Field(None, description="大分类")
     create_time: Optional[datetime] = Field(None, description="创建时间", alias="createTime")
     update_time: Optional[datetime] = Field(None, description="更新时间", alias="updateTime")
 

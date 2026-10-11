@@ -77,29 +77,28 @@ class MusicService:
             logger.error(f"猜你喜欢查询失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg=f"猜你喜欢查询失败: {str(e)}", data=None)
 
-    async def get_music_classify(self) -> ResultEntity:
+    async def get_music_category(self) -> ResultEntity:
         """
-        获取音乐分类列表
-        按 classify_rank 降序排列
+        获取音乐分类列表（music_category 表，按 id 升序）
 
         Returns:
             ResultEntity: 分类列表
         """
         try:
-            classify_list = self.music_repository.get_music_classify_list()
+            category_list = self.music_repository.get_music_category_list()
 
-            if not classify_list:
+            if not category_list:
                 return ResultUtil.success(data=[], total=0, msg="暂无分类数据")
 
-            return ResultUtil.success(data=classify_list, total=len(classify_list))
+            return ResultUtil.success(data=category_list, total=len(category_list))
 
         except Exception as e:
             logger.error(f"获取音乐分类失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg=f"获取音乐分类失败: {str(e)}", data=None)
 
-    async def get_music_list_by_classify_id(
+    async def get_music_list_by_category_id(
             self,
-            classify_id: int,
+            category_id: int,
             user_id: str,
             page_num: int = 1,
             page_size: int = 10
@@ -108,7 +107,7 @@ class MusicService:
         根据分类ID分页查询音乐列表
 
         Args:
-            classify_id: 分类ID
+            category_id: 分类ID
             user_id: 当前用户ID
             page_num: 页码，从1开始
             page_size: 每页数量
@@ -118,7 +117,7 @@ class MusicService:
         """
         try:
             # 参数校验
-            if classify_id is None or classify_id <= 0:
+            if category_id is None or category_id <= 0:
                 return ResultUtil.fail(msg="分类ID不能为空", data=None)
 
             if page_num < 1:
@@ -130,8 +129,8 @@ class MusicService:
                 page_size = 500
 
             # 查询音乐列表
-            music_list, total = self.music_repository.get_music_list_by_classify_id(
-                classify_id=classify_id,
+            music_list, total = self.music_repository.get_music_list_by_category_id(
+                category_id=category_id,
                 user_id=user_id,
                 page_num=page_num,
                 page_size=page_size

@@ -8,15 +8,15 @@
 
 ## 鉴权
 
-除 `getMusicClassify`、`getMusicAuthorCategory` 外，其余接口均需 token（网关注入 `X-User-Id`）。
+除 `getMusicCategory`、`getMusicAuthorCategory` 外，其余接口均需 token（网关注入 `X-User-Id`）。
 
 ## 接口总览
 
 | 方法 | 接口 | 作用 | 鉴权 |
 |------|------|------|------|
 | GET | /service/music/getKeywordMusic | 搜索框推荐音乐（热门） | 需 |
-| GET | /service/music/getMusicClassify | 音乐分类 | 否 |
-| GET | /service/music/getMusicListByClassifyId | 按分类取音乐列表 | 需 |
+| GET | /service/music/getMusicCategory | 音乐分类（music_category 表） | 否 |
+| GET | /service/music/getMusicListByCategoryId | 按分类取音乐列表（music_category_relation + music） | 需 |
 | GET | /service/music/getMusicAuthorListByCategoryId | 按分类取歌手 | 需 |
 | GET | /service/music/getMusicListByAuthorId | 按歌手取音乐 | 需 |
 | GET | /service/music/getFavoriteAuthor | 收藏的歌手 | 需 |
@@ -39,7 +39,7 @@
 | POST | /service/music/insertMusicFavorite/{musicId} | 添加到收藏夹 | 需 |
 | GET | /service/music/getRecommendMusic | 猜你喜欢（前5条） | 需 |
 
-> 差异（与 Spring Boot）：`deleteFavoriteDirectory/{favoriteId}` → `{directoryId}`；`getMusicListByAuthorId` 去掉 `authorName`；`getFavoriteAuthor` 去掉分页；`getMusicListByClassifyId` 去掉 `isRedis`；`insertMusicFavorite` body 为 `favoriteIds` int 数组。
+> 差异（与 Spring Boot）：`deleteFavoriteDirectory/{favoriteId}` → `{directoryId}`；`getMusicListByAuthorId` 去掉 `authorName`；`getFavoriteAuthor` 去掉分页；`getMusicListByCategoryId` 去掉 `isRedis`；`insertMusicFavorite` body 为 `favoriteIds` int 数组。
 
 ## 接口详情
 
@@ -60,23 +60,25 @@
 ```
 
 ### 2. 音乐分类
-- 接口：`GET /service/music/getMusicClassify`
+- 接口：`GET /service/music/getMusicCategory`
 - 入参：无
+- 说明：查询 `music_category` 表（歌曲分类名称表），按 `id` 升序返回全部分类；`classify` 为大分类、`category` 为小分类、`img` 为类型图片
 - 出参：ResultEntity，data 为分类列表
 - 出参示例：
 ```json
 {
-  "data": [{"id":1,"classifyName":"热门","cover":"https://example.com/cover.jpg","classifyRank":1}],
+  "data": [{"id":68,"img":"/static/music/images/20130807185439172736.png","category":"酷狗飙升榜","classify":"热门榜单","createTime":"2026-10-11T11:18:07","updateTime":"2026-10-11T11:18:07"}],
   "status": "SUCCESS",
   "msg": null,
-  "total": null,
+  "total": 33,
   "token": null
 }
 ```
 
 ### 3. 按分类取音乐列表
-- 接口：`GET /service/music/getMusicListByClassifyId`
-- 入参：`X-User-Id`（Header）+ Query：`classifyId`、`pageNum`（默认 1）、`pageSize`（默认 10）
+- 接口：`GET /service/music/getMusicListByCategoryId`
+- 入参：`X-User-Id`（Header）+ Query：`categoryId`、`pageNum`（默认 1）、`pageSize`（默认 10）
+- 说明：从 `music_category_relation` 表按 `category_id` 取出 `music_id`，再关联 `music` 表查音乐详情（只取 `local_play_url` 不为空的歌曲，按关联表 `id` 升序），并 LEFT JOIN `music_like` 得到当前用户的点赞状态 `isLike`
 - 出参：ResultEntity，data 为音乐列表（含 isLike），`total` 为总数
 - 出参示例：
 ```json
