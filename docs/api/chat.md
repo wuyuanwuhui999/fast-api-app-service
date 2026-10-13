@@ -209,6 +209,7 @@
 - 入参：`?token=<token>`（网关注入 `X-User-Id`）；消息体通过 send 发送 JSON（prompt、promptId、chatId、modelId、docIds、showThink、type、language、companyId、tenantId 等）
 - prompt / promptId 说明：`prompt` 为用户提问（可选）；传了 promptId 则按 promptId、tenantId、userId 查 prompt 表，用表里的 prompt 覆盖；未查到记录时返回「找不到提示词」
 - 文档时间优先规则（`type=document`）：检索到的每一段摘录都会带上「创建时间」，并把它显式注入 system prompt 告诉模型如何取舍 —— 同一问题在不同文档中说法不一致时，以「创建时间」最新的文档为准，忽略旧文档；创建时间为「未知」的按最旧的文档处理；回答时说明依据的是哪一份文档
+- 同一规则还会写进**用户消息**的开头（两端文案一致）：`请参考以下内容，并使用「创建时间」最新的文档内容进行总结输出（创建时间越晚越新；显示「未知」的按最旧处理）：`，后面接检索到的文档摘录，末尾为 `回答问题: <原始提问>`
 - 文档上下文说明：`type=document` 时把检索结果拼进用户消息（`请参考以下内容\n: <上下文>\n\n回答问题: <问题>`）
 - 出参：流式文本消息
 - 出参示例：

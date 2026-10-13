@@ -353,7 +353,12 @@ class ChatService:
                 logger.info(f"[ChatService] 查询到相关文档，长度: {len(context) if context else 0}")
 
                 if context:
-                    prompt = f"请参考以下内容\n: {context}\n\n回答问题: {user_prompt}"
+                    # 除了 system prompt 里的规则，用户消息开头也再显式要求一次：
+                    # 用「创建时间」最新的文档内容总结输出（与 Spring PromptUtil 的前缀文案保持一致）
+                    prompt = (
+                        "请参考以下内容，并使用「创建时间」最新的文档内容进行总结输出"
+                        f"（创建时间越晚越新；显示「未知」的按最旧处理）：\n{context}\n\n回答问题: {user_prompt}"
+                    )
                     # 检索到的文档上下文必须真的进到发给模型的消息里：
                     # 原来只是赋值给 prompt 变量、靠 {prompt} 占位符替换，请求里没有占位符时上下文会被直接丢掉
                     messages[-1] = ("human", prompt)
