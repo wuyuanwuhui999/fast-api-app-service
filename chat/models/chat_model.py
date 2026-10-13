@@ -4,6 +4,28 @@ from sqlalchemy.ext.declarative import declarative_base
 Base = declarative_base()
 
 
+class ChatHistorySummaryModel(Base):
+    """会话记录压缩概要总结表（MongoDB chat_memory 的备份，Mongo 崩溃后可据此恢复会话记忆）"""
+    __tablename__ = 'chat_history_summary'
+    __table_args__ = {
+        'comment': '会话记录压缩概要总结表（MongoDB chat_memory 的备份）',
+        'mysql_charset': 'utf8mb4',
+        'mysql_collate': 'utf8mb4_general_ci',
+        'mysql_engine': 'InnoDB'
+    }
+
+    id = Column(String(32), primary_key=True, comment='主键（user_id:chat_id 的 md5，与 Spring 同一算法）')
+    chat_id = Column(String(128), nullable=False, comment='会话id')
+    user_id = Column(String(64), nullable=False, comment='用户id')
+    summary = Column(Text, comment='会话记录压缩后的概要总结')
+    message_count = Column(Integer, default=0, comment='生成该概要时压缩掉的原始会话消息条数')
+    create_time = Column(DateTime, comment='创建时间')
+    update_time = Column(DateTime, comment='更新时间')
+
+    def __repr__(self):
+        return f"<ChatHistorySummaryModel(id={self.id}, chat_id={self.chat_id}, user_id={self.user_id})>"
+
+
 class ChatDocModel(Base):
     __tablename__ = 'chat_doc'
     __table_args__ = {

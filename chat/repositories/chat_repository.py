@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime
 
 from elasticsearch.esql import and_
@@ -5,7 +6,7 @@ from fastapi.logger import logger
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from chat.models.chat_model import ChatModel, ChatHistory, ChatDocModel, ChatDocDirectory
+from chat.models.chat_model import ChatModel, ChatHistory, ChatDocModel, ChatDocDirectory, ChatHistorySummaryModel
 from chat.schemas.chat_schema import ChatModelSchema, ChatSchema, ChatDocSchema
 from chat.schemas.chat_schema import DirectorySchema
 
@@ -186,6 +187,54 @@ class ChatRepository:
 
         except Exception as e:
             logger.error(f"检查用户管理员权限失败: {str(e)}", exc_info=True)
+            return False
+
+    @staticmethod
+    def chat_history_summary_id(user_id: str, chat_id: str) -> str:
+        """会话概要主键：md5(user_id:chat_id)，与 Spring 侧 DigestUtils.md5DigestAsHex 结果一致（同一会话两端同一行）"""
+        return hashlib.md5(f"{user_id}:{chat_id}".encode("utf-8")).hexdigest()
+
+    def get_chat_history_summary(self, user_id: str, chat_id: str) -> Optional[str]:
+        """读取会话概要总结（MongoDB 不可用时的兜底来源）"""
+        try:
+            row = self.db.query(ChatHistorySummaryModel).filter(
+                ChatHistorySummaryModel.user_id == user_id,
+                ChatHistorySummaryModel.chat_id == chat_id
+            ).first()
+            return row.summary if row else None
+        except Exception as e:
+            logger.error(f"读取会话概要失败: {str(e)}", exc_info=True)
+            return None
+
+    def save_chat_history_summary(self, user_id: str, chat_id: str, summary: str, message_count: int) -> bool:
+        """保存/更新会话概要总结（每个会话一行；MySQL 里同时保留原始会话记录，不受影响）"""
+        try:
+            summary_id = self.chat_history_summary_id(user_id, chat_id)
+            now = datetime.now()
+            row = self.db.query(ChatHistorySummaryModel).filter(
+                ChatHistorySummaryModel.id == summary_id
+            ).first()
+            if row:
+                row.summary = summary
+                row.message_count = message_count
+                row.update_time = now
+            else:
+                self.db.add(ChatHistorySummaryModel(
+                    id=summary_id,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    summary=summary,
+                    message_count=message_count,
+                    create_time=now,
+                    update_time=now
+                ))
+            self.db.commit()
+            logger.info(f"会话概要已保存到 MySQL: user_id={user_id}, chat_id={chat_id}, 压缩消息数={message_count}")
+            return True
+        except Exception as e:
+            logger.error(f"保存会话概要失败: {str(e)}", exc_info=True)
+            if self.db:
+                self.db.rollback()
             return False
 
     async def save_chat_history(self, chat_data: ChatSchema) -> bool:

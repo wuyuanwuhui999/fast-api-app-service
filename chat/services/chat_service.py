@@ -13,10 +13,10 @@ from chat.repositories.chat_repository import ChatRepository
 from prompt.repositories.prompt_repository import PromptRepository
 from chat.schemas.chat_schema import ChatDocSchema, ChatParamsEntity, ChatSchema, ChatModelSchema
 from chat.schemas.chat_schema import AddModelSchema, UpdateModelSchema  # 新增导入
-from chat.utils.chat_util import PromptUtil, DOC_TIME_RULE
+from chat.utils.chat_util import (PromptUtil, DOC_TIME_RULE, CHAT_SUMMARY_PROMPT, CHAT_HISTORY_SUMMARY_THRESHOLD, HISTORY_SUMMARY_TITLE)
 from langchain_core.messages import ToolMessage
 from chat.tools.chat_tool import build_chat_tools
-from common.config.common_database import get_db
+from common.config.common_database import get_db, SessionLocal
 from common.utils.result_util import ResultEntity, ResultUtil
 from pymongo import MongoClient
 from pypdf import PdfReader
@@ -322,6 +322,11 @@ class ChatService:
             chat_history = self._get_chat_history_from_mongo(chat_history_key)
 
             system_prompt = chat_params.systemPrompt if chat_params.systemPrompt and chat_params.systemPrompt != '' else "你叫小吴同学，是一个无所不能的AI助手，上知天文下知地理，请用小吴同学的身份回答问题。"
+            # 会话概要（MongoDB 优先、MySQL 备份兜底）：有概要时只把概要发给大模型，不再发原始会话记录
+            history_summary = self._get_session_summary(user_id, chat_params.chatId)
+            if history_summary:
+                system_prompt = system_prompt + "\n\n" + HISTORY_SUMMARY_TITLE + "\n" + history_summary
+                logger.info(f"[ChatService] 已注入会话概要，长度: {len(history_summary)}")
             if chat_params.type == "document":
                 # 文档问答：把「按创建时间取最新文档」的规则显式写进 system prompt，
                 # 否则模型不知道哪段来自新文档、哪段来自旧文档，会把新旧内容平等对待甚至新旧混杂
@@ -425,6 +430,13 @@ class ChatService:
             yield "[completed]"
 
             asyncio.create_task(self.save_chat_history_async(chat_entity, full_response))
+
+            # 会话记录（不含 system）超过阈值 -> 用当前模型压缩成概要，写入 MongoDB + MySQL（MySQL 原始记录不动）
+            asyncio.create_task(self.summarize_chat_history_if_needed(
+                user_id=user_id,
+                chat_id=chat_params.chatId,
+                model_config=model_config
+            ))
 
         except Exception as e:
             logger.error(f"WebSocket chat error: {str(e)}", exc_info=True)
@@ -642,6 +654,111 @@ class ChatService:
         except Exception as e:
             logger.error(f"工具调用处理失败: {str(e)}", exc_info=True)
             yield f"工具调用处理失败: {str(e)}"
+
+    def _get_session_summary(self, user_id: str, chat_id: str) -> Optional[str]:
+        """会话概要：优先 MongoDB；Mongo 里没有（崩溃 / 过期）时回退 MySQL 备份，并顺手恢复到 MongoDB"""
+        try:
+            doc = self.mongo_chat_memory.find_one({"_id": f"chat_history:{user_id}:{chat_id}"})
+            if doc and doc.get("summary"):
+                return doc["summary"]
+        except Exception as e:
+            logger.error(f"[ChatService] 从 MongoDB 读取会话概要失败: {e}")
+
+        try:
+            summary = self.chat_repository.get_chat_history_summary(user_id, chat_id)
+            if summary:
+                logger.info("[ChatService] MongoDB 中无会话概要，使用 MySQL 备份并恢复回 MongoDB")
+                self._save_summary_to_mongo(user_id, chat_id, summary, 0)
+                return summary
+        except Exception as e:
+            logger.error(f"[ChatService] 从 MySQL 读取会话概要失败: {e}")
+        return None
+
+    def _save_summary_to_mongo(self, user_id: str, chat_id: str, summary: str, message_count: int) -> None:
+        """把概要写入 MongoDB，并清空原始会话记录（MongoDB 里只保留概要）"""
+        try:
+            now = datetime.utcnow()
+            self.mongo_chat_memory.update_one(
+                {"_id": f"chat_history:{user_id}:{chat_id}"},
+                {"$set": {
+                    "user_id": user_id,
+                    "chat_id": chat_id,
+                    "summary": summary,
+                    "summary_count": message_count,
+                    "summary_time": now,
+                    "messages": "[]",  # 删除原始会话记录，只保留概要
+                    "update_time": now,
+                }},
+                upsert=True,
+            )
+        except Exception as e:
+            logger.error(f"[ChatService] 保存会话概要到 MongoDB 失败: {e}")
+
+    def _save_summary_to_mysql(self, user_id: str, chat_id: str, summary: str, message_count: int) -> None:
+        """概要备份到 MySQL：后台任务不能复用请求作用域的 Session（请求可能已结束），用独立 SessionLocal"""
+        session = None
+        try:
+            session = SessionLocal()
+            ChatRepository(session).save_chat_history_summary(user_id, chat_id, summary, message_count)
+        except Exception as e:
+            logger.error(f"[ChatService] 保存会话概要到 MySQL 失败: {e}")
+        finally:
+            if session:
+                session.close()
+
+    async def summarize_chat_history_if_needed(self, user_id: str, chat_id: str,
+                                               model_config: ChatModelSchema, show_think: bool = False) -> None:
+        """会话记录（不含 system）超过阈值时，用当前模型把会话记录压缩成概要，写入 MongoDB + MySQL。
+
+        MySQL 的 chat_history 原始记录保持不变（用户想看历史仍从数据库查）。
+        已有概要时会一起送进模型，输出合并后的概要（避免丢历史信息）。
+        """
+        try:
+            doc = self.mongo_chat_memory.find_one({"_id": f"chat_history:{user_id}:{chat_id}"}) or {}
+            messages_json = doc.get("messages")
+            old_summary = doc.get("summary")
+            raw_messages = json.loads(messages_json) if messages_json else []
+
+            records = []
+            for item in raw_messages:
+                if isinstance(item, (list, tuple)) and len(item) >= 2:
+                    role, content = item[0], item[1]
+                elif isinstance(item, dict):
+                    role, content = item.get("role"), item.get("content")
+                else:
+                    continue
+                if not role or role == "system":
+                    continue
+                records.append(f"{'用户' if role in ('human', 'user') else '助手'}: {content}")
+
+            if len(records) <= CHAT_HISTORY_SUMMARY_THRESHOLD:
+                return
+
+            chat_model = await self._create_chat_model(model_config, show_think=False)
+            if chat_model is None:
+                logger.error("[ChatService] 会话压缩失败：无法创建模型实例")
+                return
+
+            user_content = ""
+            if old_summary:
+                user_content += f"【已有概要】\n{old_summary}\n\n"
+            user_content += "【新增会话记录】\n" + "\n".join(records)
+
+            logger.info(f"[ChatService] 开始压缩会话记录: chat_id={chat_id}, 消息数={len(records)}")
+            response = await chat_model.ainvoke(
+                [("system", CHAT_SUMMARY_PROMPT), ("human", user_content)]
+            )
+            summary = (getattr(response, "content", "") or "").strip()
+            if not summary:
+                logger.warning("[ChatService] 会话压缩结果为空，放弃保存")
+                return
+
+            self._save_summary_to_mongo(user_id, chat_id, summary, len(records))
+            self._save_summary_to_mysql(user_id, chat_id, summary, len(records))
+            logger.info(f"[ChatService] 会话已压缩: chat_id={chat_id}, 概要长度={len(summary)}")
+
+        except Exception as e:
+            logger.error(f"[ChatService] 会话记录压缩失败: {str(e)}", exc_info=True)
 
     async def save_chat_history_async(self, chat_entity: ChatSchema, content: str):
         """异步保存聊天记录的辅助方法"""
