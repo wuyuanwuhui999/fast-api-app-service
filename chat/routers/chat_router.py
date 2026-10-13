@@ -184,6 +184,7 @@ async def websocket_chat(
                     doc_ids = [doc_ids] if isinstance(doc_ids, str) else []
 
                 chat_params = ChatParamsEntity(
+                    prompt=chat_params_data.get("prompt", None),
                     promptId=chat_params_data.get("promptId", None),
                     systemPrompt=chat_params_data.get("systemPrompt", None),
                     docIds=doc_ids,

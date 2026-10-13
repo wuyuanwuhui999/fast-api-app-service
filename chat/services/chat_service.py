@@ -13,7 +13,7 @@ from chat.repositories.chat_repository import ChatRepository
 from prompt.repositories.prompt_repository import PromptRepository
 from chat.schemas.chat_schema import ChatDocSchema, ChatParamsEntity, ChatSchema, ChatModelSchema
 from chat.schemas.chat_schema import AddModelSchema, UpdateModelSchema  # 新增导入
-from chat.utils.chat_util import PromptUtil
+from chat.utils.chat_util import PromptUtil, DOC_TIME_RULE
 from langchain_core.messages import ToolMessage
 from chat.tools.chat_tool import build_chat_tools
 from common.config.common_database import get_db
@@ -265,8 +265,8 @@ class ChatService:
         logger.info(f"[ChatService] docIds={chat_params.docIds}")
         logger.info(f"[ChatService] promptId={chat_params.promptId}")
 
-        # 解析 promptId → 用户提示词（传了 promptId 则查 prompt 表取 prompt 字段作为用户提示词）
-        user_prompt = ""
+        # 用户提示词：默认取请求里的 prompt；传了 promptId 则查 prompt 表，用表里的 prompt 覆盖（与 Spring 的 ChatParamsEntity 语义一致）
+        user_prompt = chat_params.prompt or ""
         if chat_params.promptId:
             prompt_record = await self.prompt_repository.get_prompt_by_id_tenant_user(
                 chat_params.promptId,
@@ -322,6 +322,10 @@ class ChatService:
             chat_history = self._get_chat_history_from_mongo(chat_history_key)
 
             system_prompt = chat_params.systemPrompt if chat_params.systemPrompt and chat_params.systemPrompt != '' else "你叫小吴同学，是一个无所不能的AI助手，上知天文下知地理，请用小吴同学的身份回答问题。"
+            if chat_params.type == "document":
+                # 文档问答：把「按创建时间取最新文档」的规则显式写进 system prompt，
+                # 否则模型不知道哪段来自新文档、哪段来自旧文档，会把新旧内容平等对待甚至新旧混杂
+                system_prompt = system_prompt + "\n\n" + DOC_TIME_RULE
             messages = [
                 ("system", system_prompt)
             ]
@@ -335,8 +339,6 @@ class ChatService:
                     logger.warning(f"Failed to parse chat history from MongoDB: {str(e)}")
 
             messages.append(("human", user_prompt))
-
-            chat_template = ChatPromptTemplate.from_messages(messages)
 
             prompt = user_prompt
             if chat_params.type == "document":
@@ -352,6 +354,9 @@ class ChatService:
 
                 if context:
                     prompt = f"请参考以下内容\n: {context}\n\n回答问题: {user_prompt}"
+                    # 检索到的文档上下文必须真的进到发给模型的消息里：
+                    # 原来只是赋值给 prompt 变量、靠 {prompt} 占位符替换，请求里没有占位符时上下文会被直接丢掉
+                    messages[-1] = ("human", prompt)
                     logger.info(f"[ChatService] 已添加文档上下文，长度: {len(context)}")
                 else:
                     yield "对不起，没有查询到相关文档！"
@@ -360,6 +365,9 @@ class ChatService:
             else:
                 logger.info(f"[ChatService] 不查询文档")
 
+            # 模板必须在「文档上下文注入完成」之后再建：
+            # 原来模板在文档检索之前就建好了，之后改 messages 不生效，检索到的上下文会被丢掉
+            chat_template = ChatPromptTemplate.from_messages(messages)
             formatted_prompt = chat_template.format_messages(prompt=prompt)
 
             full_response = ""
@@ -812,6 +820,8 @@ class ChatService:
             for idx, (doc, score) in enumerate(results):
                 metadata = doc.metadata
                 filename = metadata.get('filename', '未知文件')
+                # 文档创建时间（旧数据没写过这个字段时兜底显示「未知」，由提示词规则按最旧处理）
+                create_time = metadata.get('create_time') or '未知'
                 text = doc.page_content
                 # 计算相似度分数
                 if score <= 1:
@@ -820,7 +830,7 @@ class ChatService:
                     similarity_score = 1 / (1 + score)
                 text_preview = text[:50] + '...' if len(text) > 50 else text
                 output_lines.append(
-                    f"第{idx + 1}段, 文档来源：{filename},  内容：{text_preview}\n\n"
+                    f"第{idx + 1}段, 文档来源：{filename}, 创建时间：{create_time},  内容：{text_preview}\n\n"
                 )
 
             return "\n".join(output_lines)
@@ -875,6 +885,9 @@ class ChatService:
             if not texts:
                 raise ValueError("分割后无有效文本")
 
+            # 同一份文档的所有分片共用同一个入库时间（chroma metadata 只支持字符串/数值，存格式化字符串便于展示和比较）
+            create_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
             documents = []
             for i, text in enumerate(texts):
                 documents.append(Document(
@@ -887,6 +900,7 @@ class ChatService:
                         "doc_id": doc_id,
                         "permission": permission,
                         "company_id": company_id,
+                        "create_time": create_time,
                     }
                 ))
 

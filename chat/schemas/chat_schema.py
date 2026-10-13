@@ -46,6 +46,7 @@ class ChatSchema(BaseModel):
 
 class ChatParamsEntity(BaseModel):
     """WebSocket消息参数 - 通过send方法传递"""
+    prompt: Optional[str] = None
     promptId: Optional[str] = None
     systemPrompt: Optional[str] = None
     docIds: Optional[List[str]] = None

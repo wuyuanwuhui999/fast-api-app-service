@@ -39,7 +39,8 @@
 ### 1. AI 对话（HTTP 流式）
 - 接口：`POST /service/chat/chat`
 - 作用：发起 AI 对话，流式返回文本（与 WebSocket 聊天逻辑一致）
-- 入参：`X-User-Id`（Header）+ Body（ChatParamsEntity：`promptId`、`chatId`、`modelId`、`companyId`、`systemPrompt`、`docIds`、`showThink`、`type`、`language`、`tenantId`）
+- 入参：`X-User-Id`（Header）+ Body（ChatParamsEntity：`prompt`、`promptId`、`chatId`、`modelId`、`companyId`、`systemPrompt`、`docIds`、`showThink`、`type`、`language`、`tenantId`）
+- prompt / promptId 说明：`prompt` 为用户提问（可选）；`promptId` 传了则查 prompt 表，用表里的 prompt 覆盖 `prompt`；两者都没传时视为空提问
 - 出参：流式文本（`text/plain;charset=utf-8`，非 ResultEntity）
 - 出参示例：
 （流式文本，非 ResultEntity）示例输出：`你好！我是 AI 助手，很高兴为您服务。`
@@ -205,8 +206,10 @@
 ### 5. WebSocket 聊天
 - 接口：`WS /service/chat/ws/chat`
 - 作用：WebSocket 方式 AI 对话（流式）
-- 入参：`?token=<token>`（网关注入 `X-User-Id`）；消息体通过 send 发送 JSON（promptId、chatId、modelId、docIds、showThink、type、language、companyId、tenantId 等）
-- promptId 说明：可选参数；传了则按 promptId、tenantId、userId 查 prompt 表，取 prompt 字段作为用户提示词；未查到记录时返回「找不到提示词」
+- 入参：`?token=<token>`（网关注入 `X-User-Id`）；消息体通过 send 发送 JSON（prompt、promptId、chatId、modelId、docIds、showThink、type、language、companyId、tenantId 等）
+- prompt / promptId 说明：`prompt` 为用户提问（可选）；传了 promptId 则按 promptId、tenantId、userId 查 prompt 表，用表里的 prompt 覆盖；未查到记录时返回「找不到提示词」
+- 文档时间优先规则（`type=document`）：检索到的每一段摘录都会带上「创建时间」，并把它显式注入 system prompt 告诉模型如何取舍 —— 同一问题在不同文档中说法不一致时，以「创建时间」最新的文档为准，忽略旧文档；创建时间为「未知」的按最旧的文档处理；回答时说明依据的是哪一份文档
+- 文档上下文说明：`type=document` 时把检索结果拼进用户消息（`请参考以下内容\n: <上下文>\n\n回答问题: <问题>`）
 - 出参：流式文本消息
 - 出参示例：
 （流式文本，非 ResultEntity）示例输出：`你好！我是 AI 助手。`
@@ -214,6 +217,7 @@
 ### 6. 上传文档
 - 接口：`POST /service/chat/uploadDoc`
 - 入参：`X-User-Id`（Header）+ Form：`tenantId`（可选，默认 personal）、`directoryId`（可选，默认 public）、`splitMethod`（可选，分割方式，默认 recursive）、`chunkSize`（可选，splitMethod=fixed 时必填，自定义块大小）、`permission`（可选，文档权限，默认 private）、`file`（文件，支持 pdf/docx/doc/txt）
+- 说明：文档分片写入向量库（Chroma）时，metadata 会写入 `create_time`（当前系统时间，格式 `yyyy-MM-dd HH:mm:ss`），同一份文档的所有分片共用同一个时间；检索时用于区分文档新旧
 - 出参：ResultEntity
 - 出参示例：
 ```json
@@ -251,9 +255,9 @@
 - 出参示例：
 ```json
 {
-  "data": null,
+  "data": 1,
   "status": "SUCCESS",
-  "msg": null,
+  "msg": "删除文档成功",
   "total": null,
   "token": null
 }
