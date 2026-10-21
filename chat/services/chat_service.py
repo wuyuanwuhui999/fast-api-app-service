@@ -69,6 +69,7 @@ SPLIT_METHODS = [
     {"value": "paragraph", "label": "按段落分割", "description": "按空行/段落边界切分"},
     {"value": "sentence", "label": "按句子分割", "description": "按句号、感叹号、问号等句子边界切分"},
     {"value": "fixed", "label": "固定长度分割", "description": "按固定字符数切分"},
+    {"value": "intelligent", "label": "智能分割", "description": "调用指定大模型按语义完整性智能切分，需传入 modelId"},
 ]
 
 
@@ -994,16 +995,34 @@ class ChatService:
             split_method: str = "recursive",
             chunk_size: int = None,
             permission: str = "private",
-            company_id: str = None
+            company_id: str = None,
+            model_id: str = None
     ):
-        """处理文本内容并存储到向量数据库"""
+        """处理文本内容并存储到向量数据库
+
+        split_method == "intelligent" 时，调用 model_id 对应的大模型做语义分割，
+        否则走原有本地字符分割。
+        """
         try:
             if not content.strip():
                 raise ValueError("内容不能为空")
 
-            text_splitter = self._create_splitter(split_method, chunk_size)
+            if split_method == "intelligent":
+                texts = self._intelligent_split(
+                    content=content,
+                    model_id=model_id,
+                    company_id=company_id,
+                    chunk_size=chunk_size,
+                )
+                if not texts:
+                    # 智能分割失败/空结果时降级为递归分割，避免上传中断
+                    logger.warning("[ChatService] 智能分割结果为空，降级为 recursive 分割")
+                    text_splitter = self._create_splitter("recursive")
+                    texts = text_splitter.split_text(content)
+            else:
+                text_splitter = self._create_splitter(split_method, chunk_size)
+                texts = text_splitter.split_text(content)
 
-            texts = text_splitter.split_text(content)
             if not texts:
                 raise ValueError("分割后无有效文本")
 
@@ -1037,6 +1056,34 @@ class ChatService:
             logger.error(f"处理文本内容失败: {str(e)}", exc_info=True)
             raise
 
+
+
+    def _extract_docx_text(self, content: bytes) -> str:
+        """提取DOCX文本。
+
+        优先用 python-docx 解析；解析失败（例如 WPS 等工具生成的文档 [Content_Types].xml
+        里存在 image/.jpg 这类畸形 ContentType，导致 python-docx 抛「NULL in archive」）时，
+        回退到直接解析 word/document.xml 提取 <w:t> 文本，保证兼容性。
+        """
+        try:
+            doc = DocxDocument(BytesIO(content))
+            return "\n\n".join(p.text for p in doc.paragraphs if p.text.strip())
+        except Exception as e:
+            logger.warning(f"python-docx 解析失败，回退到直接解析 word/document.xml: {str(e)}")
+            try:
+                with zipfile.ZipFile(BytesIO(content)) as zf:
+                    xml_bytes = zf.read('word/document.xml')
+            except Exception as ze:
+                raise ValueError(f"无法读取 DOCX 内容: {str(ze)}")
+            root = ET.fromstring(xml_bytes.decode('utf-8', errors='ignore'))
+            ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+            paragraphs = []
+            for p in root.iter(f'{{{ns}}}p'):
+                texts = [t.text for t in p.iter(f'{{{ns}}}t') if t.text]
+                if texts:
+                    paragraphs.append(''.join(texts))
+            return "\n\n".join(paragraphs)
+
     def process_pdf(
             self,
             content: bytes,
@@ -1047,7 +1094,8 @@ class ChatService:
             split_method: str = "recursive",
             chunk_size: int = None,
             permission: str = "private",
-            company_id: str = None
+            company_id: str = None,
+            model_id: str = None
     ):
         """处理PDF文件"""
         try:
@@ -1078,7 +1126,8 @@ class ChatService:
                 split_method,
                 chunk_size,
                 permission,
-                company_id
+                company_id,
+                model_id
             )
 
         except HTTPException:
@@ -1097,7 +1146,8 @@ class ChatService:
             split_method: str = "recursive",
             chunk_size: int = None,
             permission: str = "private",
-            company_id: str = None
+            company_id: str = None,
+            model_id: str = None
     ):
         """处理TXT文件"""
         try:
@@ -1111,7 +1161,8 @@ class ChatService:
                 split_method,
                 chunk_size,
                 permission,
-                company_id
+                company_id,
+                model_id
             )
         except Exception as e:
             logger.error(f"TXT processing failed: {str(e)}")
@@ -1127,7 +1178,8 @@ class ChatService:
             split_method: str = "recursive",
             chunk_size: int = None,
             permission: str = "private",
-            company_id: str = None
+            company_id: str = None,
+            model_id: str = None
     ):
         """处理DOCX文件"""
         try:
@@ -1143,39 +1195,14 @@ class ChatService:
                 split_method,
                 chunk_size,
                 permission,
-                company_id
+                company_id,
+                model_id
             )
         except HTTPException:
             raise
         except Exception as e:
             logger.error(f"DOCX processing failed: {str(e)}")
             raise HTTPException(status_code=500, detail=f"DOCX处理失败: {str(e)}")
-
-    def _extract_docx_text(self, content: bytes) -> str:
-        """提取DOCX文本。
-
-        优先用 python-docx 解析；解析失败（例如 WPS 等工具生成的文档 [Content_Types].xml
-        里存在 image/.jpg 这类畸形 ContentType，导致 python-docx 抛「NULL in archive」）时，
-        回退到直接解析 word/document.xml 提取 <w:t> 文本，保证兼容性。
-        """
-        try:
-            doc = DocxDocument(BytesIO(content))
-            return "\n\n".join(p.text for p in doc.paragraphs if p.text.strip())
-        except Exception as e:
-            logger.warning(f"python-docx 解析失败，回退到直接解析 word/document.xml: {str(e)}")
-            try:
-                with zipfile.ZipFile(BytesIO(content)) as zf:
-                    xml_bytes = zf.read('word/document.xml')
-            except Exception as ze:
-                raise ValueError(f"无法读取 DOCX 内容: {str(ze)}")
-            root = ET.fromstring(xml_bytes.decode('utf-8', errors='ignore'))
-            ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
-            paragraphs = []
-            for p in root.iter(f'{{{ns}}}p'):
-                texts = [t.text for t in p.iter(f'{{{ns}}}t') if t.text]
-                if texts:
-                    paragraphs.append(''.join(texts))
-            return "\n\n".join(paragraphs)
 
     def process_doc(
             self,
@@ -1187,7 +1214,8 @@ class ChatService:
             split_method: str = "recursive",
             chunk_size: int = None,
             permission: str = "private",
-            company_id: str = None
+            company_id: str = None,
+            model_id: str = None
     ):
         """处理DOC文件（老格式，通过 macOS textutil 转文本）"""
         tmp_path = None
@@ -1211,7 +1239,8 @@ class ChatService:
                 split_method,
                 chunk_size,
                 permission,
-                company_id
+                company_id,
+                model_id
             )
         except HTTPException:
             raise
@@ -1221,6 +1250,173 @@ class ChatService:
         finally:
             if tmp_path and os.path.exists(tmp_path):
                 os.unlink(tmp_path)
+
+    async def _async_intelligent_split(
+            self,
+            content: str,
+            model_id: str,
+            company_id: Optional[str] = None,
+            chunk_size: Optional[int] = None
+    ) -> List[str]:
+        """调用大模型对文本做语义分割（异步实现）。
+
+        步骤：
+        1. 按 model_id（+ company_id 越权校验）从模型表查询模型配置；
+        2. 用 _create_chat_model 创建模型实例；
+        3. 提示词要求模型严格以 JSON 数组返回分块结果；
+        4. 解析结果；解析失败按行兜底切分；最终返回空列表由调用方降级处理。
+        """
+        try:
+            # 1. 查询模型配置
+            model_config = self.chat_repository.get_model_by_id(
+                model_id, company_id=company_id
+            )
+            if not model_config:
+                logger.warning(f"[ChatService] 智能分割未找到模型配置: modelId={model_id}")
+                return []
+
+            # 2. 创建模型实例（不走流式）
+            chat_model = await self._create_chat_model(model_config, show_think=False)
+            if chat_model is None:
+                logger.warning(f"[ChatService] 智能分割创建模型实例失败: type={model_config.type}")
+                return []
+
+            max_chunk = chunk_size if (chunk_size and chunk_size > 0) else 1000
+
+            # 3. 构造分割提示词
+            system_prompt = (
+                "你是一个专业的文档语义分割助手。请把用户提供的文档内容切分成若干个语义完整的片段。"
+                "要求：\n"
+                f"1. 每个片段不超过 {max_chunk} 个字符；\n"
+                "2. 片段边界必须落在语义完整的段落、章节或句子处，禁止从句子中间截断；\n"
+                "3. 保持原文内容不变，不要改写、总结或增删内容；\n"
+                "4. 片段数量尽可能少，但要保证每个片段不超过长度限制；\n"
+                "5. 必须严格输出一个 JSON 字符串数组，例如：[\"片段1\", \"片段2\"]，不要输出任何解释、Markdown 代码块或其它内容。"
+            )
+
+            # 控制单次送模型的内容长度，超长文档分段处理（按 8000 字符切，避免超出上下文）
+            segments = self._split_by_length(content, 8000)
+            all_chunks: List[str] = []
+            for seg in segments:
+                response = await chat_model.ainvoke(
+                    [("system", system_prompt), ("human", seg)]
+                )
+                text = (getattr(response, "content", "") or "").strip()
+                chunks = self._parse_intelligent_split_result(text)
+                if not chunks:
+                    logger.warning("[ChatService] 智能分割返回结果解析失败，使用按行兜底切分")
+                    chunks = [line.strip() for line in seg.splitlines() if line.strip()]
+                all_chunks.extend(chunks)
+
+            # 二次兜底：单块超长时再按本地分割器拆分
+            final_chunks: List[str] = []
+            for chunk in all_chunks:
+                if len(chunk) <= max_chunk:
+                    final_chunks.append(chunk)
+                else:
+                    text_splitter = self._create_splitter("fixed", max_chunk)
+                    final_chunks.extend(text_splitter.split_text(chunk))
+            return final_chunks
+
+        except Exception as e:
+            logger.error(f"[ChatService] 智能分割失败: {str(e)}", exc_info=True)
+            return []
+
+    def _intelligent_split(
+            self,
+            content: str,
+            model_id: Optional[str],
+            company_id: Optional[str] = None,
+            chunk_size: Optional[int] = None
+    ) -> List[str]:
+        """智能分割同步入口（供 process_text_content 这种同步方法调用）。
+
+        这些 process_xxx 方法原本就是同步函数，为避免大范围改造调用链，
+        这里用 asyncio.run 执行异步分割；若当前已处于事件循环中则新建线程运行。
+        """
+        if not model_id:
+            return []
+
+        try:
+            asyncio.get_running_loop()
+            in_loop = True
+        except RuntimeError:
+            in_loop = False
+
+        if in_loop:
+            # 当前线程已有事件循环，放到独立线程里跑，避免 asyncio.run 报错
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    lambda: asyncio.run(self._async_intelligent_split(
+                        content, model_id, company_id, chunk_size
+                    ))
+                )
+                return future.result()
+        else:
+            return asyncio.run(self._async_intelligent_split(
+                content, model_id, company_id, chunk_size
+            ))
+
+    @staticmethod
+    def _split_by_length(content: str, max_len: int) -> List[str]:
+        """把超长文本按行累积切分为不超过 max_len 的若干段（用于分批送模型）"""
+        if len(content) <= max_len:
+            return [content]
+        segments: List[str] = []
+        buf: List[str] = []
+        buf_len = 0
+        for line in content.splitlines(keepends=True):
+            if buf_len + len(line) > max_len and buf:
+                segments.append("".join(buf))
+                buf = []
+                buf_len = 0
+            buf.append(line)
+            buf_len += len(line)
+        if buf:
+            segments.append("".join(buf))
+        return segments
+
+    @staticmethod
+    def _parse_intelligent_split_result(text: str) -> List[str]:
+        """解析大模型返回的分割结果。
+
+        优先按 JSON 字符串数组解析；兼容 ```json ``` 代码块包裹；
+        解析失败返回空列表，由调用方走兜底策略。
+        """
+        if not text:
+            return []
+
+        cleaned = text.strip()
+
+        # 剥离 Markdown 代码块
+        if cleaned.startswith("```"):
+            cleaned = cleaned.strip("`")
+            # 去掉可能的语言标记 json
+            if cleaned.lower().startswith("json"):
+                cleaned = cleaned[4:]
+            cleaned = cleaned.strip()
+
+        # 尝试直接解析
+        try:
+            data = json.loads(cleaned)
+            if isinstance(data, list):
+                return [str(x).strip() for x in data if str(x).strip()]
+        except Exception:
+            pass
+
+        # 尝试从文本中截取第一个 [ ... ] 再解析
+        start = cleaned.find("[")
+        end = cleaned.rfind("]")
+        if start != -1 and end != -1 and end > start:
+            try:
+                data = json.loads(cleaned[start:end + 1])
+                if isinstance(data, list):
+                    return [str(x).strip() for x in data if str(x).strip()]
+            except Exception:
+                pass
+
+        return []
 
     async def delete_document(self, doc_id: str, user_id: str):
         """删除文档"""
@@ -1375,8 +1571,23 @@ class ChatService:
             logger.warning(f"查询租户所属公司ID失败: {str(e)}")
             return None
 
-    async def upload_doc(self, file: UploadFile, user_id: str, directory_id: str, tenant_id: str, split_method: str = "recursive", chunk_size: int = None, permission: str = "private", company_id: Optional[str] = None) -> ResultEntity:
-        """上传文档"""
+    async def upload_doc(
+            self,
+            file: UploadFile,
+            user_id: str,
+            directory_id: str,
+            tenant_id: str,
+            split_method: str = "recursive",
+            chunk_size: int = None,
+            permission: str = "private",
+            company_id: Optional[str] = None,
+            model_id: Optional[str] = None
+    ) -> ResultEntity:
+        """上传文档
+
+        新增 model_id 参数：当 split_method == "intelligent"（智能分割）时必填，
+        会用该模型对文件内容做语义分割后再写入向量库。
+        """
         if not file.filename:
             raise HTTPException(status_code=400, detail="文件名不能为空")
 
@@ -1387,6 +1598,10 @@ class ChatService:
         # fixed 分割方式需要用户提供 chunkSize 参数
         if split_method == "fixed" and (not chunk_size or chunk_size <= 0):
             raise HTTPException(status_code=400, detail="fixed 分割方式需要提供有效的 chunkSize 参数")
+
+        # 智能分割必须提供 modelId（调用大模型做语义切分）
+        if split_method == "intelligent" and not model_id:
+            raise HTTPException(status_code=400, detail="智能分割需要提供 modelId 参数")
 
         # 文档权限只能是 private/tenant/company，非法值回退为 private（私密）
         if permission not in ("private", "tenant", "company"):
@@ -1402,13 +1617,17 @@ class ChatService:
             content = await file.read()
 
             if ext.lower() == "pdf":
-                self.process_pdf(content, file.filename, user_id, doc_id, tenant_id, split_method, chunk_size, permission, company_id)
+                self.process_pdf(content, file.filename, user_id, doc_id, tenant_id,
+                                 split_method, chunk_size, permission, company_id, model_id)
             elif ext.lower() == "docx":
-                self.process_docx(content, file.filename, user_id, doc_id, tenant_id, split_method, chunk_size, permission, company_id)
+                self.process_docx(content, file.filename, user_id, doc_id, tenant_id,
+                                  split_method, chunk_size, permission, company_id, model_id)
             elif ext.lower() == "doc":
-                self.process_doc(content, file.filename, user_id, doc_id, tenant_id, split_method, chunk_size, permission, company_id)
+                self.process_doc(content, file.filename, user_id, doc_id, tenant_id,
+                                 split_method, chunk_size, permission, company_id, model_id)
             else:
-                self.process_txt(content, file.filename, user_id, doc_id, tenant_id, split_method, chunk_size, permission, company_id)
+                self.process_txt(content, file.filename, user_id, doc_id, tenant_id,
+                                 split_method, chunk_size, permission, company_id, model_id)
 
             file_path = os.path.join(self.upload_dir, file.filename)
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -1430,6 +1649,8 @@ class ChatService:
             self.chat_repository.save_doc(doc)
             return ResultUtil.success(msg="文件上传成功")
 
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Document processing failed: {str(e)}")
             raise HTTPException(status_code=500, detail=f"文件处理失败: {str(e)}")

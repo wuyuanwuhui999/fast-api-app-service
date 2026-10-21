@@ -233,15 +233,18 @@ async def upload_doc(
         file: UploadFile,
         directoryId: str = Form("public", description="目录ID"),
         tenantId: str = Form("personal", description="租户ID"),
-        splitMethod: str = Form("recursive", description="分割方式：recursive/paragraph/sentence/fixed"),
-        chunkSize: int = Form(None, description="fixed 分割方式的块大小（splitMethod=fixed 时必填）"),
+        splitMethod: str = Form("recursive", description="分割方式：recursive/paragraph/sentence/fixed/intelligent"),
+        chunkSize: int = Form(None, description="fixed/intelligent 分割方式的块大小（splitMethod=fixed 或 intelligent 时可选）"),
         permission: str = Form("private", description="文档权限：private-私密，tenant-租户内公开，company-公司内公开"),
         companyId: str = Form(None, description="所属公司ID（permission=company 时使用）"),
+        modelId: str = Form(None, description="大模型ID（splitMethod=intelligent 智能分割时必填）"),
         current_user_id: str = Depends(get_user_id_from_header),
         chat_service: ChatService = Depends()
 ):
-    return await chat_service.upload_doc(file, current_user_id, directoryId, tenantId, splitMethod, chunkSize, permission, companyId)
-
+    return await chat_service.upload_doc(
+        file, current_user_id, directoryId, tenantId,
+        splitMethod, chunkSize, permission, companyId, modelId
+    )
 
 @router.delete("/deleteDoc/{doc_id}")
 async def delete_document(
