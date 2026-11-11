@@ -27,7 +27,7 @@ class MusicModel(Base):
     big_pack_id = Column(Integer, nullable=True, comment="大型集合id")
     final_id = Column(Integer, nullable=True, comment="最终id")
     audio_id = Column(Integer, nullable=True, comment="音频id")
-    similar_audio_id = Column(Integer, nullable=True, comment="相似的音乐id")
+    similar_audio_id = Column(String(255), nullable=True, comment="相似的音乐id（多个用英文逗号分隔）")
     is_hot = Column(Integer, nullable=True, comment="是否热门")
     album_audio_id = Column(Integer, nullable=True, comment="歌曲音频id")
     audio_group_id = Column(Integer, nullable=True, comment="专辑id")

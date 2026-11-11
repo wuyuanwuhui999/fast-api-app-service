@@ -21,7 +21,7 @@ class MusicSchema(BaseModel):
     big_pack_id: Optional[int] = Field(None, description="大型集合id", alias="bigPackId")
     final_id: Optional[int] = Field(None, description="最终id", alias="finalId")
     audio_id: Optional[int] = Field(None, description="音频id", alias="audioId")
-    similar_audio_id: Optional[int] = Field(None, description="相似的音乐id", alias="similarAudioId")
+    similar_audio_id: Optional[str] = Field(None, description="相似的音乐id（多个用英文逗号分隔）", alias="similarAudioId")
     is_hot: Optional[int] = Field(None, description="是否热门", alias="isHot")
     album_audio_id: Optional[int] = Field(None, description="歌曲音频id", alias="albumAudioId")
     audio_group_id: Optional[int] = Field(None, description="专辑id", alias="audioGroupId")
