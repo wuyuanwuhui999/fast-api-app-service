@@ -1,10 +1,11 @@
+import asyncio
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 from fastapi.logger import logger
 
-from common.config.common_database import get_db
+from common.config.common_database import get_db, SessionLocal
 from common.utils.result_util import ResultEntity, ResultUtil
 from music.repositories.music_repository import MusicRepository
 from music.schemas.music_favorite_schema import FavoriteDirectoryUpdateSchema
@@ -407,6 +408,30 @@ class MusicService:
             logger.error(f"获取音乐播放记录失败: {str(e)}", exc_info=True)
             return ResultUtil.fail(msg=f"获取音乐播放记录失败: {str(e)}", data=None)
 
+    async def _update_play_stat_async(self, user_id: str, music_id: int, play_time: Optional[datetime] = None) -> None:
+        """异步更新播放统计表（用户维度 + 歌曲维度）。
+
+        - 播放记录已经提交，这里失败**不影响播放记录、也不回滚**（只记 warning，靠对账脚本兜底）；
+        - 后台任务不能用请求作用域的 Session（请求可能已结束），用独立 SessionLocal；
+        - 两张表在同一个事务里提交，尽量保持一致。
+        """
+        session = None
+        try:
+            session = SessionLocal()
+            repository = MusicRepository(session)
+            repository.increment_user_music_play_stat(user_id, music_id, play_time)
+            repository.increment_music_play_stat(music_id, play_time)
+            session.commit()
+            logger.info(f"[MusicService] 播放统计已更新: user_id={user_id}, music_id={music_id}")
+        except Exception as e:
+            if session:
+                session.rollback()
+            logger.warning(f"[MusicService] 播放统计更新失败（播放记录不受影响）: "
+                           f"user_id={user_id}, music_id={music_id}, err={str(e)}")
+        finally:
+            if session:
+                session.close()
+
     async def insert_music_record(
         self,
         user_id: str,
@@ -434,7 +459,7 @@ class MusicService:
             if not self.music_repository.check_music_exists(record_data.musicId):
                 return ResultUtil.fail(msg=f"音乐不存在: musicId={record_data.musicId}", data=None)
 
-            # 插入播放记录
+            # 插入播放记录（同步、是唯一的事实来源）
             result = self.music_repository.insert_music_record(
                 music_id=record_data.musicId,
                 user_id=user_id,
@@ -445,6 +470,13 @@ class MusicService:
 
             if not result:
                 return ResultUtil.fail(msg="插入播放记录失败", data=None)
+
+            # 播放统计表异步更新：不阻塞响应、失败只记 warning，不影响已插入的播放记录（不回滚）
+            asyncio.create_task(self._update_play_stat_async(
+                user_id=user_id,
+                music_id=record_data.musicId,
+                play_time=getattr(result, "create_time", None)
+            ))
 
             return ResultUtil.success(
                 data=result.id,

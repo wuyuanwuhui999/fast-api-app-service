@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any, Tuple
 
 from sqlalchemy import func, and_, desc, select, or_, text, exists
+from sqlalchemy import text
 from sqlalchemy.orm import Session, aliased
 from fastapi.logger import logger
 
@@ -905,12 +906,17 @@ class MusicRepository:
         """
         try:
 
+            now = datetime.now()
             db_record = MusicRecordModel(
                 music_id=music_id,
                 user_id=user_id,
                 platform=platform,
                 version=version,
-                device=device
+                device=device,
+                # 显式写入播放时间（表里的 create_time 原来是 DEFAULT NULL，靠默认值会落空，
+                # 导致「最近播放时间 / 时间范围统计」不准）
+                create_time=now,
+                update_time=now
             )
 
             self.db.add(db_record)
@@ -923,6 +929,34 @@ class MusicRepository:
             self.db.rollback()
             logger.error(f"插入音乐播放记录失败: {str(e)}", exc_info=True)
             return None
+
+    def increment_user_music_play_stat(self, user_id: str, music_id: int, play_time: Optional[datetime] = None) -> None:
+        """用户维度统计表自增（user_id, music_id 唯一，播放一次 +1，同时刷新 last_play_time/update_time）"""
+        play_time = play_time or datetime.now()
+        self.db.execute(text("""
+            INSERT INTO user_music_play_stat
+                (user_id, music_id, play_count, first_play_time, last_play_time, create_time, update_time)
+            VALUES (:user_id, :music_id, 1, :play_time, :play_time, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE
+                play_count = play_count + 1,
+                first_play_time = IF(first_play_time IS NULL, :play_time, first_play_time),
+                last_play_time = IF(last_play_time IS NULL, :play_time, GREATEST(last_play_time, :play_time)),
+                update_time = NOW()
+        """), {"user_id": user_id, "music_id": music_id, "play_time": play_time})
+
+    def increment_music_play_stat(self, music_id: int, play_time: Optional[datetime] = None) -> None:
+        """歌曲维度统计表自增（music_id 唯一，播放一次 +1，同时刷新 last_play_time/update_time）"""
+        play_time = play_time or datetime.now()
+        self.db.execute(text("""
+            INSERT INTO music_play_stat
+                (music_id, play_count, first_play_time, last_play_time, create_time, update_time)
+            VALUES (:music_id, 1, :play_time, :play_time, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE
+                play_count = play_count + 1,
+                first_play_time = IF(first_play_time IS NULL, :play_time, first_play_time),
+                last_play_time = IF(last_play_time IS NULL, :play_time, GREATEST(last_play_time, :play_time)),
+                update_time = NOW()
+        """), {"music_id": music_id, "play_time": play_time})
 
     def check_music_exists(self, music_id: int) -> bool:
         """检查音乐是否存在"""
