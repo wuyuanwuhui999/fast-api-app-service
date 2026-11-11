@@ -419,7 +419,7 @@ class MusicService:
         try:
             session = SessionLocal()
             repository = MusicRepository(session)
-            repository.increment_user_music_play_stat(user_id, music_id, play_time)
+            repository.increment_music_user_play_stat(user_id, music_id, play_time)
             repository.increment_music_play_stat(music_id, play_time)
             session.commit()
             logger.info(f"[MusicService] 播放统计已更新: user_id={user_id}, music_id={music_id}")

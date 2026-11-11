@@ -930,11 +930,11 @@ class MusicRepository:
             logger.error(f"插入音乐播放记录失败: {str(e)}", exc_info=True)
             return None
 
-    def increment_user_music_play_stat(self, user_id: str, music_id: int, play_time: Optional[datetime] = None) -> None:
+    def increment_music_user_play_stat(self, user_id: str, music_id: int, play_time: Optional[datetime] = None) -> None:
         """用户维度统计表自增（user_id, music_id 唯一，播放一次 +1，同时刷新 last_play_time/update_time）"""
         play_time = play_time or datetime.now()
         self.db.execute(text("""
-            INSERT INTO user_music_play_stat
+            INSERT INTO music_user_play_stat
                 (user_id, music_id, play_count, first_play_time, last_play_time, create_time, update_time)
             VALUES (:user_id, :music_id, 1, :play_time, :play_time, NOW(), NOW())
             ON DUPLICATE KEY UPDATE

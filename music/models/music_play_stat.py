@@ -8,7 +8,7 @@ class UserMusicPlayStatModel(Base):
 
     主键 (user_id, music_id)：播放记录插入后异步 UPSERT 自增，读"我听了几次"直接命中聚簇索引。
     """
-    __tablename__ = "user_music_play_stat"
+    __tablename__ = "music_user_play_stat"
     __table_args__ = (
         Index("idx_user_last", "user_id", "last_play_time"),
         {
