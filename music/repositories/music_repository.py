@@ -110,6 +110,8 @@ class MusicRepository:
         try:
             results = (
                 self.db.query(MusicCategoryModel)
+                # 排除「专题歌曲」分类（该分类走专题页，不在分类列表里展示）
+                .filter(MusicCategoryModel.classify != '专题歌曲')
                 .order_by(MusicCategoryModel.id.asc())
                 .all()
             )
