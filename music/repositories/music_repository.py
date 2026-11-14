@@ -13,6 +13,7 @@ from music.models.music_category_relation import MusicCategoryRelationModel
 from music.models.music_favorite_directory import MusicFavoriteDirectoryModel
 from music.models.music_favorite_list import MusicFavoriteListModel
 from music.models.music_model import MusicModel, MusicLikeModel
+from music.models.music_play_stat import UserMusicPlayStatModel
 from music.models.music_record import MusicRecordModel
 from music.schemas.music_author_category_schema import MusicAuthorCategorySchema
 from music.schemas.music_favorite_schema import MusicFavoriteDirectorySchema
@@ -714,14 +715,14 @@ class MusicRepository:
         page_num: int = 1,
         page_size: int = 20
     ) -> Tuple[List[Dict[str, Any]], int]:
-        """
-        获取用户播放记录，按音乐去重，返回最新播放记录和播放总次数
+        """获取用户播放记录：直接查用户播放统计表 music_user_play_stat，关联 music 表。
 
-        使用 SQLAlchemy ORM 实现：
-        1. 子查询1: 按 user_id 和 (可选) 时间范围过滤播放记录
-        2. 子查询2: 按 music_id 分组，取 MAX(create_time) 作为最新播放时间
-        3. 关联音乐表获取音乐详情
-        4. 关联统计子查询获取每首音乐的播放总次数
+        说明（与 Spring 项目 MusicMapper.getMusicRecord 保持一致）：
+        1. music_user_play_stat 是「每用户每首歌的播放次数」汇总表，(user_id, music_id) 唯一，
+           所以天然按音乐去重，不需要再对 music_record 做 GROUP BY；
+        2. 统计表的 play_count 就是接口返回的 times（听过的次数）；
+        3. 按最近播放时间 last_play_time 倒序（等价于原来按 MAX(create_time) 倒序）；
+        4. 时间范围过滤作用在 last_play_time 上。
 
         Args:
             user_id: 用户ID
@@ -735,114 +736,48 @@ class MusicRepository:
         """
         try:
             # ============================================================
-            # 第1步：构建基础查询（过滤用户和时间范围）
+            # 第1步：基础查询 - 统计表 JOIN music 表
+            #   SELECT music.*, s.play_count AS times
+            #   FROM music_user_play_stat s INNER JOIN music m ON m.id = s.music_id
+            #   WHERE s.user_id = :user_id
             # ============================================================
-            base_query = self.db.query(MusicRecordModel).filter(
-                MusicRecordModel.user_id == user_id
+            base = (
+                select(
+                    MusicModel,
+                    UserMusicPlayStatModel.play_count.label("times")
+                )
+                .select_from(UserMusicPlayStatModel)
+                .join(MusicModel, MusicModel.id == UserMusicPlayStatModel.music_id)
+                .where(UserMusicPlayStatModel.user_id == user_id)
             )
 
             if start_date:
-                base_query = base_query.filter(MusicRecordModel.create_time >= start_date)
+                base = base.where(UserMusicPlayStatModel.last_play_time >= start_date)
             if end_date:
-                base_query = base_query.filter(MusicRecordModel.create_time <= end_date)
+                base = base.where(UserMusicPlayStatModel.last_play_time <= end_date)
 
             # ============================================================
-            # 第2步：子查询 - 获取每首音乐的最新播放时间
+            # 第2步：总数
             # ============================================================
-            # 使用 subquery 构建：SELECT music_id, MAX(create_time) AS max_date
-            # FROM music_record WHERE user_id = :user_id ... GROUP BY music_id
-            latest_subq = (
-                base_query
-                .with_entities(
-                    MusicRecordModel.music_id,
-                    func.max(MusicRecordModel.create_time).label("max_date")
-                )
-                .group_by(MusicRecordModel.music_id)
-                .subquery("latest")
-            )
+            total = self.db.execute(select(func.count()).select_from(base.subquery())).scalar() or 0
 
             # ============================================================
-            # 第3步：子查询 - 获取最新播放记录的完整信息
-            # ============================================================
-            # 将 base_query 作为子查询，内连接 latest_subq 获取最新记录
-            # 使用 aliased 来引用 MusicRecordModel 作为不同的表别名
-            RecordAlias = aliased(MusicRecordModel)
-
-            # 构建最新记录的子查询
-            # SELECT RecordAlias.*
-            # FROM music_record AS RecordAlias
-            # INNER JOIN latest ON RecordAlias.music_id = latest.music_id
-            #   AND RecordAlias.create_time = latest.max_date
-            # ORDER BY RecordAlias.create_time DESC
-            latest_records_subq = (
-                self.db.query(RecordAlias)
-                .join(
-                    latest_subq,
-                    and_(
-                        RecordAlias.music_id == latest_subq.c.music_id,
-                        RecordAlias.create_time == latest_subq.c.max_date
-                    )
-                )
-                .order_by(desc(RecordAlias.create_time))
-                .subquery("latest_records")
-            )
-
-            # ============================================================
-            # 第4步：子查询 - 统计每首音乐的播放总次数
-            # ============================================================
-            # SELECT COUNT(music_id) AS times, music_id
-            # FROM music_record WHERE user_id = :user_id ...
-            # GROUP BY music_id
-            count_subq = (
-                base_query
-                .with_entities(
-                    MusicRecordModel.music_id,
-                    func.count(MusicRecordModel.music_id).label("times")
-                )
-                .group_by(MusicRecordModel.music_id)
-                .subquery("counts")
-            )
-
-            # ============================================================
-            # 第5步：主查询 - 关联音乐表和统计表
-            # ============================================================
-            # SELECT music.*, counts.times
-            # FROM latest_records AS lr
-            # INNER JOIN music ON lr.music_id = music.id
-            # INNER JOIN counts ON lr.music_id = counts.music_id
-            # ORDER BY lr.create_time DESC
-            # LIMIT ... OFFSET ...
-            stmt = (
-                select(
-                    MusicModel,
-                    func.coalesce(count_subq.c.times, 0).label("times")
-                )
-                .select_from(latest_records_subq)
-                .join(MusicModel, latest_records_subq.c.music_id == MusicModel.id)
-                .join(count_subq, latest_records_subq.c.music_id == count_subq.c.music_id)
-                .order_by(desc(latest_records_subq.c.create_time))
-            )
-
-            # ============================================================
-            # 第6步：查询总数
-            # ============================================================
-            total_stmt = select(func.count()).select_from(latest_records_subq)
-            total = self.db.execute(total_stmt).scalar() or 0
-
-            # ============================================================
-            # 第7步：分页查询
+            # 第3步：按最近播放时间倒序分页
             # ============================================================
             offset = (page_num - 1) * page_size
-            stmt = stmt.offset(offset).limit(page_size)
-
+            stmt = (
+                base
+                .order_by(desc(UserMusicPlayStatModel.last_play_time), desc(UserMusicPlayStatModel.music_id))
+                .offset(offset)
+                .limit(page_size)
+            )
             results = self.db.execute(stmt).all()
 
             # ============================================================
-            # 第8步：构建返回数据
+            # 第4步：构建返回数据（times 取统计表的 play_count）
             # ============================================================
             music_list = []
             for music_obj, times in results:
-                # 使用已有的音乐模型转字典方法
                 music_dict = self._music_to_dict(music_obj)
                 music_dict["times"] = int(times) if times else 0
                 music_list.append(music_dict)
