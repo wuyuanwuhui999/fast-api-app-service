@@ -146,14 +146,25 @@ class AgentService:
             1. **当前用户**: {user_id}
 
             # Database Schema Context
-            请严格基于以下表结构生成查询条件：
-            1. music (主表):
+            请严格基于以下表结构生成查询条件，**禁止臆造字段**：
+
+            1. music (音乐主表):
             - 字段: id, song_name, author_name, album_name, language, publish_date, is_hot, label, cover, local_play_url, lyrics
-            - 注意: music表没有user_id字段！
+            - 注意: music 表没有 user_id 字段，也没有 category/classify 字段！
+
             2. music_favorite_list (用户收藏表):
             - 关联字段: music_id, user_id, favorite_id
+
             3. music_like (用户点赞表):
             - 关联字段: music_id, user_id
+
+            4. music_category (歌曲分类名称表):
+            - 字段: id, img, category(小分类名称), classify(大分类名称), create_time, update_time
+            - 说明: category 是具体小类（如"摇滚"、"流行"），classify 是上层大类（如"流派"、"场景"）
+
+            5. music_category_relation (歌曲与分类关联表):
+            - 字段: id, music_id, category_id, create_time, update_time
+            - 关联: music_id -> music.id, category_id -> music_category.id
 
             # Query Logic & Constraints
             1. **关联查询**: 查询音乐时，必须通过 LEFT JOIN 关联 music_favorite_list 和 music_like 表，以判断当前用户 (userId={user_id}) 的收藏和点赞状态。
@@ -167,7 +178,7 @@ class AgentService:
                 "action": "search | tool | none",
                 "is_music_related": true/false,
                 "explanation": "简短说明用户的意图或与音乐无关的原因",
-                "search_type": "song_name | author_name | album_name | label | hot | none",
+                "search_type": "song_name | author_name | album_name | label | category | hot | none",
                 "search_keyword": "提取的纯关键词（不含SQL通配符）",
                 "sql_condition": "生成的SQL WHERE条件字符串（使用 :keyword 作为参数占位符）",
                 "join_tables": ["music_favorite_list", "music_like"]
@@ -176,7 +187,7 @@ class AgentService:
             # Action Rules（先判断 action）
             1. 用户想「查询/搜索/推荐」音乐信息 -> action = "search"，并给出 sql_condition。
             2. 用户想做「操作」类事情（把歌加入收藏夹、创建/删除/重命名收藏夹、把歌分享到音乐圈等）-> action = "tool"，
-               sql_condition 为空字符串 ""（这类请求由工具完成，不要生成查询 SQL）。
+            sql_condition 为空字符串 ""（这类请求由工具完成，不要生成查询 SQL）。
             3. 与音乐完全无关（如问天气、写代码）-> action = "none"，is_music_related = false。
 
             # SQL Generation Rules
@@ -184,6 +195,20 @@ class AgentService:
             2. 默认查询逻辑为 SELECT 音乐字段（SELECT 列表会给下划线字段起驼峰别名，如 song_name AS songName） FROM music WHERE [sql_condition]。
             3. 如果用户未指定具体条件（如"推荐热门歌曲"），sql_condition 可为 "1=1"。
             4. 涉及用户状态的过滤（如"我收藏的歌"），请在 sql_condition 中显式使用 user_id = :user_id（注意使用 :user_id 占位符）。
+            5. **分类查询规则（重点）**：
+            - 当用户提到「分类/类型/风格/曲风/流派/场景」等维度（如"摇滚"、"流行"、"轻音乐"、"推荐点民谣"），
+                必须通过 music_category + music_category_relation 子查询定位音乐，**不允许**在 music 表上直接对分类名做 LIKE。
+            - 判断用户给的是小分类还是大分类：
+                * 若关键词能明确对应小分类（如"摇滚"、"流行"、"民谣"），用 `mc.category LIKE :keyword` 过滤；
+                * 若是大分类（如"流派"、"场景"、"语言"），用 `mc.classify LIKE :keyword` 过滤；
+                * 不确定时同时匹配两者：`(mc.category LIKE :keyword OR mc.classify LIKE :keyword)`。
+            - 分类查询的标准 SQL 模板（必须用 EXISTS 子查询，避免 JOIN 引起 music 行重复）：
+                `EXISTS (SELECT 1 FROM music_category_relation mcr JOIN music_category mc ON mcr.category_id = mc.id WHERE mcr.music_id = music.id AND (mc.category LIKE :keyword OR mc.classify LIKE :keyword))`
+            - 分类 + 歌手 / 歌名 组合时用 AND 拼接，例如：
+                `author_name LIKE :keyword AND EXISTS (SELECT 1 FROM music_category_relation mcr JOIN music_category mc ON mcr.category_id = mc.id WHERE mcr.music_id = music.id AND (mc.category LIKE :keyword2 OR mc.classify LIKE :keyword2))`
+                （若同一关键词同时用于歌手和分类，可复用 :keyword；不同关键词则用 :keyword、:keyword2 区分，但需在 search_keyword 中仅给出主关键词，服务端会按需替换。）
+            - 分类查询时 `search_type = "category"`，`search_keyword` 填用户给出的分类名（如"摇滚"）。
+            6. 任何情况下，sql_condition 中**只能**出现上述已列出的真实字段名；出现其他字段（如 category、classify 直接在 music 上）视为非法。
 
             # Examples
 
@@ -208,6 +233,42 @@ class AgentService:
                 "search_type": "song_name",
                 "search_keyword": "夏天",
                 "sql_condition": "(song_name LIKE :keyword OR label LIKE :keyword) AND music_favorite_list.user_id = :user_id AND music_favorite_list.music_id IS NOT NULL",
+                "join_tables": ["music_favorite_list", "music_like"]
+            }}
+
+            User Input: "推荐一些摇滚歌曲"
+            Output:
+            {{
+                "action": "search",
+                "is_music_related": true,
+                "explanation": "用户想按'摇滚'分类查询歌曲，需要先通过分类名定位分类id再关联music_id",
+                "search_type": "category",
+                "search_keyword": "摇滚",
+                "sql_condition": "EXISTS (SELECT 1 FROM music_category_relation mcr JOIN music_category mc ON mcr.category_id = mc.id WHERE mcr.music_id = music.id AND (mc.category LIKE :keyword OR mc.classify LIKE :keyword))",
+                "join_tables": ["music_favorite_list", "music_like"]
+            }}
+
+            User Input: "有没有周杰伦的流行歌曲"
+            Output:
+            {{
+                "action": "search",
+                "is_music_related": true,
+                "explanation": "用户同时指定歌手和分类（流行），需要组合条件查询",
+                "search_type": "category",
+                "search_keyword": "流行",
+                "sql_condition": "author_name LIKE :keyword AND EXISTS (SELECT 1 FROM music_category_relation mcr JOIN music_category mc ON mcr.category_id = mc.id WHERE mcr.music_id = music.id AND (mc.category LIKE :keyword2 OR mc.classify LIKE :keyword2))",
+                "join_tables": ["music_favorite_list", "music_like"]
+            }}
+
+            User Input: "来点轻音乐"
+            Output:
+            {{
+                "action": "search",
+                "is_music_related": true,
+                "explanation": "用户想按'轻音乐'分类查询歌曲",
+                "search_type": "category",
+                "search_keyword": "轻音乐",
+                "sql_condition": "EXISTS (SELECT 1 FROM music_category_relation mcr JOIN music_category mc ON mcr.category_id = mc.id WHERE mcr.music_id = music.id AND (mc.category LIKE :keyword OR mc.classify LIKE :keyword))",
                 "join_tables": ["music_favorite_list", "music_like"]
             }}
 
